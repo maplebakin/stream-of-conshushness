@@ -22,9 +22,6 @@ body {
 
 /* ─── Sticky Header & Footer ───────────────────────── */
 header {
-  position: sticky;
-  top: 0;
-  z-index: 1000;
   background-color: var(--color-card-background);
   text-align: center;
   padding: 20px;

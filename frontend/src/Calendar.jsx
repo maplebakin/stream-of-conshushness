@@ -13,14 +13,80 @@ export default function Calendar() {
   const [calendarData, setCalendarData] = useState({});
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
   const [showForm, setShowForm] = useState(false);
-  const [newAppointment, setNewAppointment] = useState({
-    date: '',
-    time: '',
-    details: ''
-  });
-
+  const [newAppointment, setNewAppointment] = useState({ date: '', time: '', details: '' });
   const [importantEvents, setImportantEvents] = useState([]);
   const [newEvent, setNewEvent] = useState({ title: '', date: '' });
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [showMonthMenu, setShowMonthMenu] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 800);
+  const getDaysUntil = (dateStr) => {
+  const eventDate = new Date(dateStr);
+  const today = new Date(todayStr);
+
+  // Remove time component for accurate day difference
+  eventDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+
+  const diffMs = eventDate - today;
+  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Tomorrow';
+  if (diffDays > 1) return `${diffDays} Days Away`;
+  return `${Math.abs(diffDays)} Days Ago`;
+};
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 800);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Month options with clear short labels
+  const monthOptions = [
+    ['J', 'January', '01'],
+    ['F', 'February', '02'],
+    ['MR', 'March', '03'],
+    ['MA', 'April', '04'],
+    ['MY', 'May', '05'],
+    ['JN', 'June', '06'],
+    ['JL', 'July', '07'],
+    ['AU', 'August', '08'],
+    ['S', 'September', '09'],
+    ['O', 'October', '10'],
+    ['N', 'November', '11'],
+    ['D', 'December', '12']
+  ];
+
+  // Helper to render month tab
+  const renderMonthTab = ([abbr, full, monthNum]) => {
+  const yearStr = String(now.getFullYear());
+  const monthKey = `${yearStr}-${monthNum}`;
+  const active = monthKey === selectedMonth;
+
+  return (
+    <div
+      key={monthKey}
+      className={`month-tab ${active ? 'active' : ''}`}
+      onClick={() => {
+        setSelectedMonth(monthKey);
+        setShowMonthMenu(false);
+      }}
+    >
+      {isMobile ? (
+        <span className="month-label">{full}</span>
+      ) : (
+        <>
+          <span className="collapsed-label">{abbr}</span>
+          <span className="expanded-label">{full}</span>
+        </>
+      )}
+    </div>
+  );
+};
+
 
   // Fetch full calendar data
   const fetchCalendar = () => {
@@ -49,7 +115,7 @@ export default function Calendar() {
     })
   );
 
-  // Handle adding important event
+  // Add important event
   const handleAddImportantEvent = (e) => {
     e.preventDefault();
     if (!newEvent.title.trim() || !newEvent.date.trim()) {
@@ -69,7 +135,7 @@ export default function Calendar() {
       .catch(err => console.error('Error adding event:', err));
   };
 
-  // Handle delete important event
+  // Delete important event
   const handleDeleteImportantEvent = (id) => {
     axios.delete(`/api/important-events/${selectedMonth}/${id}`)
       .then(() => axios.get(`/api/important-events/${selectedMonth}`))
@@ -141,24 +207,35 @@ export default function Calendar() {
       <div className="calendar-layout">
         <aside className="important-events">
           <h3>Important Events</h3>
-          <form className="important-event-form" onSubmit={handleAddImportantEvent}>
-            <input
-              type="text"
-              placeholder="Event Title"
-              value={newEvent.title}
-              onChange={e => setNewEvent({ ...newEvent, title: e.target.value })}
-            />
-            <input
-              type="date"
-              value={newEvent.date}
-              onChange={e => setNewEvent({ ...newEvent, date: e.target.value })}
-            />
-            <button type="submit">+ Add Event</button>
-          </form>
+          <button
+            type="button"
+            className="toggle-event-form-button"
+            onClick={() => setShowEventForm(!showEventForm)}
+          >
+            {showEventForm ? 'Hide Add Event' : '+ Add Event'}
+          </button>
+
+          {showEventForm && (
+            <form className="important-event-form" onSubmit={handleAddImportantEvent}>
+              <input
+                type="text"
+                placeholder="Event Title"
+                value={newEvent.title}
+                onChange={e => setNewEvent({ ...newEvent, title: e.target.value })}
+              />
+              <input
+                type="date"
+                value={newEvent.date}
+                onChange={e => setNewEvent({ ...newEvent, date: e.target.value })}
+              />
+              <button type="submit">+ Add Event</button>
+            </form>
+          )}
+
           <ul className="important-event-list">
             {importantEvents.map((ev) => (
               <li key={ev.id}>
-                <span>{ev.date}: {ev.title}</span>
+                <span>{getDaysUntil(ev.date)}: {ev.title}</span>
                 <button onClick={() => handleDeleteImportantEvent(ev.id)}>🗑️</button>
               </li>
             ))}
@@ -180,7 +257,18 @@ export default function Calendar() {
               <button onClick={() => navigate(`/day/${todayStr}`)}>
                 Today
               </button>
+              {isMobile && (
+                <button onClick={() => setShowMonthMenu(!showMonthMenu)}>
+                  {showMonthMenu ? 'Hide Months' : 'Month'}
+                </button>
+              )}
             </div>
+
+            {isMobile && showMonthMenu && (
+              <div className="month-tabs">
+                {monthOptions.map(renderMonthTab)}
+              </div>
+            )}
 
             {showForm && (
               <form onSubmit={handleSubmit}>
@@ -253,38 +341,13 @@ export default function Calendar() {
           </div>
         </section>
 
-        <aside className="calendar-sidebar">
-          <div className="month-tabs">
-            {[
-              ['J', 'January', '01'],
-              ['F', 'February', '02'],
-              ['M', 'March', '03'],
-              ['A', 'April', '04'],
-              ['M', 'May', '05'],
-              ['J', 'June', '06'],
-              ['J', 'July', '07'],
-              ['A', 'August', '08'],
-              ['S', 'September', '09'],
-              ['O', 'October', '10'],
-              ['N', 'November', '11'],
-              ['D', 'December', '12']
-            ].map(([abbr, full, monthNum]) => {
-              const yearStr = String(now.getFullYear());
-              const monthKey = `${yearStr}-${monthNum}`;
-              const active = monthKey === selectedMonth;
-              return (
-                <div
-                  key={monthKey}
-                  className={`month-tab ${active ? 'active' : ''}`}
-                  onClick={() => setSelectedMonth(monthKey)}
-                >
-                  <span className="collapsed-label">{abbr}</span>
-                  <span className="expanded-label">{full}</span>
-                </div>
-              );
-            })}
-          </div>
-        </aside>
+        {!isMobile && (
+          <aside className="calendar-sidebar">
+            <div className="month-tabs">
+              {monthOptions.map(renderMonthTab)}
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );

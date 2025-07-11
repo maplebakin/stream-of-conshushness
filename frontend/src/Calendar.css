@@ -415,17 +415,196 @@
 }
 @media (max-width: 800px) {
   .calendar-page .calendar-layout {
+    display: grid;
     grid-template-columns: 1fr;
     grid-template-areas:
       "important-events"
       "calendar-content"
       "calendar-sidebar";
     gap: 1rem;
+    padding: 0 0.5rem;
   }
+
+  .important-events {
+    grid-area: important-events;
+  }
+
+  .calendar-content {
+    grid-area: calendar-content;
+  }
+
+  .calendar-sidebar {
+    grid-area: calendar-sidebar;
+    position: static;
+    padding: 0;
+    background: none;
+    border: none;
+  }
+
+  .calendar-page .month-tabs {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    scrollbar-width: none;
+  }
+
+  .calendar-page .month-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
   .calendar-page .month-tab {
-    width: 100%;
-    max-width: none;
-    height: auto;
+    flex: 0 0 auto;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-button);
+    font-size: 0.9rem;
+    background-color: var(--color-input-bg);
+    border: 1px solid var(--color-graph-line);
+    transition: background-color 0.25s ease;
+  }
+
+  .calendar-page .month-tab.active {
+    background-color: var(--color-muted-mauve);
+    color: #fff;
+  }
+
+  .calendar-page .month-tab .collapsed-label,
+  .calendar-page .month-tab .expanded-label {
+    opacity: 1;
+    white-space: nowrap;
+  }
+}
+
+/*──────────────────────────────────────────────────────
+  Mobile Layout (≤800px)
+──────────────────────────────────────────────────────*/
+@media (max-width: 800px) {
+  /* Remove sidebar on mobile */
+  .calendar-sidebar {
+    display: none;
+  }
+
+  /* Main layout: stack important events under calendar */
+  .calendar-page .calendar-layout {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "calendar-content"
+      "important-events";
+    gap: 1rem;
+    padding: 0 0.5rem;
+  }
+
+  .important-events {
+    order: 2;
+    background-color: var(--color-card-background);
+    border: 1px solid var(--color-graph-line);
+    border-radius: var(--radius-card);
+    padding: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+
+  .calendar-content {
+    order: 1;
+  }
+
+  /* Add Appointment Buttons Layout */
+  .add-appointment-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-bottom: 0.5rem;
+  }
+
+  .add-appointment-buttons button {
+    flex: 1 1 auto;
+  }
+
+  /* Inline Month Tabs Grid */
+  .calendar-page .month-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    background-color: var(--color-card-background);
+    border: 1px solid var(--color-graph-line);
+    border-radius: var(--radius-card);
+    padding: 0.75rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  }
+
+  .calendar-page .month-tab {
+    flex: 1 0 28%;
+    max-width: 28%;
+    min-width: 80px;
+    text-align: center;
+    padding: 0.5rem;
+    border-radius: var(--radius-button);
+    font-size: 0.95rem;
+    background-color: var(--color-input-bg);
+    border: 1px solid var(--color-graph-line);
+    cursor: pointer;
+    transition: background-color 0.25s ease;
+    box-sizing: border-box;
+  }
+
+  .calendar-page .month-tab.active {
+    background-color: var(--color-muted-mauve);
+    color: #fff;
+  }
+
+  .calendar-page .month-tab:hover {
+    background-color: var(--color-blush);
+    color: #fff;
+  }
+
+  
+  .calendar-page .month-tab .expanded-label {
+    opacity: 1;
+    white-space: nowrap;
+  }
+
+  /* Calendar Grid adjustments */
+  .calendar-page .calendar-grid {
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.25rem;
+  }
+
+  .calendar-page .calendar-grid .day-of-week {
+    font-size: 0.85rem;
+    padding: 0.25rem 0;
+    text-align: center;
+  }
+
+  .calendar-page .calendar-day {
+    min-height: 80px;
+    padding: 0.25rem;
+    font-size: 0.9rem;
+    border: 1px solid var(--color-graph-line);
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background-color: var(--color-card-background);
+    border-radius: var(--radius-card);
+    transition: background-color 0.2s;
+  }
+
+  .calendar-page .calendar-day .date-label {
+    font-weight: bold;
     font-size: 1rem;
+  }
+
+  .calendar-page .day-appointment {
+    font-size: 0.85rem;
+    margin-top: 0.25rem;
+    word-break: break-word;
+  }
+
+  .calendar-page .calendar-day:hover {
+    background-color: var(--color-blush);
+    cursor: pointer;
   }
 }
