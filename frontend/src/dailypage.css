@@ -1,0 +1,388 @@
+/*──────────────────────────────────────────────────────
+  Stream of Conshushness — DailyPage.css
+──────────────────────────────────────────────────────*/
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;700&family=Libre+Baskerville&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Pacifico&display=swap');
+
+/*──────────────────────────────────────────────────────
+  Color & Font Variables
+──────────────────────────────────────────────────────*/
+@import url('./variables.css');
+
+
+/*──────────────────────────────────────────────────────
+  Base Page
+──────────────────────────────────────────────────────*/
+body {
+  background-color: var(--color-background);
+  color: var(--color-ink);
+  font-family: 'Libre Baskerville', serif;
+  margin: 0;
+  padding: 0;
+  line-height: 1.6;
+}
+
+/*──────────────────────────────────────────────────────
+  Header
+──────────────────────────────────────────────────────*/
+.daily-page-header {
+  background-color: var(--color-header-footer-bg);
+  color: #fefaf6;
+  padding: 12px 16px;
+  border-radius: var(--radius-card);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  font-family: 'Pacifico', cursive;
+  margin-bottom: 2rem;
+}
+
+.daily-page-header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.daily-page-header a {
+  text-decoration: none;
+  background-color: var(--color-muted-mauve);
+  color: #fefaf6;
+  padding: 6px 12px;
+  border-radius: var(--radius-button);
+  font-family: var(--font-handwritten);
+  transition: background-color 0.3s ease;
+}
+
+.daily-page-header a:hover {
+  background-color: var(--color-dusty-rose);
+}
+
+/*──────────────────────────────────────────────────────
+  Main Content Grid Layout
+──────────────────────────────────────────────────────*/
+.daily-page-content {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 0 1rem;
+  align-items: stretch;
+}
+
+@media (min-width: 800px) {
+  .daily-page-content {
+    grid-template-areas:
+      "schedule todo priorities"
+      "notes entries entries";
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto auto;
+  }
+}
+
+.schedule-section { grid-area: schedule; }
+.todo-section     { grid-area: todo; }
+.priorities-section { grid-area: priorities; }
+.notes-section    { grid-area: notes; }
+.entries-section  { grid-area: entries; }
+
+/*──────────────────────────────────────────────────────
+  Card Styling
+──────────────────────────────────────────────────────*/
+.schedule-section,
+.todo-section,
+.priorities-section,
+.notes-section,
+.entries-section {
+  background-color: var(--color-card-background);
+  border: 1px solid var(--color-graph-line);
+  border-radius: var(--radius-card);
+  padding: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  min-height: 350px;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/*──────────────────────────────────────────────────────
+  Section Headers
+──────────────────────────────────────────────────────*/
+.schedule-section h2,
+.todo-section h2,
+.priorities-section h2,
+.notes-section h2,
+.entries-section h2 {
+  margin-top: 0;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.4rem;
+  color: var(--color-ink);
+  border-bottom: 1px solid var(--color-blush);
+  padding-bottom: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+/*──────────────────────────────────────────────────────
+  Hourly Schedule Styling
+──────────────────────────────────────────────────────*/
+.hourly-schedule ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.hourly-schedule li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px dashed var(--color-graph-line);
+  padding: 0.25rem 0;
+  font-family: 'Libre Baskerville', serif;
+  font-size: 0.95rem;
+  color: var(--color-ink);
+}
+
+.appointment-text {
+  flex: 1;
+  display: inline-block;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--color-graph-line);
+  background-color: transparent;
+  color: var(--color-ink);
+  cursor: text;
+  transition: background-color 0.2s;
+}
+
+.appointment-text:hover {
+  background-color: var(--color-blush);
+}
+
+/*──────────────────────────────────────────────────────
+  To-Do and Top Priorities Styling
+──────────────────────────────────────────────────────*/
+.to-do-box ul,
+.top-priorities ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.to-do-box li,
+.top-priorities li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px dashed var(--color-graph-line);
+  padding-bottom: 0.25rem;
+  font-family: var(--font-handwritten);
+  font-size: 1.1rem;
+}
+
+.todo-text,
+.priority-text {
+  font-family: var(--font-handwritten);
+  border-bottom: 1px solid var(--color-graph-line);
+  padding: 0.25rem 0;
+  cursor: text;
+  display: inline-block;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.todo-text:hover,
+.priority-text:hover {
+  background-color: var(--color-blush);
+}
+
+.to-do-box li.done .todo-text {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.add-todo,
+.add-priority {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/*──────────────────────────────────────────────────────
+  Notes Section
+──────────────────────────────────────────────────────*/
+.notes-section textarea {
+  width: 100%;
+  padding: 0.75rem;
+  font-family: 'Libre Baskerville', serif;
+  font-size: 1rem;
+  border: 1px solid var(--color-graph-line);
+  border-radius: var(--radius-input);
+  resize: vertical;
+  min-height: 150px;
+  line-height: 1.5;
+}
+
+/*──────────────────────────────────────────────────────
+  Entries Section
+──────────────────────────────────────────────────────*/
+.entries-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.entry-item {
+  border-top: 1px dashed var(--color-graph-line);
+  padding: 0.75rem 0;
+}
+
+.entry-section {
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+  font-family: 'Libre Baskerville', serif;
+  color: var(--color-ink);
+}
+
+.entry-content {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.entry-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.entry-tag {
+  background-color: var(--color-blush);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-tag);
+  font-size: 0.85rem;
+  color: var(--color-ink);
+}
+
+/*──────────────────────────────────────────────────────
+  Buttons
+──────────────────────────────────────────────────────*/
+button {
+  background-color: var(--color-muted-mauve);
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  font-family: var(--font-handwritten);
+  transition: background-color 0.3s ease;
+  font-size: 0.95rem;
+}
+
+button:hover {
+  background-color: var(--color-dusty-rose);
+}
+
+/*──────────────────────────────────────────────────────
+  Print Styles
+──────────────────────────────────────────────────────*/
+@media print {
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  .daily-page {
+    box-shadow: none;
+    background: #fff;
+  }
+
+  .daily-page-header,
+  .daily-page-content section {
+    background: #fff;
+    border: 1px solid #000;
+    box-shadow: none;
+  }
+
+  button {
+    display: none;
+  }
+}
+/*──────────────────────────────────────────────────────
+  Daily Page — Schedule Refinements
+──────────────────────────────────────────────────────*/
+
+/* Remove border line when appointment is empty */
+.appointment-text:empty {
+  border-bottom: none;
+}
+
+/* Improve styling of input fields in schedule editing */
+.hourly-schedule input {
+  font-family: 'Libre Baskerville', serif;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-input);
+  border: 1px solid var(--color-graph-line);
+  background-color: var(--color-input-bg);
+  color: var(--color-ink);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Add subtle hover highlight for hour slots, even when blank */
+.hourly-schedule li {
+  min-height: 2rem;
+  transition: background-color 0.2s ease;
+}
+
+.hourly-schedule li:hover {
+  background-color: var(--color-blush);
+  cursor: pointer;
+}
+
+/* Add spacing to delete button to avoid crowding text */
+.hourly-schedule .delete-button {
+  margin-left: 0.5rem;
+}
+
+/* Optional: match delete button style to rest of app */
+.hourly-schedule button {
+  background-color: var(--color-muted-mauve);
+  color: #fff;
+  border: none;
+  padding: 4px 8px;
+  border-radius: var(--radius-button);
+  font-family: var(--font-handwritten);
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.hourly-schedule button:hover {
+  background-color: var(--color-dusty-rose);
+}
+@media (max-width: 800px) {
+  .daily-page-content {
+    grid-template-areas:
+      "schedule"
+      "todo"
+      "priorities"
+      "notes"
+      "entries";
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+@media (max-width: 800px) {
+  .daily-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px;
+  }
+  .daily-page-header h1 {
+    font-size: 1.4rem;
+  }
+  .daily-page-header a {
+    margin-top: 0.5rem;
+  }
+}

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Stream of Conshushness</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;700&family=Libre+Baskerville&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Stream of Conshushness</h1>
+    <nav>
+      <a href="#">The Stream</a>
+      <a href="#">Magnetic Theory</a>
+      <a href="/calendar.html">📅 Calendar</a>
+    </nav>
+  </header>
+
+  <button id="toggle-entry-form" class="toggle-entry-btn">New Entry</button>
+
+  <div class="add-entry collapsed">
+    <h2>Add New Entry</h2>
+    <input id="date" type="text" placeholder="Date (e.g., June 30, 2025)">
+    <select id="section">
+      <option value="Floating in the Stream">Floating in the Stream</option>
+      <option value="General">General</option>
+      <option value="Gaming">Gaming</option>
+      <option value="Magnetic Energy Stream Theory">Magnetic Energy Stream Theory</option>
+    </select>
+    <input id="tags" type="text" placeholder="Tags (comma-separated)">
+    <textarea id="content" placeholder="Write your thoughts here"></textarea>
+    <button id="submit">Add Entry</button>
+  </div>
+
+  <div class="container">
+    <aside class="sidebar">
+      <input type="text" id="search" placeholder="Search...">
+      <div class="calendar">[Calendar Placeholder]</div>
+      <div class="sections">
+        <ul>
+          <li><a href="#" data-section="">All</a></li>
+          <li><a href="#" data-section="Floating in the Stream">Floating in the Stream</a></li>
+          <li><a href="#" data-section="General">General</a></li>
+          <li><a href="#" data-section="Gaming">Gaming</a></li>
+          <li><a href="#" data-section="Magnetic Energy Stream Theory">Magnetic Energy Stream Theory</a></li>
+        </ul>
+      </div>
+    </aside>
+
+    <section class="feed" id="feed">
+      <!-- entries will render here -->
+    </section>
+  </div>
+
+  <footer id="tag-footer">
+    <!-- tags will render here -->
+  </footer>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

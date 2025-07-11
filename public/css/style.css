@@ -1,0 +1,336 @@
+@import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;600&display=swap');
+
+/* ==================================
+   Global Styles and Variables
+   ================================== */
+:root {
+  --color-bg: #FAF8F5;
+  --color-bg-alt: #F0EEE9;
+  --color-text: #2E2A25;
+  --color-text-light: #FFFFFF;
+  --color-text-alt: #6B6655;
+  --color-primary: #6B705C;
+  --color-primary-light: #888C7C;
+  --color-accent: #855C65;
+  --color-accent-light: #9D7C83;
+  --color-border: #D5D0C5;
+  --spacing-xs: 4px;
+  --spacing-s: 8px;
+  --spacing-m: 16px;
+  --spacing-l: 24px;
+  --spacing-xl: 32px;
+  --radius-small: 4px;
+  --radius-medium: 8px;
+  --radius-large: 12px;
+  --font-family-base: 'Lora', serif;
+}
+
+/* Global reset and base typography */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+body {
+  font-family: var(--font-family-base);
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
+}
+
+/* Global form element styles */
+input, textarea, select, button {
+  font-family: inherit;
+  font-size: 1em;
+}
+input[type="text"], input[type="search"], textarea {
+  background: var(--color-bg-alt);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  padding: var(--spacing-s);
+}
+input::placeholder, textarea::placeholder {
+  color: #999;
+  font-style: italic;
+}
+button {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 1em;
+}
+button:focus, input:focus, textarea:focus, a:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* =========================
+   Journal Entry Page Styles
+   ========================= */
+body.index-page {
+  display: flex;
+  min-height: 100vh;
+}
+body.index-page .sidebar {
+  width: 250px;
+  background: var(--color-primary);
+  color: var(--color-text-light);
+  padding: var(--spacing-m);
+}
+body.index-page .sidebar label {
+  display: block;
+  color: var(--color-text-light);
+  font-weight: 600;
+  margin-bottom: var(--spacing-xs);
+}
+body.index-page .sidebar input[type="search"],
+body.index-page .sidebar input[type="text"] {
+  width: 100%;
+  margin-bottom: var(--spacing-m);
+}
+body.index-page .sidebar nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+body.index-page .sidebar nav li {
+  margin-bottom: var(--spacing-xs);
+}
+body.index-page .sidebar nav a {
+  display: block;
+  text-decoration: none;
+  color: var(--color-text-light);
+  padding: var(--spacing-s) var(--spacing-m);
+  border-radius: var(--radius-small);
+  transition: background 0.2s ease;
+}
+body.index-page .sidebar nav a:hover {
+  background: var(--color-accent);
+  color: var(--color-text-light);
+}
+body.index-page .sidebar nav a.active {
+  background: var(--color-accent);
+  color: var(--color-text-light);
+  font-weight: 600;
+}
+
+/* Main content area next to sidebar */
+body.index-page .main-content {
+  flex: 1;
+  padding: var(--spacing-m);
+  max-width: 900px;
+}
+
+/* Journal entry feed styles */
+body.index-page .entry-card {
+  background: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  padding: var(--spacing-m);
+  margin-bottom: var(--spacing-m);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  transition: box-shadow 0.2s ease;
+}
+body.index-page .entry-card:hover {
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+body.index-page .entry-card h2 {
+  font-size: 1.25em;
+  margin-bottom: var(--spacing-xs);
+  color: var(--color-primary);
+}
+body.index-page .entry-card .entry-meta {
+  font-size: 0.9em;
+  color: var(--color-text-alt);
+  margin-bottom: var(--spacing-s);
+}
+body.index-page .entry-card p {
+  margin-bottom: var(--spacing-s);
+}
+
+/* Add-entry button and collapsible form */
+body.index-page .add-entry-toggle {
+  display: inline-block;
+  background: var(--color-accent);
+  color: var(--color-text-light);
+  padding: var(--spacing-s) var(--spacing-m);
+  border: none;
+  border-radius: var(--radius-small);
+  margin-bottom: var(--spacing-s);
+  transition: background 0.2s ease;
+}
+body.index-page .add-entry-toggle:hover {
+  background: var(--color-accent-light);
+}
+body.index-page .add-entry-form {
+  background: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  padding: var(--spacing-m);
+  margin-bottom: var(--spacing-m);
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out;
+}
+body.index-page .add-entry-form.open {
+  max-height: 800px; /* expanded state */
+  transition: max-height 0.5s ease-in;
+}
+body.index-page .add-entry-form label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+body.index-page .add-entry-form input,
+body.index-page .add-entry-form textarea {
+  width: 100%;
+  margin-bottom: var(--spacing-m);
+}
+body.index-page .add-entry-form textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+body.index-page .add-entry-form button[type="submit"] {
+  background: var(--color-accent);
+  color: var(--color-text-light);
+  padding: var(--spacing-s) var(--spacing-m);
+  border: none;
+  border-radius: var(--radius-small);
+}
+body.index-page .add-entry-form button[type="submit"]:hover {
+  background: var(--color-accent-light);
+}
+
+/* =========================
+   Calendar Page Styles
+   ========================= */
+body.calendar-page {
+  min-height: 100vh;
+}
+body.calendar-page .calendar-wrapper {
+  display: flex;
+  flex: 1;
+  position: relative;
+}
+body.calendar-page .main-calendar {
+  flex: 1;
+  padding: var(--spacing-m);
+  position: relative;
+  padding-left: 40px; /* space for collapsed month tabs */
+}
+body.calendar-page .events-sidebar {
+  width: 250px;
+  padding: var(--spacing-m);
+  background: var(--color-bg-alt);
+  border-left: 1px solid var(--color-border);
+}
+body.calendar-page .events-sidebar h2 {
+  font-size: 1.2em;
+  margin-bottom: var(--spacing-m);
+}
+body.calendar-page .events-sidebar .event {
+  margin-bottom: var(--spacing-s);
+  padding-bottom: var(--spacing-s);
+  border-bottom: 1px solid var(--color-border);
+}
+body.calendar-page .events-sidebar .event:last-child {
+  border-bottom: none;
+}
+body.calendar-page .events-sidebar .event-title {
+  font-weight: 600;
+}
+body.calendar-page .events-sidebar .event-date {
+  font-size: 0.9em;
+  color: var(--color-text-alt);
+}
+
+/* Calendar grid (planner-style) */
+body.calendar-page .calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--spacing-xs);
+}
+body.calendar-page .calendar-grid .day {
+  position: relative;
+  background: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  padding: var(--spacing-xs);
+  min-height: 80px;
+}
+body.calendar-page .calendar-grid .day:hover {
+  background: #EAE8E3;
+}
+body.calendar-page .calendar-grid .day.today {
+  background: var(--color-accent-light);
+  border: 2px solid var(--color-accent);
+}
+body.calendar-page .calendar-grid .day.inactive {
+  color: #AAA;
+}
+body.calendar-page .calendar-grid .day .date {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 0.9em;
+  font-weight: 600;
+}
+body.calendar-page .calendar-grid .day .content {
+  margin-top: var(--spacing-s);
+  font-size: 0.9em;
+}
+
+/* Month tabs on left (expanding on hover) */
+body.calendar-page .month-tabs {
+  position: absolute;
+  top: var(--spacing-m);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+body.calendar-page .month-tab {
+  display: block;
+  background: var(--color-primary);
+  color: var(--color-text-light);
+  padding: var(--spacing-xs) var(--spacing-s);
+  margin-bottom: var(--spacing-xs);
+  border-radius: 0 var(--radius-medium) var(--radius-medium) 0;
+  white-space: nowrap;
+  overflow: hidden;
+  width: 36px;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+body.calendar-page .month-tab:hover {
+  width: 140px;
+  background: var(--color-primary-light);
+}
+
+/* Responsive (mobile) adjustments */
+@media (max-width: 768px) {
+  /* Hide or toggle sidebar on mobile */
+  body.index-page .sidebar {
+    position: absolute;
+    left: -250px;
+    top: 0;
+    height: 100%;
+    /* Sidebar could be toggled via JS for mobile */
+  }
+  body.index-page .main-content {
+    max-width: 100%;
+    padding: var(--spacing-s);
+  }
+  body.calendar-page .calendar-wrapper {
+    flex-direction: column;
+  }
+  body.calendar-page .events-sidebar {
+    width: auto;
+    margin-top: var(--spacing-m);
+  }
+  body.calendar-page .month-tabs {
+    display: none;
+  }
+  body.calendar-page .main-calendar {
+    padding-left: var(--spacing-m);
+  }
+}

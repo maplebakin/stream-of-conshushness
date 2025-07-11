@@ -1,0 +1,66 @@
+{
+  "2025-07": {
+    "dailyNotes": {
+      "2025-07-02": "Doctor at 10am",
+      "2025-07-14": "Team meeting"
+    },
+    "importantEvents": [
+      {
+        "id": "dc71d33f-7fc0-4541-9ae4-c115c9bc126f",
+        "title": "Mom's Birthday",
+        "date": "2025-07-17"
+      }
+    ],
+    "days": {
+      "2025-07-02": {
+        "schedule": {},
+        "freeForm": [
+          {
+            "type": "text",
+            "content": "Don't forget to breathe",
+            "x": 120,
+            "y": 250
+          },
+          {
+            "type": "image",
+            "src": "/stickers/moon.png",
+            "x": 300,
+            "y": 400
+          }
+        ]
+      },
+      "2025-07-14": {
+        "schedule": {},
+        "freeForm": []
+      },
+      "2025-07-15": {
+        "schedule": {},
+        "freeForm": []
+      },
+      "2025-07-08": {
+        "schedule": {},
+        "freeForm": []
+      },
+      "2025-07-01": {
+        "schedule": {},
+        "freeForm": []
+      },
+      "2025-07-17": {
+        "schedule": {},
+        "freeForm": []
+      },
+      "2025-07-09": {
+        "schedule": {},
+        "freeForm": []
+      },
+      "2025-07-16": {
+        "schedule": {},
+        "freeForm": []
+      },
+      "2025-07-10": {
+        "schedule": {},
+        "freeForm": []
+      }
+    }
+  }
+}
