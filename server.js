@@ -338,24 +338,23 @@ app.post('/api/todos/:date', authenticateToken, async (req, res) => {
   }
 });
 
+// ─── Serve Frontend in Production ─────────────────────────────
+const CLIENT_BUILD_PATH = path.join(__dirname, 'frontend', 'dist');
+console.log('🌿  Static files path:', CLIENT_BUILD_PATH);
+app.use(express.static(CLIENT_BUILD_PATH));
+
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
+  res.sendFile(path.join(CLIENT_BUILD_PATH, 'index.html'));
+});
+
 // ─── 404 Catcher ─────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// ─── Serve Frontend in Production ─────────────────────────────
- const CLIENT_BUILD_PATH = path.join(__dirname, 'frontend', 'dist');
-console.log('🌿  Static files path:', CLIENT_BUILD_PATH);
-
-// Serve frontend if it exists
-app.use(express.static(CLIENT_BUILD_PATH));
-
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api')) {
-    return next(); // Don't serve index.html for API routes
-  }
-  res.sendFile(path.join(CLIENT_BUILD_PATH, 'index.html'));
-});
 
 
 // ─── Start Server ─────────────────────────────
