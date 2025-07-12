@@ -344,13 +344,19 @@ app.use((req, res) => {
 });
 
 // ─── Serve Frontend in Production ─────────────────────────────
-if (process.env.NODE_ENV === 'production') {
-  const CLIENT_BUILD_PATH = path.join(__dirname, 'frontend', 'dist');
-  app.use(express.static(CLIENT_BUILD_PATH));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(CLIENT_BUILD_PATH, 'index.html'));
-  });
-}
+ const CLIENT_BUILD_PATH = path.join(__dirname, 'frontend', 'dist');
+console.log('🌿  Static files path:', CLIENT_BUILD_PATH);
+
+// Serve frontend if it exists
+app.use(express.static(CLIENT_BUILD_PATH));
+
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return next(); // Don't serve index.html for API routes
+  }
+  res.sendFile(path.join(CLIENT_BUILD_PATH, 'index.html'));
+});
+
 
 // ─── Start Server ─────────────────────────────
 app.listen(PORT, () => {
