@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import axios from './api/axiosInstance';
+
 
 function TopPriorities({ date, importantEvents = [] }) {
   const [priorities, setPriorities] = useState([]);

@@ -125,12 +125,13 @@ body {
 .hourly-schedule li {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   border-bottom: 1px dashed var(--color-border);
-  padding: 0.25rem 0;
+  padding: 0.4rem 0;
   font-family: var(--font-serif);
   font-size: 0.95rem;
   color: var(--color-text);
+  gap: 1rem;
   transition: background-color 0.2s ease;
 }
 
@@ -139,23 +140,54 @@ body {
   cursor: pointer;
 }
 
+.hourly-schedule strong {
+  flex-shrink: 0;
+  width: 100px;
+  text-align: left;
+  font-weight: normal;
+  color: var(--color-text);
+}
+
 .appointment-text {
   flex: 1;
-  display: inline-block;
-  padding: 0.25rem 0;
-  border-bottom: 1px solid var(--color-border);
-  background-color: transparent;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-input);
+  background-color: var(--color-input-bg);
   color: var(--color-text);
   cursor: text;
-  transition: background-color 0.2s;
+  transition: background-color 0.2s, border-color 0.2s;
 }
 
 .appointment-text:hover {
   background-color: var(--color-hover);
+  border-color: var(--color-border);
+}
+
+.hourly-schedule input[type="text"] {
+  flex: 1;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-serif);
 }
 
 .hourly-schedule .delete-button {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--radius-button);
+  font-size: 0.85rem;
   margin-left: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.hourly-schedule .delete-button:hover {
+  background-color: var(--color-hover);
 }
 
 .hourly-schedule button {

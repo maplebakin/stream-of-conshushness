@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import axios from 'axios';
+import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 
 function HourlySchedule({ date, seedAppointments }) {
@@ -13,29 +13,33 @@ function HourlySchedule({ date, seedAppointments }) {
   for (let hour = 8; hour <= 18; hour++) {
     let displayHour = hour;
     let period = 'AM';
-
     if (hour > 12) {
       displayHour = hour - 12;
       period = 'PM';
     } else if (hour === 12) {
       period = 'PM';
     }
-
     hours.push(`${displayHour}:00 ${period}`);
   }
 
-  // Load saved plan or seed appointments on date change
+  // Load appointments from server, merging with seedAppointments
   useEffect(() => {
     if (!date || !token) return;
-
-    setAppointments({});
 
     axios.get(`/api/appointments/${date}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
-      .then(res => setAppointments(res.data || {}))
-      .catch(() => setAppointments({}));
-  }, [date, token]);
+      .then(res => {
+        const fetched = res.data || {};
+        // Merge: server wins if overlapping keys
+        const merged = { ...seedAppointments, ...fetched };
+        setAppointments(merged);
+      })
+      .catch(() => {
+        // Fallback to seedAppointments only
+        setAppointments({ ...seedAppointments });
+      });
+  }, [date, token, seedAppointments]);
 
   // Handle clicking to edit
   const handleEditClick = (hourLabel) => {
@@ -43,17 +47,15 @@ function HourlySchedule({ date, seedAppointments }) {
     setInputValue(appointments[hourLabel] || '');
   };
 
-  // Handle saving the edited text
+  // Handle saving
   const handleSave = (hourLabel) => {
     const updated = {
       ...appointments,
       [hourLabel]: inputValue
     };
-
     setAppointments(updated);
     setEditingHour(null);
 
-    // Optionally send to server to persist
     axios.post('/api/add-appointment', {
       date,
       time: hourLabel,
@@ -63,10 +65,14 @@ function HourlySchedule({ date, seedAppointments }) {
     }).catch(err => console.error(err));
   };
 
-  // Handle deleting/clearing a slot
+  // Handle deleting
   const handleDelete = (hourLabel) => {
-    axios.delete(`/api/appointments/${date}/${hourLabel}`, {
-      headers: { Authorization: `Bearer ${token}` }
+    axios.delete('/api/delete-appointment', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: {
+        date,
+        time: hourLabel
+      }
     })
       .then(() => {
         const updated = { ...appointments };
@@ -78,10 +84,9 @@ function HourlySchedule({ date, seedAppointments }) {
 
   return (
     <div className="hourly-schedule">
-      
       <ul>
-        {hours.map((label, index) => (
-          <li key={index}>
+        {hours.map((label) => (
+          <li key={label}>
             <strong>{label}</strong>
             {editingHour === label ? (
               <>

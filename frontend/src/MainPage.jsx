@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from './api/axiosInstance';
 import { useEffect, useState, useContext } from 'react';
 import './Main.css';
 import { Link } from 'react-router-dom';
@@ -106,12 +106,11 @@ export default function MainPage() {
   };
 
   const allTags = Array.from(new Set(
-    entries.flatMap(e =>
-      Array.isArray(e.tags)
-        ? e.tags
-        : (e.tags ? e.tags.split(',').map(t => t.trim()) : [])
-    ).filter(Boolean)
-  ));
+    entries
+      .flatMap(e => Array.isArray(e.tags) ? e.tags : (e.tags || '').split(','))
+      .map(t => t.trim())
+      .filter(t => t.length > 0)
+  )).sort();
 
   const filteredEntries = entries.filter((entry) => {
     const matchesSection = !selectedSection || entry.section === selectedSection;
@@ -152,16 +151,16 @@ export default function MainPage() {
 
             <label>
               Section
-             <select id="section" value={newEntry.section} onChange={handleChange}>
-  <option value="Floating in the Stream">Floating in the Stream</option>
-  <option value="Reflections">Reflections</option>
-  <option value="Ideas & Plans">Ideas & Plans</option>
-  <option value="Creative Stream">Creative Stream</option>
-  <option value="Notes & Research">Notes & Research</option>
-  <option value="Free Writing">Free Writing</option>
-  <option value="Personal Log">Personal Log</option>
-  <option value="Open Thoughts">Open Thoughts</option>
-</select>
+              <select id="section" value={newEntry.section} onChange={handleChange}>
+                <option value="Floating in the Stream">Floating in the Stream</option>
+                <option value="Reflections">Reflections</option>
+                <option value="Ideas & Plans">Ideas & Plans</option>
+                <option value="Creative Stream">Creative Stream</option>
+                <option value="Notes & Research">Notes & Research</option>
+                <option value="Free Writing">Free Writing</option>
+                <option value="Personal Log">Personal Log</option>
+                <option value="Open Thoughts">Open Thoughts</option>
+              </select>
             </label>
 
             <label>
@@ -193,14 +192,19 @@ export default function MainPage() {
       <div className="main-container">
         <section className="main-feed">
           {filteredEntries.map((entry) => (
-            <div className="main-entry" key={entry.id}>
+  <div className="main-entry" key={entry._id}>
+
               <h3>{entry.date}</h3>
               <h4>{entry.section}</h4>
               <p>{entry.content}</p>
               {entry.tags && entry.tags.toString().trim().length > 0 && (
                 <div className="tags">
-                  {(Array.isArray(entry.tags) ? entry.tags : entry.tags.split(',')).map((tag, i) => (
-                    <span key={i} className="tag-pill">#{tag.trim()}</span>
+                  {[...new Set(
+                    (Array.isArray(entry.tags) ? entry.tags : entry.tags.split(','))
+                      .map(tag => tag.trim())
+                      .filter(Boolean)
+                  )].map((tag, i) => (
+                    <span key={`${entry.id}-tag-${i}`} className="tag-pill">#{tag}</span>
                   ))}
                 </div>
               )}
@@ -225,17 +229,16 @@ export default function MainPage() {
           </div>
           <div className="sections">
             <div className="sections placeholder-sections">
-  <p>Future Place for User Created Sections</p>
-</div>
-
+              <p>Future Place for User Created Sections</p>
+            </div>
           </div>
         </aside>
       </div>
 
       <footer id="tag-footer">
-        {allTags.map((tag, i) => (
+        {allTags.map((tag) => (
           <a
-            key={i}
+            key={`tag-footer-${tag}`}
             href="#"
             className={searchQuery === `#${tag}` ? 'active' : ''}
             onClick={(e) => {

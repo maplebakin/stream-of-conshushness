@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from 'react';
-import axios from 'axios';
+import axios from './api/axiosInstance';
 import './Calendar.css';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from './AuthContext.jsx';
@@ -10,7 +10,7 @@ export default function Calendar() {
 
   const now = new Date();
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const todayStr = now.toISOString().slice(0,10);
+  const todayStr = now.toISOString().slice(0, 10);
 
   const [calendarData, setCalendarData] = useState({});
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
@@ -22,6 +22,14 @@ export default function Calendar() {
   const [showMonthMenu, setShowMonthMenu] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 800);
 
+  // Track window resize for mobile responsiveness
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 800);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Utility
   const getDaysUntil = (dateStr) => {
     const eventDate = new Date(dateStr);
     const today = new Date(todayStr);
@@ -35,12 +43,7 @@ export default function Calendar() {
     return `${Math.abs(diffDays)} Days Ago`;
   };
 
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 800);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
+  // Month Tabs
   const monthOptions = [
     ['J', 'January', '01'],
     ['F', 'February', '02'],
@@ -81,6 +84,7 @@ export default function Calendar() {
     );
   };
 
+  // Fetch appointments
   const fetchCalendar = () => {
     axios.get('/api/calendar-data', {
       headers: { Authorization: `Bearer ${token}` }
@@ -93,22 +97,25 @@ export default function Calendar() {
     fetchCalendar();
   }, [token]);
 
-  useEffect(() => {
-    if (!selectedMonth) return;
-    axios.get(`/api/important-events/${selectedMonth}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    .then(res => setImportantEvents(Array.isArray(res.data) ? res.data : []))
-    .catch(() => setImportantEvents([]));
-  }, [selectedMonth, token]);
+  // Fetch important events for the month
+ useEffect(() => {
+  if (!selectedMonth) return;
+  axios.get(`/api/important-events/month/${selectedMonth}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  .then(res => {
+    console.log('Fetched important events:', res.data);  // ADD THIS LINE
+    setImportantEvents(Array.isArray(res.data) ? res.data : []);
+  })
+  .catch(() => setImportantEvents([]));
+}, [selectedMonth, token]);
 
+  // Set of dates with events for easy lookup
   const importantEventDates = new Set(
-    (Array.isArray(importantEvents) ? importantEvents : []).map(ev => {
-      const [y, m, d] = ev.date.split('-');
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    })
+    importantEvents.map(ev => ev.date)
   );
 
+  // Add Important Event
   const handleAddImportantEvent = (e) => {
     e.preventDefault();
     if (!newEvent.title.trim() || !newEvent.date.trim()) {
@@ -123,7 +130,7 @@ export default function Calendar() {
     })
     .then(() => {
       setNewEvent({ title: '', date: '' });
-      return axios.get(`/api/important-events/${selectedMonth}`, {
+      return axios.get(`/api/important-events/month/${selectedMonth}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
     })
@@ -131,17 +138,19 @@ export default function Calendar() {
     .catch(err => console.error('Error adding event:', err));
   };
 
+  // Delete Important Event
   const handleDeleteImportantEvent = (id) => {
-    axios.delete(`/api/important-events/${selectedMonth}/${id}`, {
+    axios.delete(`/api/important-events/${id}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
-    .then(() => axios.get(`/api/important-events/${selectedMonth}`, {
+    .then(() => axios.get(`/api/important-events/month/${selectedMonth}`, {
       headers: { Authorization: `Bearer ${token}` }
     }))
     .then(res => setImportantEvents(Array.isArray(res.data) ? res.data : []))
     .catch(err => console.error('Error deleting event:', err));
   };
 
+  // Add Appointment
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!newAppointment.date || !newAppointment.time || !newAppointment.details) {
@@ -229,14 +238,16 @@ export default function Calendar() {
             </form>
           )}
 
-          <ul className="important-event-list">
-            {Array.isArray(importantEvents) && importantEvents.map((ev) => (
-              <li key={ev.id}>
-                <span>{getDaysUntil(ev.date)}: {ev.title}</span>
-                <button onClick={() => handleDeleteImportantEvent(ev.id)}>🗑️</button>
-              </li>
-            ))}
-          </ul>
+    <ul className="important-event-list">
+  {importantEvents.map(ev => (
+    <li key={ev._id}>
+      <span>{getDaysUntil(ev.date)}: {ev.title}</span>
+      <button className="delete-button" onClick={() => handleDeleteImportantEvent(ev._id)}>🗑️</button>
+    </li>
+  ))}
+</ul>
+
+
         </aside>
 
         <section className="calendar-content">
@@ -247,24 +258,22 @@ export default function Calendar() {
           </div>
 
           <div className="add-appointment">
-           
             <div className="add-appointment-buttons">
-  <button onClick={() => setShowForm(!showForm)}>
-    {showForm ? 'Close' : '+ Add Appointment'}
-  </button>
+              <button onClick={() => setShowForm(!showForm)}>
+                {showForm ? 'Close' : '+ Add Appointment'}
+              </button>
 
-  <div className="calendar-controls">
-    <button onClick={() => navigate(`/day/${todayStr}`)}>
-      Today
-    </button>
-    {isMobile && (
-      <button onClick={() => setShowMonthMenu(!showMonthMenu)}>
-        {showMonthMenu ? 'Hide Months' : 'Month'}
-      </button>
-    )}
-  </div>
-</div>
-
+              <div className="calendar-controls">
+                <button onClick={() => navigate(`/day/${todayStr}`)}>
+                  Today
+                </button>
+                {isMobile && (
+                  <button onClick={() => setShowMonthMenu(!showMonthMenu)}>
+                    {showMonthMenu ? 'Hide Months' : 'Month'}
+                  </button>
+                )}
+              </div>
+            </div>
 
             {isMobile && showMonthMenu && (
               <div className="month-tabs">
@@ -329,7 +338,10 @@ export default function Calendar() {
                   className={`calendar-day ${dayData ? 'has-note' : ''} ${isImportant ? 'has-important' : ''} ${isPast ? 'past-day' : ''} ${isToday ? 'today' : ''}`}
                   onClick={() => handleDayClick(dateStr)}
                 >
-                  <div className="date-label">{day}</div>
+                  <div className="date-label">
+                    {day}
+                    {isImportant && <span className="star">★</span>}
+                  </div>
                   {dayData?.schedule &&
                     Object.entries(dayData.schedule).map(([time, details]) => (
                       <div key={time} className="day-appointment">

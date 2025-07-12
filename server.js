@@ -171,6 +171,17 @@ app.delete('/api/delete-entry/:id', authenticateToken, async (req, res) => {
 });
 
 // ─── Calendar Routes ─────────────────────────────
+app.get('/api/calendar-data', authenticateToken, async (req, res) => {
+  try {
+    const appointments = await Appointment.find({ userId: req.user.userId });
+    const importantEvents = await ImportantEvent.find({ userId: req.user.userId });
+    res.json({ appointments, importantEvents });
+  } catch (err) {
+    console.error('Error fetching calendar data:', err);
+    res.status(500).json({ error: 'Server error fetching calendar data' });
+  }
+});
+
 app.get('/api/appointments/:date', authenticateToken, async (req, res) => {
   try {
     const appointments = await Appointment.find({ userId: req.user.userId, date: req.params.date }).sort({ time: 1 });
@@ -178,6 +189,19 @@ app.get('/api/appointments/:date', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Error fetching appointments:', err);
     res.status(500).json({ error: 'Server error fetching appointments' });
+  }
+});
+app.get('/api/important-events/:month', authenticateToken, async (req, res) => {
+  try {
+    const events = await ImportantEvent.find({
+      userId: req.user.userId,
+      date: { $regex: `^${req.params.month}` }
+    }).sort({ date: 1 });
+
+    res.json(events);
+  } catch (err) {
+    console.error('Error fetching events for month:', err);
+    res.status(500).json({ error: 'Server error fetching events for month' });
   }
 });
 

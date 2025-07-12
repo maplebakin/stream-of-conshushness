@@ -6,7 +6,7 @@ import TopPriorities from './TopPriorities';
 import ToDoBox from './ToDoBox';
 import NotesSection from './NotesSection';
 import EntriesSection from './EntriesSection';
-import axios from 'axios';
+import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 
 function DailyPage() {
@@ -32,17 +32,29 @@ function DailyPage() {
   };
 
   useEffect(() => {
-    if (!date || !token) return;
+  if (!date || !token) return;
 
-    axios.get(`/api/appointments/${date}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(res => setSeedAppointments(res.data || {}))
-      .catch(err => {
-        console.error('Error fetching appointments:', err);
-        setSeedAppointments({});
+  axios.get(`/api/appointments/${date}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(res => {
+      const raw = res.data || [];
+      const map = {};
+
+      raw.forEach(item => {
+        if (item.time && item.details) {
+          map[item.time] = item.details;
+        }
       });
-  }, [date, token]);
+
+      setSeedAppointments(map);
+    })
+    .catch(err => {
+      console.error('Error fetching appointments:', err);
+      setSeedAppointments({});
+    });
+}, [date, token]);
+
 
   useEffect(() => {
     if (!date || !token) return;

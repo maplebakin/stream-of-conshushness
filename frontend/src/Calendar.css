@@ -279,6 +279,43 @@
   margin-left: 0.5rem;
 }
 
+.star {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 1.4rem;
+  color: var(--color-accent);
+  font-family: var(--font-serif);
+  font-weight: bold;
+  vertical-align: middle;
+  filter: drop-shadow(0 0 2px var(--color-accent));
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.star:hover {
+  transform: scale(1.2);
+  filter: drop-shadow(0 0 4px var(--color-accent));
+  cursor: default;
+}
+
+.delete-button {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--radius-button);
+  font-family: var(--font-handwritten);
+  cursor: pointer;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+  font-size: 0.9rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.delete-button:hover {
+  background-color: var(--color-hover);
+  border-color: var(--color-accent);
+}
+
+
 /*──────────────────────────────────────────────────────
   Month Tabs (Sidebar)
 ──────────────────────────────────────────────────────*/

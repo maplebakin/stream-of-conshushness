@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import axios from 'axios';
+import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 
 function NotesSection({ date }) {
