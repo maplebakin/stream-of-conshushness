@@ -4,11 +4,11 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "dev": "nodemon server.js",
-    "start": "NODE_ENV=production node server.js",
-    "build": "cd frontend && npm install && npm run build"
-
-  },
+  "dev": "nodemon server.js",
+  "start": "NODE_ENV=production node server.js",
+  "build": "cd frontend && npm install && npm run build"
+}
+,
   "dependencies": {
     "bcrypt": "^6.0.0",
     "dotenv": "^17.2.0",
