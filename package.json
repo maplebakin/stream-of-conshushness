@@ -6,8 +6,9 @@
   "scripts": {
   "dev": "nodemon server.js",
   "start": "NODE_ENV=production node server.js",
-  "build": "cd frontend && npm install && npm run build"
+  "build": "cd frontend && npm install --include=dev && npm run build"
 }
+
 ,
   "dependencies": {
     "bcrypt": "^6.0.0",
