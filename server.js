@@ -331,7 +331,7 @@ app.use((req, res) => {
 
 // ─── Serve Frontend in Production ─────────────────────────────
 if (process.env.NODE_ENV === 'production') {
-  const CLIENT_BUILD_PATH = path.join(__dirname, 'dist');
+  const CLIENT_BUILD_PATH = path.join(__dirname, 'frontend', 'dist');
   app.use(express.static(CLIENT_BUILD_PATH));
   app.get('*', (req, res) => {
     res.sendFile(path.join(CLIENT_BUILD_PATH, 'index.html'));
