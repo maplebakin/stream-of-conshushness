@@ -1,37 +1,61 @@
 import { useParams, Link } from 'react-router-dom';
 import './dailypage.css';
 import HourlySchedule from './HourlySchedule';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import TopPriorities from './TopPriorities';
 import ToDoBox from './ToDoBox';
 import NotesSection from './NotesSection';
 import EntriesSection from './EntriesSection';
+import axios from 'axios';
+import { AuthContext } from './AuthContext.jsx';
 
 function DailyPage() {
   const { date } = useParams();
+  const { token } = useContext(AuthContext);
   const [seedAppointments, setSeedAppointments] = useState({});
-    const [importantEvents, setImportantEvents] = useState([]);
+  const [importantEvents, setImportantEvents] = useState([]);
+
+  // NEW: Schedule open/closed state
+  const [isScheduleOpen, setIsScheduleOpen] = useState(true);
 
   useEffect(() => {
-    if (!date) return;
+    // Set default open/closed based on screen size
+    if (window.innerWidth < 800) {
+      setIsScheduleOpen(false);
+    } else {
+      setIsScheduleOpen(true);
+    }
+  }, []);
 
-    fetch(`/api/appointments/${date}`)
-      .then(res => res.json())
-      .then(data => {
-        setSeedAppointments(data || {});
-      })
+  const toggleSchedule = () => {
+    setIsScheduleOpen(prev => !prev);
+  };
+
+  useEffect(() => {
+    if (!date || !token) return;
+
+    axios.get(`/api/appointments/${date}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => setSeedAppointments(res.data || {}))
       .catch(err => {
         console.error('Error fetching appointments:', err);
         setSeedAppointments({});
       });
-  }, [date]);
-useEffect(() => {
-  if (!date) return;
-  fetch(`/api/important-events/date/${date}`)
-    .then(res => res.json())
-    .then(data => setImportantEvents(data || []))
-    .catch(() => setImportantEvents([]));
-}, [date]);
+  }, [date, token]);
+
+  useEffect(() => {
+    if (!date || !token) return;
+
+    axios.get(`/api/important-events/month/${date.slice(0, 7)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => {
+        const filtered = (res.data || []).filter(ev => ev.date === date);
+        setImportantEvents(filtered);
+      })
+      .catch(() => setImportantEvents([]));
+  }, [date, token]);
 
   const [yyyy, mm, dd] = date.split('-');
   const formattedDate = new Date(
@@ -53,9 +77,17 @@ useEffect(() => {
       </header>
 
       <main className="daily-page-content">
-        <section className="schedule-section">
-          <HourlySchedule date={date} seedAppointments={seedAppointments} />
-        </section>
+        <div className={`schedule-section ${isScheduleOpen ? 'open' : ''}`}>
+  <button className="schedule-toggle" onClick={toggleSchedule}>
+    {isScheduleOpen ? '▼ Schedule' : '► Schedule'}
+  </button>
+  {isScheduleOpen && (
+    <div className="schedule-content">
+      <HourlySchedule date={date} seedAppointments={seedAppointments} />
+    </div>
+  )}
+</div>
+
 
         <section className="todo-section">
           <h2>To-Do List</h2>

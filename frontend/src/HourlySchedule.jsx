@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
+import { AuthContext } from './AuthContext.jsx';
 
 function HourlySchedule({ date, seedAppointments }) {
   const [appointments, setAppointments] = useState({});
   const [editingHour, setEditingHour] = useState(null);
   const [inputValue, setInputValue] = useState('');
+  const { token } = useContext(AuthContext);
 
   // Build hour labels (8AM to 6PM)
   const hours = [];
@@ -24,15 +26,16 @@ function HourlySchedule({ date, seedAppointments }) {
 
   // Load saved plan or seed appointments on date change
   useEffect(() => {
-  if (!date) return;
+    if (!date || !token) return;
 
-  setAppointments({});
+    setAppointments({});
 
-  axios.get(`/api/appointments/${date}`)
-    .then(res => setAppointments(res.data || {}))
-    .catch(() => setAppointments({}));
-}, [date]);
-
+    axios.get(`/api/appointments/${date}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => setAppointments(res.data || {}))
+      .catch(() => setAppointments({}));
+  }, [date, token]);
 
   // Handle clicking to edit
   const handleEditClick = (hourLabel) => {
@@ -49,23 +52,33 @@ function HourlySchedule({ date, seedAppointments }) {
 
     setAppointments(updated);
     setEditingHour(null);
-    localStorage.setItem(`schedule-${date}`, JSON.stringify(updated));
+
+    // Optionally send to server to persist
+    axios.post('/api/add-appointment', {
+      date,
+      time: hourLabel,
+      details: inputValue
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).catch(err => console.error(err));
   };
 
   // Handle deleting/clearing a slot
-const handleDelete = (hourLabel) => {
-  axios.delete(`/api/appointments/${date}/${hourLabel}`)
-    .then(() => {
-      const updated = { ...appointments };
-      delete updated[hourLabel];
-      setAppointments(updated);
+  const handleDelete = (hourLabel) => {
+    axios.delete(`/api/appointments/${date}/${hourLabel}`, {
+      headers: { Authorization: `Bearer ${token}` }
     })
-    .catch(err => console.error(err));
-};
+      .then(() => {
+        const updated = { ...appointments };
+        delete updated[hourLabel];
+        setAppointments(updated);
+      })
+      .catch(err => console.error(err));
+  };
 
   return (
     <div className="hourly-schedule">
-      <h2>Schedule</h2>
+      
       <ul>
         {hours.map((label, index) => (
           <li key={index}>

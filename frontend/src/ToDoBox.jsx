@@ -1,29 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import axios from 'axios';
+import { AuthContext } from './AuthContext.jsx';
 
 function ToDoBox({ date }) {
   const [todos, setTodos] = useState([]);
   const [inputValue, setInputValue] = useState('');
-  const [hasLoaded, setHasLoaded] = useState(false);
   const [editingIndex, setEditingIndex] = useState(null);
   const [editingText, setEditingText] = useState('');
+  const { token } = useContext(AuthContext);
 
-  // Load saved todos
   useEffect(() => {
     if (!date) return;
-    const saved = localStorage.getItem(`todos-${date}`);
-    if (saved) {
-      setTodos(JSON.parse(saved));
-    } else {
-      setTodos([]);
-    }
-    setHasLoaded(true);
-  }, [date]);
 
-  // Save to localStorage on change
+    axios.get(`/api/todos/${date}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => setTodos(res.data || []))
+      .catch(() => setTodos([]));
+  }, [date, token]);
+
   useEffect(() => {
-    if (!date || !hasLoaded) return;
-    localStorage.setItem(`todos-${date}`, JSON.stringify(todos));
-  }, [date, todos, hasLoaded]);
+    if (!date) return;
+
+    axios.post(`/api/todos/${date}`, { items: todos }, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).catch(err => console.error('Error saving todos:', err));
+  }, [date, todos, token]);
 
   const handleAdd = () => {
     if (!inputValue.trim()) return;
@@ -57,7 +59,6 @@ function ToDoBox({ date }) {
 
   return (
     <div className="to-do-box">
-      
       <ul>
         {todos.map((item, index) => (
           <li key={index} className={item.done ? 'done' : ''}>

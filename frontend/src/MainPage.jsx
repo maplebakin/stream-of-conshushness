@@ -1,7 +1,8 @@
 import axios from 'axios';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useContext } from 'react';
 import './Main.css';
 import { Link } from 'react-router-dom';
+import { AuthContext } from './AuthContext.jsx';
 
 function getTodayISO() {
   const today = new Date();
@@ -9,6 +10,7 @@ function getTodayISO() {
 }
 
 export default function MainPage() {
+  const { token } = useContext(AuthContext);
   const [entries, setEntries] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [newEntry, setNewEntry] = useState({
@@ -22,10 +24,13 @@ export default function MainPage() {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    axios.get('/api/entries')
+    if (!token) return;
+    axios.get('/api/entries', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
       .then(res => setEntries(res.data))
       .catch(err => console.error('Error fetching entries:', err));
-  }, []);
+  }, [token]);
 
   const toggleForm = () => setShowForm(!showForm);
 
@@ -48,15 +53,19 @@ export default function MainPage() {
         : [],
     };
 
+    const config = {
+      headers: { Authorization: `Bearer ${token}` }
+    };
+
     if (editingId) {
-      axios.put(`/api/edit-entry/${editingId}`, entryToSave)
+      axios.put(`/api/edit-entry/${editingId}`, entryToSave, config)
         .then(() => {
           setEntries(entries.map(e => e.id === editingId ? { ...e, ...entryToSave } : e));
           resetForm();
         })
         .catch(err => console.error('Error updating entry:', err));
     } else {
-      axios.post('/api/add-entry', entryToSave)
+      axios.post('/api/add-entry', entryToSave, config)
         .then(res => {
           setEntries([res.data, ...entries]);
           resetForm();
@@ -89,17 +98,20 @@ export default function MainPage() {
 
   const handleDelete = (id) => {
     if (!window.confirm('Delete this entry?')) return;
-    axios.delete(`/api/delete-entry/${id}`)
+    axios.delete(`/api/delete-entry/${id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
       .then(() => setEntries(entries.filter(e => e.id !== id)))
       .catch(err => console.error('Error deleting entry:', err));
   };
-const allTags = Array.from(new Set(
-  entries.flatMap(e =>
-    Array.isArray(e.tags)
-      ? e.tags
-      : (e.tags ? e.tags.split(',').map(t => t.trim()) : [])
-  ).filter(Boolean)
-));
+
+  const allTags = Array.from(new Set(
+    entries.flatMap(e =>
+      Array.isArray(e.tags)
+        ? e.tags
+        : (e.tags ? e.tags.split(',').map(t => t.trim()) : [])
+    ).filter(Boolean)
+  ));
 
   const filteredEntries = entries.filter((entry) => {
     const matchesSection = !selectedSection || entry.section === selectedSection;
@@ -116,7 +128,6 @@ const allTags = Array.from(new Set(
   });
 
   return (
-    
     <>
       <header>
         <h1>Stream of Conshushness</h1>
@@ -141,16 +152,16 @@ const allTags = Array.from(new Set(
 
             <label>
               Section
-              <select
-                id="section"
-                value={newEntry.section}
-                onChange={handleChange}
-              >
-                <option value="Floating in the Stream">Floating in the Stream</option>
-                <option value="General">General</option>
-                <option value="Gaming">Gaming</option>
-                <option value="Magnetic Energy Stream Theory">Magnetic Energy Stream Theory</option>
-              </select>
+             <select id="section" value={newEntry.section} onChange={handleChange}>
+  <option value="Floating in the Stream">Floating in the Stream</option>
+  <option value="Reflections">Reflections</option>
+  <option value="Ideas & Plans">Ideas & Plans</option>
+  <option value="Creative Stream">Creative Stream</option>
+  <option value="Notes & Research">Notes & Research</option>
+  <option value="Free Writing">Free Writing</option>
+  <option value="Personal Log">Personal Log</option>
+  <option value="Open Thoughts">Open Thoughts</option>
+</select>
             </label>
 
             <label>
@@ -213,48 +224,29 @@ const allTags = Array.from(new Set(
             <Link to="/calendar">📅 Open Calendar</Link>
           </div>
           <div className="sections">
-            <ul>
-              <li><button
-                className={!selectedSection ? 'active' : ''}
-                onClick={() => setSelectedSection('')}
-              >All</button></li>
-              <li><button
-                className={selectedSection === 'Floating in the Stream' ? 'active' : ''}
-                onClick={() => setSelectedSection('Floating in the Stream')}
-              >Floating in the Stream</button></li>
-              <li><button
-                className={selectedSection === 'General' ? 'active' : ''}
-                onClick={() => setSelectedSection('General')}
-              >General</button></li>
-              <li><button
-                className={selectedSection === 'Gaming' ? 'active' : ''}
-                onClick={() => setSelectedSection('Gaming')}
-              >Gaming</button></li>
-              <li><button
-                className={selectedSection === 'Magnetic Energy Stream Theory' ? 'active' : ''}
-                onClick={() => setSelectedSection('Magnetic Energy Stream Theory')}
-              >Magnetic Energy Stream Theory</button></li>
-            </ul>
+            <div className="sections placeholder-sections">
+  <p>Future Place for User Created Sections</p>
+</div>
+
           </div>
         </aside>
       </div>
 
       <footer id="tag-footer">
-  {allTags.map((tag, i) => (
-    <a
-      key={i}
-      href="#"
-      className={searchQuery === `#${tag}` ? 'active' : ''}
-      onClick={(e) => {
-        e.preventDefault();
-        setSearchQuery(`${tag}`);
-      }}
-    >
-      #{tag}
-    </a>
-  ))}
-</footer>
-
+        {allTags.map((tag, i) => (
+          <a
+            key={i}
+            href="#"
+            className={searchQuery === `#${tag}` ? 'active' : ''}
+            onClick={(e) => {
+              e.preventDefault();
+              setSearchQuery(`${tag}`);
+            }}
+          >
+            #{tag}
+          </a>
+        ))}
+      </footer>
     </>
   );
 }

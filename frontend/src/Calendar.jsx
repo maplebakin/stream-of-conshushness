@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import './Calendar.css';
 import { Link, useNavigate } from 'react-router-dom';
+import { AuthContext } from './AuthContext.jsx';
 
 export default function Calendar() {
   const navigate = useNavigate();
+  const { token } = useContext(AuthContext);
 
   const now = new Date();
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -19,32 +21,26 @@ export default function Calendar() {
   const [showEventForm, setShowEventForm] = useState(false);
   const [showMonthMenu, setShowMonthMenu] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 800);
+
   const getDaysUntil = (dateStr) => {
-  const eventDate = new Date(dateStr);
-  const today = new Date(todayStr);
-
-  // Remove time component for accurate day difference
-  eventDate.setHours(0, 0, 0, 0);
-  today.setHours(0, 0, 0, 0);
-
-  const diffMs = eventDate - today;
-  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Tomorrow';
-  if (diffDays > 1) return `${diffDays} Days Away`;
-  return `${Math.abs(diffDays)} Days Ago`;
-};
+    const eventDate = new Date(dateStr);
+    const today = new Date(todayStr);
+    eventDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    const diffMs = eventDate - today;
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Tomorrow';
+    if (diffDays > 1) return `${diffDays} Days Away`;
+    return `${Math.abs(diffDays)} Days Ago`;
+  };
 
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 800);
-    };
+    const handleResize = () => setIsMobile(window.innerWidth <= 800);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Month options with clear short labels
   const monthOptions = [
     ['J', 'January', '01'],
     ['F', 'February', '02'],
@@ -60,62 +56,59 @@ export default function Calendar() {
     ['D', 'December', '12']
   ];
 
-  // Helper to render month tab
   const renderMonthTab = ([abbr, full, monthNum]) => {
-  const yearStr = String(now.getFullYear());
-  const monthKey = `${yearStr}-${monthNum}`;
-  const active = monthKey === selectedMonth;
+    const yearStr = String(now.getFullYear());
+    const monthKey = `${yearStr}-${monthNum}`;
+    const active = monthKey === selectedMonth;
+    return (
+      <div
+        key={monthKey}
+        className={`month-tab ${active ? 'active' : ''}`}
+        onClick={() => {
+          setSelectedMonth(monthKey);
+          setShowMonthMenu(false);
+        }}
+      >
+        {isMobile ? (
+          <span className="month-label">{full}</span>
+        ) : (
+          <>
+            <span className="collapsed-label">{abbr}</span>
+            <span className="expanded-label">{full}</span>
+          </>
+        )}
+      </div>
+    );
+  };
 
-  return (
-    <div
-      key={monthKey}
-      className={`month-tab ${active ? 'active' : ''}`}
-      onClick={() => {
-        setSelectedMonth(monthKey);
-        setShowMonthMenu(false);
-      }}
-    >
-      {isMobile ? (
-        <span className="month-label">{full}</span>
-      ) : (
-        <>
-          <span className="collapsed-label">{abbr}</span>
-          <span className="expanded-label">{full}</span>
-        </>
-      )}
-    </div>
-  );
-};
-
-
-  // Fetch full calendar data
   const fetchCalendar = () => {
-    axios.get('/api/calendar-data')
-      .then(res => setCalendarData(res.data))
-      .catch(err => console.error('Error fetching calendar:', err));
+    axios.get('/api/calendar-data', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    .then(res => setCalendarData(res.data))
+    .catch(err => console.error('Error fetching calendar:', err));
   };
 
   useEffect(() => {
     fetchCalendar();
-  }, []);
+  }, [token]);
 
-  // Fetch important events for month
   useEffect(() => {
     if (!selectedMonth) return;
-    axios.get(`/api/important-events/${selectedMonth}`)
-      .then(res => setImportantEvents(res.data))
-      .catch(() => setImportantEvents([]));
-  }, [selectedMonth]);
+    axios.get(`/api/important-events/${selectedMonth}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    .then(res => setImportantEvents(Array.isArray(res.data) ? res.data : []))
+    .catch(() => setImportantEvents([]));
+  }, [selectedMonth, token]);
 
-  // Build set of dates with important events (zero-padded)
   const importantEventDates = new Set(
-    importantEvents.map(ev => {
+    (Array.isArray(importantEvents) ? importantEvents : []).map(ev => {
       const [y, m, d] = ev.date.split('-');
       return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     })
   );
 
-  // Add important event
   const handleAddImportantEvent = (e) => {
     e.preventDefault();
     if (!newEvent.title.trim() || !newEvent.date.trim()) {
@@ -123,59 +116,64 @@ export default function Calendar() {
       return;
     }
     axios.post('/api/important-events', {
-      month: selectedMonth,
       title: newEvent.title,
       date: newEvent.date
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
     })
-      .then(() => {
-        setNewEvent({ title: '', date: '' });
-        return axios.get(`/api/important-events/${selectedMonth}`);
-      })
-      .then(res => setImportantEvents(res.data))
-      .catch(err => console.error('Error adding event:', err));
+    .then(() => {
+      setNewEvent({ title: '', date: '' });
+      return axios.get(`/api/important-events/${selectedMonth}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    })
+    .then(res => setImportantEvents(Array.isArray(res.data) ? res.data : []))
+    .catch(err => console.error('Error adding event:', err));
   };
 
-  // Delete important event
   const handleDeleteImportantEvent = (id) => {
-    axios.delete(`/api/important-events/${selectedMonth}/${id}`)
-      .then(() => axios.get(`/api/important-events/${selectedMonth}`))
-      .then(res => setImportantEvents(res.data))
-      .catch(err => console.error('Error deleting event:', err));
+    axios.delete(`/api/important-events/${selectedMonth}/${id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    .then(() => axios.get(`/api/important-events/${selectedMonth}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }))
+    .then(res => setImportantEvents(Array.isArray(res.data) ? res.data : []))
+    .catch(err => console.error('Error deleting event:', err));
   };
 
-  // Add new daily appointment
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!newAppointment.date || !newAppointment.time || !newAppointment.details) {
       alert('Please fill all fields');
       return;
     }
-    axios.post('/api/add-appointment', newAppointment)
-      .then(() => {
-        fetchCalendar();
-        setShowForm(false);
-        setNewAppointment({ date: '', time: '', details: '' });
-      })
-      .catch(err => console.error('Error saving appointment:', err));
+    axios.post('/api/add-appointment', newAppointment, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    .then(() => {
+      fetchCalendar();
+      setShowForm(false);
+      setNewAppointment({ date: '', time: '', details: '' });
+    })
+    .catch(err => console.error('Error saving appointment:', err));
   };
 
-  // Delete daily appointment
   const handleDeleteAppointment = async (date, time, e) => {
     e.stopPropagation();
     try {
-      await axios.delete('/api/delete-appointment', { data: { date, time } });
+      await axios.delete('/api/delete-appointment', {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { date, time }
+      });
       fetchCalendar();
     } catch (err) {
       console.error('Error deleting appointment:', err);
     }
   };
 
-  // Handle clicking a day cell
-  const handleDayClick = (dateStr) => {
-    navigate(`/day/${dateStr}`);
-  };
+  const handleDayClick = (dateStr) => navigate(`/day/${dateStr}`);
 
-  // Month navigation
   const handleMonthChange = (direction) => {
     const [y, m] = selectedMonth.split('-').map(Number);
     const date = new Date(y, m - 1 + direction);
@@ -189,7 +187,6 @@ export default function Calendar() {
     return date.toLocaleString('default', { month: 'long', year: 'numeric' });
   };
 
-  // Days in month
   const [year, month] = selectedMonth.split('-').map(Number);
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstWeekday = new Date(year, month - 1, 1).getDay();
@@ -233,7 +230,7 @@ export default function Calendar() {
           )}
 
           <ul className="important-event-list">
-            {importantEvents.map((ev) => (
+            {Array.isArray(importantEvents) && importantEvents.map((ev) => (
               <li key={ev.id}>
                 <span>{getDaysUntil(ev.date)}: {ev.title}</span>
                 <button onClick={() => handleDeleteImportantEvent(ev.id)}>🗑️</button>
@@ -250,19 +247,24 @@ export default function Calendar() {
           </div>
 
           <div className="add-appointment">
+           
             <div className="add-appointment-buttons">
-              <button onClick={() => setShowForm(!showForm)}>
-                {showForm ? 'Close' : '+ Add Appointment'}
-              </button>
-              <button onClick={() => navigate(`/day/${todayStr}`)}>
-                Today
-              </button>
-              {isMobile && (
-                <button onClick={() => setShowMonthMenu(!showMonthMenu)}>
-                  {showMonthMenu ? 'Hide Months' : 'Month'}
-                </button>
-              )}
-            </div>
+  <button onClick={() => setShowForm(!showForm)}>
+    {showForm ? 'Close' : '+ Add Appointment'}
+  </button>
+
+  <div className="calendar-controls">
+    <button onClick={() => navigate(`/day/${todayStr}`)}>
+      Today
+    </button>
+    {isMobile && (
+      <button onClick={() => setShowMonthMenu(!showMonthMenu)}>
+        {showMonthMenu ? 'Hide Months' : 'Month'}
+      </button>
+    )}
+  </div>
+</div>
+
 
             {isMobile && showMonthMenu && (
               <div className="month-tabs">

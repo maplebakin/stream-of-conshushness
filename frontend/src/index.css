@@ -1,25 +1,93 @@
+/*──────────────────────────────────────────────────────
+  Stream of Conshushness — index.css
+──────────────────────────────────────────────────────*/
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;700&family=Libre+Baskerville&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Pacifico&display=swap');
+
+/*──────────────────────────────────────────────────────
+  Base Reset
+──────────────────────────────────────────────────────*/
 html, body {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: 'Libre Baskerville', serif;
+  line-height: 1.6;
 }
 
 *, *::before, *::after {
   box-sizing: inherit;
 }
 
+/*──────────────────────────────────────────────────────
+  Links
+──────────────────────────────────────────────────────*/
 a {
+  color: var(--color-accent);
   text-decoration: none;
+  transition: color 0.3s ease;
 }
 
+a:hover {
+  color: var(--color-hover);
+  text-decoration: underline;
+}
+
+/*──────────────────────────────────────────────────────
+  Buttons
+──────────────────────────────────────────────────────*/
 button {
+  background-color: var(--color-accent);
+  color: var(--color-surface);
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-button, 8px);
+  font-family: 'Patrick Hand', cursive;
   cursor: pointer;
+  transition: background-color 0.3s ease;
+  font-size: 1rem;
 }
 
+button:hover {
+  background-color: var(--color-hover);
+}
+
+/*──────────────────────────────────────────────────────
+  Inputs & Textareas
+──────────────────────────────────────────────────────*/
+input, textarea, select {
+  font-family: 'Libre Baskerville', serif;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input, 8px);
+  padding: 0.5rem;
+  transition: border-color 0.3s ease, background-color 0.3s ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  background-color: var(--color-surface);
+}
+
+/*──────────────────────────────────────────────────────
+  Images
+──────────────────────────────────────────────────────*/
 img {
   max-width: 100%;
   display: block;
 }
+
+/*──────────────────────────────────────────────────────
+  Mobile Responsiveness
+──────────────────────────────────────────────────────*/
 @media (max-width: 600px) {
   html, body {
     font-size: 15px;
@@ -28,4 +96,76 @@ img {
   button, input, textarea, select {
     font-size: 1rem;
   }
+}
+
+/*──────────────────────────────────────────────────────
+  Auth Container Styles
+──────────────────────────────────────────────────────*/
+.auth-container {
+  max-width: 400px;
+  margin: 2rem auto;
+  padding: 2rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card, 12px);
+  background-color: var(--color-surface);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.auth-container h2 {
+  text-align: center;
+  margin-bottom: 1rem;
+  font-family: 'Cormorant Garamond', serif;
+  color: var(--color-text);
+}
+
+.auth-container form {
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-container input {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input, 8px);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}
+
+.auth-container button {
+  padding: 0.75rem;
+  background-color: var(--color-accent);
+  color: var(--color-surface);
+  border: none;
+  border-radius: var(--radius-button, 8px);
+  font-family: 'Patrick Hand', cursive;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.auth-container button:hover {
+  background-color: var(--color-hover);
+}
+
+.auth-switch {
+  margin-top: 1rem;
+  text-align: center;
+  font-family: 'Patrick Hand', cursive;
+}
+
+.register-link {
+  margin-top: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--color-accent);
+  background: none;
+  cursor: pointer;
+  border-radius: var(--radius-button, 8px);
+  color: var(--color-accent);
+  font-family: 'Patrick Hand', cursive;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.register-link:hover {
+  background-color: var(--color-accent);
+  color: var(--color-surface);
 }

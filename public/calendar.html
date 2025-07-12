@@ -1,63 +1,110 @@
 <!DOCTYPE html>
-<html lang="en" class="calendar-page">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Stream of Conshushness – Calendar</title>
-  <link rel="stylesheet" href="css/style.css" />
+  <title>Stream of Conshushness - Calendar</title>
+  <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body class="calendar-page">
-  <div class="calendar-wrapper">
-    <!-- Month Tabs on Left -->
-    <div class="month-tabs">
-      <div class="month-tab"><span class="collapsed-label">J</span> January</div>
-      <div class="month-tab"><span class="collapsed-label">F</span> February</div>
-      <div class="month-tab"><span class="collapsed-label">M</span> March</div>
-      <div class="month-tab"><span class="collapsed-label">A</span> April</div>
-      <div class="month-tab"><span class="collapsed-label">M</span> May</div>
-      <div class="month-tab"><span class="collapsed-label">J</span> June</div>
-      <div class="month-tab"><span class="collapsed-label">J</span> July</div>
-      <div class="month-tab"><span class="collapsed-label">A</span> August</div>
-      <div class="month-tab"><span class="collapsed-label">S</span> September</div>
-      <div class="month-tab"><span class="collapsed-label">O</span> October</div>
-      <div class="month-tab"><span class="collapsed-label">N</span> November</div>
-      <div class="month-tab"><span class="collapsed-label">D</span> December</div>
+  <header>
+    <h1>Stream of Conshushness Calendar</h1>
+  </header>
+
+  <main class="calendar-layout">
+    <div class="calendar-content">
+      <section class="calendar-nav">
+        <button id="prevMonth">«</button>
+        <h2 id="monthTitle">July 2025</h2>
+        <button id="nextMonth">»</button>
+      </section>
+
+      <section class="add-appointment">
+        <button id="toggleAddForm">+ Add Appointment</button>
+        <form id="addAppointmentForm" class="collapsed">
+          <label>
+            Date
+            <input type="date" id="appointmentDate" required>
+          </label>
+          <label>
+            Time
+            <input type="time" id="appointmentTime" required>
+          </label>
+          <label>
+            Details
+            <input type="text" id="appointmentDetails" required>
+          </label>
+          <button type="submit">Add</button>
+        </form>
+      </section>
+
+      <section class="calendar-grid">
+        <div id="calendarDays" class="calendar-days">
+          <!-- JS will render day cells here -->
+        </div>
+      </section>
+
+      <section class="important-events">
+        <h3>Important Events</h3>
+        <ul id="eventList">
+          <!-- JS will render important events here -->
+        </ul>
+      </section>
     </div>
 
-    <!-- Main Calendar Grid -->
-    <div class="main-calendar">
-      <h1>My Calendar</h1>
-      <div class="calendar-grid">
-        <!-- Example day cells -->
-        <div class="day">
-          <div class="date">1</div>
-          <div class="content">Doctor at 2pm</div>
+    <aside class="calendar-sidebar">
+      <div class="month-tabs">
+        <div class="month-tab" data-month="01">
+          <span class="collapsed-label">J</span>
+          <span class="expanded-label">January</span>
         </div>
-        <div class="day">
-          <div class="date">2</div>
+        <div class="month-tab" data-month="02">
+          <span class="collapsed-label">F</span>
+          <span class="expanded-label">February</span>
         </div>
-        <div class="day today">
-          <div class="date">3</div>
-          <div class="content">Important note here</div>
+        <div class="month-tab" data-month="03">
+          <span class="collapsed-label">M</span>
+          <span class="expanded-label">March</span>
         </div>
-        <!-- Repeat for full month... -->
-      </div>
-    </div>
-
-    <!-- Events Sidebar on Right -->
-    <aside class="events-sidebar">
-      <h2>Important Events</h2>
-      <div class="event">
-        <div class="event-title">Dentist Appointment</div>
-        <div class="event-date">July 5, 2025</div>
-      </div>
-      <div class="event">
-        <div class="event-title">Family Visit</div>
-        <div class="event-date">July 12, 2025</div>
+        <div class="month-tab" data-month="04">
+          <span class="collapsed-label">A</span>
+          <span class="expanded-label">April</span>
+        </div>
+        <div class="month-tab" data-month="05">
+          <span class="collapsed-label">M</span>
+          <span class="expanded-label">May</span>
+        </div>
+        <div class="month-tab" data-month="06">
+          <span class="collapsed-label">J</span>
+          <span class="expanded-label">June</span>
+        </div>
+        <div class="month-tab" data-month="07">
+          <span class="collapsed-label">J</span>
+          <span class="expanded-label">July</span>
+        </div>
+        <div class="month-tab" data-month="08">
+          <span class="collapsed-label">A</span>
+          <span class="expanded-label">August</span>
+        </div>
+        <div class="month-tab" data-month="09">
+          <span class="collapsed-label">S</span>
+          <span class="expanded-label">September</span>
+        </div>
+        <div class="month-tab" data-month="10">
+          <span class="collapsed-label">O</span>
+          <span class="expanded-label">October</span>
+        </div>
+        <div class="month-tab" data-month="11">
+          <span class="collapsed-label">N</span>
+          <span class="expanded-label">November</span>
+        </div>
+        <div class="month-tab" data-month="12">
+          <span class="collapsed-label">D</span>
+          <span class="expanded-label">December</span>
+        </div>
       </div>
     </aside>
-  </div>
+  </main>
 
-  <script src="js/calendar.js"></script>
+  <script src="/js/calendar.js"></script>
 </body>
 </html>

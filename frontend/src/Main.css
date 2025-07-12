@@ -1,18 +1,14 @@
 /*──────────────────────────────────────────────────────
-  Stream of Conshushness — Main.css (Sidebar Right, Feed Wide)
+  Stream of Conshushness — Main.css
 ──────────────────────────────────────────────────────*/
 
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;700&family=Libre+Baskerville&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Pacifico&display=swap');
-
-
-/* ─── Variables ─────────────────────────────────────── */
 @import url('./variables.css');
 
-/* ─── Base Styles ───────────────────────────────────── */
+/*──────────────────────────────────────────────────────
+  Base Styles
+──────────────────────────────────────────────────────*/
 body {
-  font-family: 'Libre Baskerville', serif;
+  font-family: var(--font-serif);
   background-color: var(--color-background);
   color: var(--color-text);
   margin: 0;
@@ -20,97 +16,115 @@ body {
   line-height: 1.6;
 }
 
-/* ─── Sticky Header & Footer ───────────────────────── */
+/*──────────────────────────────────────────────────────
+  Header
+──────────────────────────────────────────────────────*/
 header {
-  background-color: var(--color-card-background);
+  background-color: var(--color-header);
   text-align: center;
-  padding: 20px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--color-border);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
 }
+
 header h1 {
-   font-family: 'Pacifico', cursive;
-  color: var(--color-accent);
-  font-size: 3em;
-  margin: 10px 0;
+  font-family: var(--font-decorative);
+  color: var(--color-surface);
+  font-size: 2.2em;
+  margin: 5px 0;
 }
+
 header nav a {
-  color: var(--color-text);
+  color: var(--color-surface);
   text-decoration: none;
-  margin: 0 15px;
-  font-size: 1.1em;
+  margin: 0 20px;
+  font-size: 1em;
+  font-family: var(--font-handwritten);
   transition: color 0.3s;
 }
+
 header nav a:hover {
-  color: var(--color-accent);
+  color: var(--color-hover);
   text-decoration: underline;
 }
 
+/*──────────────────────────────────────────────────────
+  Footer
+──────────────────────────────────────────────────────*/
 footer {
   position: sticky;
   bottom: 0;
   z-index: 1000;
-  background-color: var(--color-card-background);
+  background-color: var(--color-surface);
   border-top: 1px solid var(--color-border);
   padding: 15px;
   text-align: center;
+  font-family: var(--font-handwritten);
 }
 
-/* ─── Layout ───────────────────────────────────────── */
+/*──────────────────────────────────────────────────────
+  Layout
+──────────────────────────────────────────────────────*/
 .main-container {
   display: flex;
-  flex-direction: row;
+  align-items: flex-start;
+  gap: 40px;
   max-width: 1400px;
   margin: 40px auto;
   padding: 20px;
-  gap: 40px;
-  align-items: flex-start;
+  box-sizing: border-box;
 }
 
-/* ─── Sidebar (fixed width on right) ───────────────── */
+/*──────────────────────────────────────────────────────
+  Sidebar
+──────────────────────────────────────────────────────*/
 .main-sidebar {
+  position: sticky;
+  top: 20px;
   flex: 0 0 250px;
   max-width: 250px;
-  background-color: var(--color-sidebar-bg);
+  background-color: var(--color-surface);
   padding: 20px;
   border-radius: var(--radius-card);
   display: flex;
   flex-direction: column;
   gap: 20px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
+
 .main-sidebar h2,
 .main-sidebar h3 {
-  font-family: 'Cormorant Garamond', serif;
+  font-family: var(--font-serif);
   color: var(--color-text);
   margin-top: 0;
 }
-.main-sidebar button {
-  width: 100%;
-}
+
 .main-sidebar .sections ul {
   list-style: none;
   padding: 0;
   margin: 0;
 }
+
 .main-sidebar .sections li {
   margin-bottom: 8px;
 }
+
 .main-sidebar .sections button {
   background: none;
   border: none;
   color: var(--color-text);
-  font-family: 'Libre Baskerville', serif;
+  font-family: var(--font-serif);
   cursor: pointer;
   text-align: left;
   padding: 5px 0;
   border-radius: var(--radius-button);
   transition: background-color 0.3s, color 0.3s;
 }
+
 .main-sidebar .sections button:hover,
 .main-sidebar .sections button.active {
-  background-color: var(--color-accent-light);
-  color: var(--color-text);
+  background-color: var(--color-accent);
+  color: var(--color-surface);
 }
 
 #search {
@@ -118,13 +132,27 @@ footer {
   padding: 8px;
   border-radius: var(--radius-input);
   border: 1px solid var(--color-border);
-  background-color: var(--color-input-bg);
+  background-color: var(--color-surface);
   color: var(--color-text);
-  font-family: 'Libre Baskerville', serif;
+  font-family: var(--font-serif);
   margin-bottom: 10px;
 }
 
-/* ─── Feed (flex wide on left) ─────────────────────── */
+.placeholder-sections p {
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  padding: 0.5rem 1rem;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-card);
+  text-align: center;
+  margin-top: 1rem;
+}
+
+/*──────────────────────────────────────────────────────
+  Feed
+──────────────────────────────────────────────────────*/
 .main-feed {
   flex: 1 1 0;
   min-width: 0;
@@ -133,30 +161,35 @@ footer {
   gap: 20px;
 }
 
-/* ─── Entry Cards (Tumblr-style) ───────────────────── */
+/*──────────────────────────────────────────────────────
+  Entry Cards
+──────────────────────────────────────────────────────*/
 .main-entry {
-  background-color: var(--color-card-background);
+  background-color: var(--color-surface);
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
   padding: 24px;
   border-radius: var(--radius-card);
   border: 1px solid var(--color-border);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   text-align: left;
 }
+
 .main-entry h3 {
-  font-family: 'Cormorant Garamond', serif;
+  font-family: var(--font-serif);
   color: var(--color-text);
   border-bottom: 1px dashed var(--color-border);
   padding-bottom: 5px;
   margin-bottom: 10px;
 }
+
 .main-entry h4 {
-  font-family: 'Cormorant Garamond', serif;
+  font-family: var(--font-serif);
   color: var(--color-text);
   margin: 5px 0 10px;
 }
+
 .main-entry p {
   font-size: 1.1em;
   line-height: 1.6;
@@ -164,58 +197,67 @@ footer {
   margin: 0 auto;
   text-align: left;
 }
+
 .main-entry .tags {
   font-size: 0.9em;
   color: var(--color-border);
   margin-top: 10px;
   font-style: italic;
+  font-family: var(--font-handwritten);
 }
+
 .main-entry-controls {
   margin-top: 10px;
   display: flex;
   justify-content: flex-start;
   gap: 10px;
 }
+
 .main-entry-controls button {
   padding: 6px 12px;
   background-color: var(--color-accent);
-  color: #fff;
+  color: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-button);
   cursor: pointer;
-  font-family: 'Libre Baskerville', serif;
+  font-family: var(--font-handwritten);
   transition: background-color 0.3s;
 }
+
 .main-entry-controls button:hover {
-  background-color: var(--color-accent-light);
+  background-color: var(--color-hover);
 }
 
-/* ─── Add Entry Form ───────────────────────────────── */
+/*──────────────────────────────────────────────────────
+  Add Entry Form
+──────────────────────────────────────────────────────*/
 .toggle-entry-btn {
   display: block;
   margin: 1em auto;
   padding: 0.5em 1em;
   background-color: var(--color-accent);
-  color: #fff;
+  color: var(--color-surface);
   border: none;
   border-radius: var(--radius-button);
   cursor: pointer;
-  font-family: 'Libre Baskerville', serif;
+  font-family: var(--font-handwritten);
   transition: background-color 0.2s;
 }
+
 .toggle-entry-btn:hover {
-  background-color: var(--color-accent-light);
+  background-color: var(--color-hover);
 }
+
 .main-add-entry {
   max-width: 800px;
   margin: 20px auto;
   overflow: hidden;
   max-height: 0;
   padding: 0 20px;
-  background-color: var(--color-card-background);
+  background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
   transition: max-height 0.4s ease, padding-top 0.4s ease, padding-bottom 0.4s ease;
 }
 
@@ -227,58 +269,66 @@ footer {
 
 .main-add-entry h2 {
   margin-top: 0;
-  font-family: 'Libre Baskerville', serif;
+  font-family: var(--font-serif);
   text-align: center;
 }
+
 .main-add-entry input,
 .main-add-entry select,
 .main-add-entry textarea {
   width: 97%;
   margin-bottom: 10px;
   padding: 10px;
-  background-color: var(--color-input-bg);
+  background-color: var(--color-surface);
   color: var(--color-text);
   border-radius: var(--radius-input);
   border: 1px solid var(--color-border);
-  font-family: 'Libre Baskerville', serif;
+  font-family: var(--font-serif);
 }
+
 .main-add-entry textarea {
   resize: vertical;
   min-height: 200px;
 }
+
 .main-add-entry button {
   padding: 10px 20px;
   background-color: var(--color-accent);
-  color: #fff;
+  color: var(--color-surface);
   border: none;
   border-radius: var(--radius-button);
   cursor: pointer;
-  font-family: 'Libre Baskerville', serif;
+  font-family: var(--font-handwritten);
   display: block;
   margin: 0 auto;
 }
+
 .main-add-entry button:hover {
-  background-color: var(--color-accent-light);
+  background-color: var(--color-hover);
 }
 
-/* ─── Tag Footer ─────────────────────────────────── */
+/*──────────────────────────────────────────────────────
+  Tag Footer
+──────────────────────────────────────────────────────*/
 #tag-footer a {
   text-decoration: none;
   padding: 0.3em 0.6em;
   background-color: var(--color-accent);
-  color: #fff;
+  color: var(--color-surface);
   border-radius: var(--radius-tag);
   cursor: pointer;
   transition: background-color 0.3s;
   font-family: var(--font-handwritten);
 }
+
 #tag-footer a:hover,
 #tag-footer a.active {
-  background-color: var(--color-accent-light);
+  background-color: var(--color-hover);
 }
 
-
-/* ─── Responsive ───────────────────────────────────── */
+/*──────────────────────────────────────────────────────
+  Responsive
+──────────────────────────────────────────────────────*/
 @media (max-width: 768px) {
   .main-container {
     flex-direction: column;
@@ -286,42 +336,14 @@ footer {
     padding: 10px;
   }
 
-  .main-sidebar, .main-feed {
+  .main-sidebar,
+  .main-feed {
     width: 100%;
+    position: static;
   }
 
   .main-entry {
     max-width: 100%;
     margin: 10px 0;
   }
-}
-/*──────────────────────────────────────────────────────
-  Main Page — Refinements
-──────────────────────────────────────────────────────*/
-
-/* Tag pills in entries */
-.tag-pill {
-  display: inline-block;
-  background-color: var(--color-blush);
-  color: var(--color-ink);
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--radius-tag);
-  margin-right: 0.25rem;
-  font-size: 0.9rem;
-  font-family: var(--font-handwritten);
-}
-
-/* Active section button highlight */
-.main-sidebar .sections button.active {
-  background-color: var(--color-accent-light);
-  color: var(--color-text);
-  font-weight: bold;
-}
-
-/* Add-entry form labels stacked nicely */
-.main-add-entry label {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 0.5rem;
-  font-family: 'Cormorant Garamond', serif;
 }

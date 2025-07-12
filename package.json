@@ -1,6 +1,7 @@
 {
   "name": "streamofconshushness",
   "version": "1.0.0",
+  "type": "module",
   "description": "",
   "main": "script.js",
   "scripts": {
@@ -11,7 +12,12 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "bcrypt": "^6.0.0",
+    "dotenv": "^17.2.0",
     "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.17.0",
+    "mongoose": "^8.16.3",
     "react-router-dom": "^7.6.3",
     "uuid": "^11.1.0"
   }

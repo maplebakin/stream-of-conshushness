@@ -8,58 +8,29 @@
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;700&family=Libre+Baskerville&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Pacifico&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script&display=swap');
 
 /*──────────────────────────────────────────────────────
-  Root Variables
+  Light Theme
 ──────────────────────────────────────────────────────*/
 :root {
-  /* Backgrounds */
-  --color-background: #f5f0dc;
-  --color-card-background: #fefaf6;
-  --color-sidebar-bg: #f5e5dc;
-  --color-input-bg: #fefaf6;
-
-  /* Text and Ink */
-  --color-ink: #3b2f2f;
-  --color-text: #6d6875;
-
-  /* Header/Footer */
-  --color-header-footer-bg: #6d6875;
-
-  /* Accent Colors */
-  --color-blush: #723e3e;
-  --color-dusty-rose: #e5989b96;
-  --color-muted-mauve: #b5838d;
-  --color-accent: #b5838d;
-  --color-accent-light: #e5989b;
-  --color-accent-warm: #a6784e;
-
-  /* Graph Lines / Borders */
-  --color-graph-line: #8b735b;
-  --color-border: #b5838d;
-
-  /* Radius */
+  --color-background: #F5F1E7;         /* Soft Cream background */
+  --color-surface: #FFFFFF;            /* Clean panel/card surfaces */
+  --color-header: #C6A2A8;             /* Dusty Rose header/nav */
+  --color-text: #333333;               /* Deep ash/charcoal text */
+  --color-accent: #A3B5A2;             /* Muted Sage accents */
+  --color-accent-alt: #B97C68;         /* Warm Clay alternative accent */
+  --color-hover: #C2A269;              /* Antique Gold hover/links */
+  --color-border: #E5E1DA;             /* Subtle warm dividers/borders */
   --radius-card: 12px;
   --radius-button: 8px;
   --radius-input: 8px;
   --radius-tag: 999px;
-
-  /* Fonts */
   --font-handwritten: 'Patrick Hand', cursive;
   --font-serif: 'Libre Baskerville', serif;
-  --font-decorative: 'Pacifico', cursive;
+--font-decorative: 'Dancing Script', cursive;
+
 }
 
-[data-theme="dark"] {
-  --color-background: #1e1e1e;
-  --color-card-background: #2c2c2c;
-  --color-ink: #e0e0e0;
-  --color-header-footer-bg: #444;
-  --color-blush: #8b5e5e;
-  --color-dusty-rose: #b5838d;
-  --color-muted-mauve: #a6784e;
-  --color-graph-line: #555;
-  --color-input-bg: #333;
-  --color-accent: #a6784e;
-  --color-accent-light: #b5838d;
-}
+
+

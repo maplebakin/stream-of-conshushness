@@ -1,309 +1,344 @@
 console.log('🛠️  Starting Stream of Conshushness server…');
 
-const express = require('express');
-const path = require('path');
-const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 
+import User from './models/User.js';
+import Entry from './models/Entry.js';
+import Appointment from './models/Appointment.js';
+import ImportantEvent from './models/ImportantEvent.js';
+import Note from './models/Note.js';
+import Todo from './models/Todo.js';
+
+// Load .env variables
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// App
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-const ENTRIES_FILE = path.join(__dirname, 'data', 'entries.json');
-const CALENDAR_FILE = path.join(__dirname, 'data', 'calendar.json');
-const PUBLIC_DIR = path.join(__dirname, 'public');
-
-console.log('🟢 server.js loaded and routes will be registered');
-
-// ─── Middleware ─────────────────────────────
+// Middleware
 app.use(express.json());
 
-// Simple logger
+// Connect to MongoDB Atlas
+(async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log('✅ Connected to MongoDB Atlas');
+  } catch (err) {
+    console.error('❌ MongoDB connection error:', err);
+  }
+})();
+
+
+// ─── AUTH ─────────────────────────────
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ error: 'Missing token' });
+
+  const token = authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Invalid token format' });
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid or expired token' });
+    req.user = user;
+    next();
+  });
+}
+
+// ─── User Routes ─────────────────────────────
+app.get('/health', (req, res) => res.send('OK'));
+
+app.post('/api/register', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+
+  try {
+    const existing = await User.findOne({ username });
+    if (existing) return res.status(400).json({ error: 'Username already taken' });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const newUser = new User({ username, passwordHash });
+    await newUser.save();
+
+    console.log(`✅ Registered new user: ${username}`);
+    res.json({ success: true, message: 'User registered successfully' });
+  } catch (err) {
+    console.error('Error in /api/register:', err);
+    res.status(500).json({ error: 'Server error during registration' });
+  }
+});
+
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+
+  try {
+    const user = await User.findOne({ username });
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!isMatch) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const token = jwt.sign(
+      { userId: user._id, username: user.username },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    console.log(`✅ User logged in: ${username}`);
+    res.json({ success: true, token });
+  } catch (err) {
+    console.error('Error in /api/login:', err);
+    res.status(500).json({ error: 'Server error during login' });    
+  }
+});
+
+// ─── Logger ─────────────────────────────
 app.use((req, res, next) => {
   console.log(`🌐  ${req.method} ${req.url}`);
   next();
 });
 
-// ─── Journal Entry Routes ───────────────────
-// GET all journal entries
-app.get('/api/entries', (req, res) => {
+// ─── Journal Entry Routes ─────────────────────────────
+app.get('/api/entries', authenticateToken, async (req, res) => {
   try {
-    const data = fs.readFileSync(ENTRIES_FILE, 'utf8');
-    let parsed = JSON.parse(data);
-    if (!Array.isArray(parsed)) {
-      console.warn('⚠️ entries.json is not an array! Returning empty array.');
-      return res.json([]);
-    }
-    res.json(parsed);
-  } catch {
-    res.json([]);
+    const entries = await Entry.find({ userId: req.user.userId }).sort({ createdAt: -1 });
+    res.json(entries);
+  } catch (err) {
+    console.error('Error fetching entries:', err);
+    res.status(500).json({ error: 'Server error fetching entries' });
   }
 });
 
+app.post('/api/add-entry', authenticateToken, async (req, res) => {
+  const { date, section, tags, content } = req.body;
+  if (!date || !section || !content) return res.status(400).json({ error: 'Missing fields' });
 
-// POST new journal entry
-app.post('/api/add-entry', (req, res) => {
-  let entries = [];
   try {
-    entries = JSON.parse(fs.readFileSync(ENTRIES_FILE, 'utf8'));
-  } catch {}
-  const newEntry = { id: uuidv4(), ...req.body };
-  entries.unshift(newEntry);
-  fs.writeFileSync(ENTRIES_FILE, JSON.stringify(entries, null, 2));
-  res.json(newEntry);
-});
+    const newEntry = new Entry({ userId: req.user.userId, date, section, tags: tags || [], content });
+    await newEntry.save();
 
-// PUT edit entry
-app.put('/api/edit-entry/:id', (req, res) => {
-  const id = req.params.id;
-  let entries = [];
-  try {
-    entries = JSON.parse(fs.readFileSync(ENTRIES_FILE, 'utf8'));
-  } catch {}
-  let found = false;
-  entries = entries.map(e => {
-    if (e.id === id) {
-      found = true;
-      return { ...e, ...req.body, id };
-    }
-    return e;
-  });
-  if (!found) return res.status(404).json({ error: 'Entry not found.' });
-  fs.writeFileSync(ENTRIES_FILE, JSON.stringify(entries, null, 2));
-  res.json({ message: 'Entry updated successfully!' });
-});
-
-// DELETE entry
-app.delete('/api/delete-entry/:id', (req, res) => {
-  const id = req.params.id;
-  let entries = [];
-  try {
-    entries = JSON.parse(fs.readFileSync(ENTRIES_FILE, 'utf8'));
-  } catch {}
-  const filtered = entries.filter(e => e.id !== id);
-  if (filtered.length === entries.length) {
-    return res.status(404).json({ error: 'Entry not found.' });
+    console.log(`✅ Added new entry for user ${req.user.userId}`);
+    res.json(newEntry);
+  } catch (err) {
+    console.error('Error adding entry:', err);
+    res.status(500).json({ error: 'Server error adding entry' });
   }
-  fs.writeFileSync(ENTRIES_FILE, JSON.stringify(filtered, null, 2));
-  res.json({ message: 'Entry deleted successfully!' });
 });
 
-// ─── Calendar Routes ─────────────────────────
-// GET appointments for a specific day
-app.get('/api/appointments/:date', (req, res) => {
-  const { date } = req.params;
+app.put('/api/edit-entry/:id', authenticateToken, async (req, res) => {
+  const { date, section, tags, content } = req.body;
+  if (!date || !section || !content) return res.status(400).json({ error: 'Missing fields' });
 
-  let calendar = {};
   try {
-    calendar = JSON.parse(fs.readFileSync(CALENDAR_FILE, 'utf8'));
-  } catch {
-    return res.json({});
+    const updated = await Entry.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.userId },
+      { date, section, tags: tags || [], content },
+      { new: true }
+    );
+
+    if (!updated) return res.status(404).json({ error: 'Entry not found or not authorized' });
+
+    console.log(`✅ Edited entry ${req.params.id} for user ${req.user.userId}`);
+    res.json(updated);
+  } catch (err) {
+    console.error('Error editing entry:', err);
+    res.status(500).json({ error: 'Server error editing entry' });
   }
-
-  const [yyyy, mm] = date.split('-');
-  const monthKey = `${yyyy}-${String(mm).padStart(2, '0')}`;
-  const dayData = calendar[monthKey]?.days?.[date];
-
-  if (!dayData || !dayData.schedule) {
-    return res.json({});
-  }
-
-  res.json(dayData.schedule);
 });
 
-// POST add appointment
-app.post('/api/add-appointment', (req, res) => {
+app.delete('/api/delete-entry/:id', authenticateToken, async (req, res) => {
+  try {
+    const deleted = await Entry.findOneAndDelete({ _id: req.params.id, userId: req.user.userId });
+    if (!deleted) return res.status(404).json({ error: 'Entry not found or not authorized' });
+
+    console.log(`🗑️ Deleted entry ${req.params.id} for user ${req.user.userId}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting entry:', err);
+    res.status(500).json({ error: 'Server error deleting entry' });
+  }
+});
+
+// ─── Calendar Routes ─────────────────────────────
+app.get('/api/appointments/:date', authenticateToken, async (req, res) => {
+  try {
+    const appointments = await Appointment.find({ userId: req.user.userId, date: req.params.date }).sort({ time: 1 });
+    res.json(appointments);
+  } catch (err) {
+    console.error('Error fetching appointments:', err);
+    res.status(500).json({ error: 'Server error fetching appointments' });
+  }
+});
+
+app.post('/api/add-appointment', authenticateToken, async (req, res) => {
   const { date, time, details } = req.body;
-  if (!date || !time || !details) {
-    return res.status(400).json({ error: 'Missing fields' });
-  }
+  if (!date || !time || !details) return res.status(400).json({ error: 'Missing fields' });
 
-  let calendar = {};
   try {
-    calendar = JSON.parse(fs.readFileSync(CALENDAR_FILE, 'utf8'));
-  } catch {}
+    const newAppointment = new Appointment({ userId: req.user.userId, date, time, details });
+    await newAppointment.save();
 
-  const [yyyy, mm] = date.split('-');
-  const monthKey = `${yyyy}-${String(mm).padStart(2, '0')}`;
-
-  if (!calendar[monthKey]) {
-    calendar[monthKey] = { dailyNotes: {}, importantEvents: [], days: {} };
+    console.log(`✅ Added appointment for user ${req.user.userId} on ${date} at ${time}`);
+    res.json(newAppointment);
+  } catch (err) {
+    console.error('Error adding appointment:', err);
+    res.status(500).json({ error: 'Server error adding appointment' });
   }
-
-  if (!calendar[monthKey].days[date]) {
-    calendar[monthKey].days[date] = { schedule: {}, freeForm: [] };
-  }
-
-  calendar[monthKey].days[date].schedule[time] = details;
-
-  fs.writeFileSync(CALENDAR_FILE, JSON.stringify(calendar, null, 2));
-  console.log(`✅ Added appointment on ${date} at ${time}: ${details}`);
-  res.json({ success: true, date, time, details });
 });
 
-// PUT edit appointment
-app.put('/api/edit-appointment', (req, res) => {
-  const { date, time, newDetails } = req.body;
-  if (!date || !time || !newDetails) {
-    return res.status(400).json({ error: 'Missing fields' });
-  }
+app.put('/api/edit-appointment/:id', authenticateToken, async (req, res) => {
+  const { date, time, details } = req.body;
+  if (!date || !time || !details) return res.status(400).json({ error: 'Missing fields' });
 
-  let calendar = {};
   try {
-    calendar = JSON.parse(fs.readFileSync(CALENDAR_FILE, 'utf8'));
-  } catch {
-    return res.status(500).json({ error: 'Server error reading data' });
+    const updated = await Appointment.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.userId },
+      { date, time, details },
+      { new: true }
+    );
+
+    if (!updated) return res.status(404).json({ error: 'Appointment not found or not authorized' });
+
+    console.log(`✅ Edited appointment ${req.params.id} for user ${req.user.userId}`);
+    res.json(updated);
+  } catch (err) {
+    console.error('Error editing appointment:', err);
+    res.status(500).json({ error: 'Server error editing appointment' });
   }
-
-  const [yyyy, mm] = date.split('-');
-  const monthKey = `${yyyy}-${String(mm).padStart(2, '0')}`;
-
-  if (
-    !calendar[monthKey] ||
-    !calendar[monthKey].days[date] ||
-    !calendar[monthKey].days[date].schedule[time]
-  ) {
-    return res.status(404).json({ error: 'Appointment not found' });
-  }
-
-  calendar[monthKey].days[date].schedule[time] = newDetails;
-
-  fs.writeFileSync(CALENDAR_FILE, JSON.stringify(calendar, null, 2));
-  console.log(`✅ Edited appointment on ${date} at ${time}: ${newDetails}`);
-  res.json({ success: true });
 });
 
-// DELETE appointment
-app.delete('/api/delete-appointment', (req, res) => {
-  const { date, time } = req.body;
-  if (!date || !time) {
-    return res.status(400).json({ error: 'Missing fields' });
-  }
-
-  let calendar = {};
+app.delete('/api/delete-appointment/:id', authenticateToken, async (req, res) => {
   try {
-    calendar = JSON.parse(fs.readFileSync(CALENDAR_FILE, 'utf8'));
-  } catch {
-    return res.status(500).json({ error: 'Server error reading data' });
+    const deleted = await Appointment.findOneAndDelete({ _id: req.params.id, userId: req.user.userId });
+    if (!deleted) return res.status(404).json({ error: 'Appointment not found or not authorized' });
+
+    console.log(`🗑️ Deleted appointment ${req.params.id} for user ${req.user.userId}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting appointment:', err);
+    res.status(500).json({ error: 'Server error deleting appointment' });
   }
-
-  const [yyyy, mm] = date.split('-');
-  const monthKey = `${yyyy}-${String(mm).padStart(2, '0')}`;
-
-  if (
-    !calendar[monthKey] ||
-    !calendar[monthKey].days[date] ||
-    !calendar[monthKey].days[date].schedule[time]
-  ) {
-    return res.status(404).json({ error: 'Appointment not found' });
-  }
-
-  delete calendar[monthKey].days[date].schedule[time];
-
-  fs.writeFileSync(CALENDAR_FILE, JSON.stringify(calendar, null, 2));
-  console.log(`🗑️ Deleted appointment on ${date} at ${time}`);
-  res.json({ success: true });
 });
 
-// ─── Important Events Routes ─────────────────────────
-
-// GET important events for a specific date
-app.get('/api/important-events/date/:date', (req, res) => {
-  const { date } = req.params;
+// ─── Important Events Routes ─────────────────────────────
+app.get('/api/important-events/month/:month', authenticateToken, async (req, res) => {
   try {
-    const calendar = JSON.parse(fs.readFileSync(CALENDAR_FILE, 'utf8'));
-    const [yyyy, mm] = date.split('-');
-    const monthKey = `${yyyy}-${String(mm).padStart(2, '0')}`;
-    const monthData = calendar[monthKey] || {};
-    const events = (monthData.importantEvents || []).filter(ev => ev.date === date);
+    const events = await ImportantEvent.find({
+      userId: req.user.userId,
+      date: { $regex: `^${req.params.month}` }
+    }).sort({ date: 1 });
+
     res.json(events);
-  } catch {
-    res.status(500).json({ error: 'Failed to read calendar data.' });
+  } catch (err) {
+    console.error('Error fetching events for month:', err);
+    res.status(500).json({ error: 'Server error fetching events for month' });
   }
 });
 
-// GET important events for a month
-app.get('/api/important-events/:month', (req, res) => {
-  const month = req.params.month;
+app.post('/api/important-events', authenticateToken, async (req, res) => {
+  const { title, date } = req.body;
+  if (!title || !date) return res.status(400).json({ error: 'Missing fields' });
+
   try {
-    const calendar = JSON.parse(fs.readFileSync(CALENDAR_FILE, 'utf8'));
-    const monthData = calendar[month] || {};
-    res.json(monthData.importantEvents || []);
-  } catch {
-    res.status(500).json({ error: 'Failed to read calendar data.' });
+    const newEvent = new ImportantEvent({ userId: req.user.userId, title, date });
+    await newEvent.save();
+
+    console.log(`✅ Added important event for user ${req.user.userId}: ${title} on ${date}`);
+    res.json(newEvent);
+  } catch (err) {
+    console.error('Error adding important event:', err);
+    res.status(500).json({ error: 'Server error adding important event' });
   }
 });
 
-// POST new important event
-app.post('/api/important-events', (req, res) => {
-  const { month, title, date } = req.body;
-  if (!month || !title || !date) {
-    return res.status(400).json({ error: 'Missing fields' });
-  }
-
-  let calendar = {};
+app.delete('/api/important-events/:id', authenticateToken, async (req, res) => {
   try {
-    calendar = JSON.parse(fs.readFileSync(CALENDAR_FILE, 'utf8'));
-  } catch {}
+    const deleted = await ImportantEvent.findOneAndDelete({ _id: req.params.id, userId: req.user.userId });
+    if (!deleted) return res.status(404).json({ error: 'Event not found or not authorized' });
 
-  if (!calendar[month]) {
-    calendar[month] = { days: {}, importantEvents: [] };
+    console.log(`🗑️ Deleted important event ${req.params.id} for user ${req.user.userId}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting important event:', err);
+    res.status(500).json({ error: 'Server error deleting important event' });
   }
-
-  if (!calendar[month].importantEvents) {
-    calendar[month].importantEvents = [];
-  }
-
-  const newEvent = {
-    id: uuidv4(),
-    title,
-    date
-  };
-
-  calendar[month].importantEvents.push(newEvent);
-
-  fs.writeFileSync(CALENDAR_FILE, JSON.stringify(calendar, null, 2));
-  console.log(`✅ Added important event to ${month}: ${title} on ${date}`);
-  res.json(newEvent);
 });
 
-// DELETE important event
-app.delete('/api/important-events/:month/:id', (req, res) => {
-  const { month, id } = req.params;
-  let calendar = {};
+// ─── Notes & Todos ─────────────────────────────
+app.get('/api/note/:date', authenticateToken, async (req, res) => {
   try {
-    calendar = JSON.parse(fs.readFileSync(CALENDAR_FILE, 'utf8'));
-  } catch {
-    return res.status(500).json({ error: 'Server error reading data' });
+    const note = await Note.findOne({ userId: req.user.userId, date: req.params.date });
+    res.json(note ? note.content : '');
+  } catch (err) {
+    console.error('Error fetching note:', err);
+    res.status(500).json({ error: 'Server error fetching note' });
   }
-
-  if (!calendar[month] || !calendar[month].importantEvents) {
-    return res.status(404).json({ error: 'Month or events not found.' });
-  }
-
-  const original = calendar[month].importantEvents.length;
-  calendar[month].importantEvents = calendar[month].importantEvents.filter(e => e.id !== id);
-
-  if (calendar[month].importantEvents.length === original) {
-    return res.status(404).json({ error: 'Event not found.' });
-  }
-
-  fs.writeFileSync(CALENDAR_FILE, JSON.stringify(calendar, null, 2));
-  console.log(`🗑️ Deleted important event ${id} from ${month}`);
-  res.json({ success: true });
 });
 
-// ─── Static files AFTER API routes ───────────
-app.use('/data', express.static(path.join(__dirname, 'data')));
-app.use(express.static(PUBLIC_DIR));
-
-// SPA catch-all
-app.use((req, res, next) => {
-  if (req.method !== 'GET') return next();
-  if (req.path.includes('.')) return next();
-  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+app.post('/api/note/:date', authenticateToken, async (req, res) => {
+  try {
+    const note = await Note.findOneAndUpdate(
+      { userId: req.user.userId, date: req.params.date },
+      { content: req.body.content },
+      { upsert: true, new: true }
+    );
+    res.json(note);
+  } catch (err) {
+    console.error('Error saving note:', err);
+    res.status(500).json({ error: 'Server error saving note' });
+  }
 });
 
-// ─── Start server ─────────────────────────────
+app.get('/api/todos/:date', authenticateToken, async (req, res) => {
+  try {
+    const todo = await Todo.findOne({ userId: req.user.userId, date: req.params.date });
+    res.json(todo ? todo.items : []);
+  } catch (err) {
+    console.error('Error fetching todos:', err);
+    res.status(500).json({ error: 'Server error fetching todos' });
+  }
+});
+
+app.post('/api/todos/:date', authenticateToken, async (req, res) => {
+  try {
+    const todo = await Todo.findOneAndUpdate(
+      { userId: req.user.userId, date: req.params.date },
+      { items: req.body.items },
+      { upsert: true, new: true }
+    );
+    res.json(todo);
+  } catch (err) {
+    console.error('Error saving todos:', err);
+    res.status(500).json({ error: 'Server error saving todos' });
+  }
+});
+
+// ─── 404 Catcher ─────────────────────────────
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
+// ─── Serve Frontend in Production ─────────────────────────────
+if (process.env.NODE_ENV === 'production') {
+  const CLIENT_BUILD_PATH = path.join(__dirname, 'dist');
+  app.use(express.static(CLIENT_BUILD_PATH));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(CLIENT_BUILD_PATH, 'index.html'));
+  });
+}
+
+// ─── Start Server ─────────────────────────────
 app.listen(PORT, () => {
   console.log(`🌿  Listening on http://localhost:${PORT}`);
 });
