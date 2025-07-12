@@ -1,11 +1,15 @@
+// ─── Load Environment Variables First ─────────────────────────────
+import dotenv from 'dotenv';
+dotenv.config();
+
 console.log('🛠️  Starting Stream of Conshushness server…');
 
+// ─── Imports ─────────────────────────────
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
@@ -16,20 +20,18 @@ import ImportantEvent from './models/ImportantEvent.js';
 import Note from './models/Note.js';
 import Todo from './models/Todo.js';
 
-// Load .env variables
-dotenv.config();
-
+// ─── Paths ─────────────────────────────
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// App
+// ─── Express App ─────────────────────────────
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// ─── Middleware ─────────────────────────────
 app.use(express.json());
 
-// Connect to MongoDB Atlas
+// ─── Connect to MongoDB Atlas ─────────────────────────────
 (async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
@@ -39,8 +41,7 @@ app.use(express.json());
   }
 })();
 
-
-// ─── AUTH ─────────────────────────────
+// ─── AUTH Middleware ─────────────────────────────
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   if (!authHeader) return res.status(401).json({ error: 'Missing token' });
@@ -55,9 +56,10 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// ─── User Routes ─────────────────────────────
+// ─── Health Check ─────────────────────────────
 app.get('/health', (req, res) => res.send('OK'));
 
+// ─── User Routes ─────────────────────────────
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
@@ -99,11 +101,11 @@ app.post('/api/login', async (req, res) => {
     res.json({ success: true, token });
   } catch (err) {
     console.error('Error in /api/login:', err);
-    res.status(500).json({ error: 'Server error during login' });    
+    res.status(500).json({ error: 'Server error during login' });
   }
 });
 
-// ─── Logger ─────────────────────────────
+// ─── Logger Middleware ─────────────────────────────
 app.use((req, res, next) => {
   console.log(`🌐  ${req.method} ${req.url}`);
   next();
@@ -191,6 +193,7 @@ app.get('/api/appointments/:date', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Server error fetching appointments' });
   }
 });
+
 app.get('/api/important-events/:month', authenticateToken, async (req, res) => {
   try {
     const events = await ImportantEvent.find({
@@ -256,20 +259,6 @@ app.delete('/api/delete-appointment/:id', authenticateToken, async (req, res) =>
 });
 
 // ─── Important Events Routes ─────────────────────────────
-app.get('/api/important-events/month/:month', authenticateToken, async (req, res) => {
-  try {
-    const events = await ImportantEvent.find({
-      userId: req.user.userId,
-      date: { $regex: `^${req.params.month}` }
-    }).sort({ date: 1 });
-
-    res.json(events);
-  } catch (err) {
-    console.error('Error fetching events for month:', err);
-    res.status(500).json({ error: 'Server error fetching events for month' });
-  }
-});
-
 app.post('/api/important-events', authenticateToken, async (req, res) => {
   const { title, date } = req.body;
   if (!title || !date) return res.status(400).json({ error: 'Missing fields' });
