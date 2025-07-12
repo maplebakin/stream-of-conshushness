@@ -59,7 +59,7 @@ function DailyPage() {
   useEffect(() => {
     if (!date || !token) return;
 
-    axios.get(`/api/important-events/month/${date.slice(0, 7)}`, {
+    axios.get(`/api/important-events/${date.slice(0, 7)}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(res => {
