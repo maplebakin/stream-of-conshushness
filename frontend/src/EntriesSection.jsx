@@ -7,27 +7,31 @@ function EntriesSection({ date }) {
   const [loading, setLoading] = useState(true);
   const { token } = useContext(AuthContext);
 
-  useEffect(() => {
-    setLoading(true);
-    axios.get('/api/entries', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-      .then(res => {
-        if (Array.isArray(res.data)) {
-          setEntries(res.data);
-        } else {
-          console.warn('⚠️ Server returned non-array entries', res.data);
-          setEntries([]);
-        }
-      })
-      .catch((err) => {
-        console.error('⚠️ Error fetching entries:', err);
+useEffect(() => {
+  if (!date || !token) return;
+  setLoading(true);
+  axios.get(`/api/entries/${date}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+    .then(res => {
+      if (Array.isArray(res.data)) {
+        setEntries(res.data);
+      } else {
+        console.warn('⚠️ Server returned non-array entries', res.data);
         setEntries([]);
-      })
-      .finally(() => setLoading(false));
-  }, [token]);
+      }
+    })
+    .catch((err) => {
+      console.error('⚠️ Error fetching entries:', err);
+      setEntries([]);
+    })
+    .finally(() => setLoading(false));
+}, [date, token]);
+
+
+
 
   const safeEntries = Array.isArray(entries) ? entries : [];
   const dailyEntries = safeEntries.filter((entry) => entry.date === date);

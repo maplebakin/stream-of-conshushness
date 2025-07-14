@@ -28,32 +28,145 @@ export default function Calendar() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // 🟣 SINGLE useEffect to load calendar
+useEffect(() => {
+  if (!token) return;
+
+  if (!selectedMonth || selectedMonth.trim() === '') {
+    console.warn('❗ selectedMonth was empty or invalid. Resetting to defaultMonth.');
+    setSelectedMonth(defaultMonth);
+    return;
+  }
+
+  fetchCalendar();
+}, [token, selectedMonth]);
+
+
+  // ✅ Fetch calendar + events safely
+ const fetchCalendar = () => {
+  if (!token) {
+    console.warn('❗ Missing token!');
+    return;
+  }
+
+  if (!selectedMonth || selectedMonth.trim() === "") {
+    console.warn('❗ fetchCalendar blocked because selectedMonth is empty or invalid.');
+    return;
+  }
+
+  console.log('⭐ Fetching calendar for:', selectedMonth);
+
+  axios.get(`/api/calendar-data/${selectedMonth}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+    .then(res => setCalendarData(res.data?.calendarData || {}))
+    .catch(err => console.error('Error fetching calendar:', err));
+
+  axios.get(`/api/important-events/${selectedMonth}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+    .then(res => setImportantEvents(res.data || []))
+    .catch(err => console.error('Error fetching important events:', err));
+};
+
+
+  // 🟣 Handle adding appointments
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!newAppointment.date || !newAppointment.time || !newAppointment.details) {
+      alert('Please fill all fields');
+      return;
+    }
+    const normalizedDate = new Date(newAppointment.date).toISOString().slice(0, 10);
+    axios.post('/api/appointments', {
+      ...newAppointment,
+      date: normalizedDate
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(() => {
+        fetchCalendar();
+        setShowForm(false);
+        setNewAppointment({ date: '', time: '', details: '' });
+      })
+      .catch(err => console.error('Error saving appointment:', err));
+  };
+
+  // 🟣 Delete appointment
+  const handleDeleteAppointment = (id, e) => {
+    e.stopPropagation();
+    axios.delete(`/api/appointments/${id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(() => fetchCalendar())
+      .catch(err => console.error('Error deleting appointment:', err));
+  };
+
+  // 🟣 Add important event
+  const handleAddImportantEvent = (e) => {
+    e.preventDefault();
+    if (!newEvent.title.trim() || !newEvent.date.trim()) {
+      alert('Please fill in both title and date.');
+      return;
+    }
+    axios.post('/api/important-events', newEvent, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(() => {
+        setNewEvent({ title: '', date: '' });
+        fetchCalendar();
+      })
+      .catch(err => console.error('Error adding event:', err));
+  };
+
+  // 🟣 Delete important event
+  const handleDeleteImportantEvent = (id) => {
+    axios.delete(`/api/important-events/${id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(() => fetchCalendar())
+      .catch(err => console.error('Error deleting event:', err));
+  };
+
+  // 🟣 Navigation
+  const handleDayClick = (dateStr) => navigate(`/day/${dateStr}`);
+
+  const handleMonthChange = (direction) => {
+    if (!selectedMonth) return;
+    const [y, m] = selectedMonth.split('-').map(Number);
+    const date = new Date(y, m - 1 + direction);
+    const newMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    setSelectedMonth(newMonth);
+  };
+
+  const formatMonthYear = (monthKey) => {
+    const [yyyy, mm] = monthKey.split('-');
+    const date = new Date(yyyy, mm - 1);
+    return date.toLocaleString('default', { month: 'long', year: 'numeric' });
+  };
+
   const getDaysUntil = (dateStr) => {
     const eventDate = new Date(dateStr);
     const today = new Date(todayStr);
     eventDate.setHours(0, 0, 0, 0);
     today.setHours(0, 0, 0, 0);
-    const diffMs = eventDate - today;
-    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    const diffDays = Math.round((eventDate - today) / (1000 * 60 * 60 * 24));
     if (diffDays === 0) return 'Today';
     if (diffDays === 1) return 'Tomorrow';
     if (diffDays > 1) return `${diffDays} Days Away`;
     return `${Math.abs(diffDays)} Days Ago`;
   };
 
+  // 🟣 Calendar grid calculations
+  const [year, month] = selectedMonth ? selectedMonth.split('-').map(Number) : [now.getFullYear(), now.getMonth() + 1];
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstWeekday = new Date(year, month - 1, 1).getDay();
+  const monthData = calendarData[selectedMonth]?.days || {};
+
   const monthOptions = [
-    ['J', 'January', '01'],
-    ['F', 'February', '02'],
-    ['MR', 'March', '03'],
-    ['MA', 'April', '04'],
-    ['MY', 'May', '05'],
-    ['JN', 'June', '06'],
-    ['JL', 'July', '07'],
-    ['AU', 'August', '08'],
-    ['S', 'September', '09'],
-    ['O', 'October', '10'],
-    ['N', 'November', '11'],
-    ['D', 'December', '12']
+    ['J', 'January', '01'], ['F', 'February', '02'], ['MR', 'March', '03'], ['MA', 'April', '04'],
+    ['MY', 'May', '05'], ['JN', 'June', '06'], ['JL', 'July', '07'], ['AU', 'August', '08'],
+    ['S', 'September', '09'], ['O', 'October', '10'], ['N', 'November', '11'], ['D', 'December', '12']
   ];
 
   const renderMonthTab = ([abbr, full, monthNum]) => {
@@ -69,9 +182,7 @@ export default function Calendar() {
           setShowMonthMenu(false);
         }}
       >
-        {isMobile ? (
-          <span className="month-label">{full}</span>
-        ) : (
+        {isMobile ? full : (
           <>
             <span className="collapsed-label">{abbr}</span>
             <span className="expanded-label">{full}</span>
@@ -80,117 +191,6 @@ export default function Calendar() {
       </div>
     );
   };
-
-  const fetchCalendar = () => {
-    axios.get('/api/calendar-data', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    .then(res => setCalendarData(res.data))
-    .catch(err => console.error('Error fetching calendar:', err));
-  };
-
-  useEffect(() => {
-    fetchCalendar();
-  }, [token]);
-
-  useEffect(() => {
-    if (!selectedMonth) return;
-    axios.get(`/api/important-events/${selectedMonth}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    .then(res => {
-      console.log('Fetched important events:', res.data);
-      setImportantEvents(Array.isArray(res.data) ? res.data : []);
-    })
-    .catch(() => setImportantEvents([]));
-  }, [selectedMonth, token]);
-
-  const importantEventDates = new Set(
-    importantEvents.map(ev => ev.date)
-  );
-
-  const handleAddImportantEvent = (e) => {
-    e.preventDefault();
-    if (!newEvent.title.trim() || !newEvent.date.trim()) {
-      alert('Please fill in both title and date.');
-      return;
-    }
-    axios.post('/api/important-events', {
-      title: newEvent.title,
-      date: newEvent.date
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    .then(() => {
-      setNewEvent({ title: '', date: '' });
-      return axios.get(`/api/important-events/${selectedMonth}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-    })
-    .then(res => setImportantEvents(Array.isArray(res.data) ? res.data : []))
-    .catch(err => console.error('Error adding event:', err));
-  };
-
-  const handleDeleteImportantEvent = (id) => {
-    axios.delete(`/api/important-events/${id}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    .then(() => axios.get(`/api/important-events/${selectedMonth}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }))
-    .then(res => setImportantEvents(Array.isArray(res.data) ? res.data : []))
-    .catch(err => console.error('Error deleting event:', err));
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!newAppointment.date || !newAppointment.time || !newAppointment.details) {
-      alert('Please fill all fields');
-      return;
-    }
-    axios.post('/api/add-appointment', newAppointment, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    .then(() => {
-      fetchCalendar();
-      setShowForm(false);
-      setNewAppointment({ date: '', time: '', details: '' });
-    })
-    .catch(err => console.error('Error saving appointment:', err));
-  };
-
-  const handleDeleteAppointment = async (date, time, e) => {
-    e.stopPropagation();
-    try {
-      await axios.delete('/api/delete-appointment', {
-        headers: { Authorization: `Bearer ${token}` },
-        data: { date, time }
-      });
-      fetchCalendar();
-    } catch (err) {
-      console.error('Error deleting appointment:', err);
-    }
-  };
-
-  const handleDayClick = (dateStr) => navigate(`/day/${dateStr}`);
-
-  const handleMonthChange = (direction) => {
-    const [y, m] = selectedMonth.split('-').map(Number);
-    const date = new Date(y, m - 1 + direction);
-    const newMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    setSelectedMonth(newMonth);
-  };
-
-  const formatMonthYear = (monthKey) => {
-    const [yyyy, mm] = monthKey.split('-');
-    const date = new Date(yyyy, mm - 1);
-    return date.toLocaleString('default', { month: 'long', year: 'numeric' });
-  };
-
-  const [year, month] = selectedMonth.split('-').map(Number);
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const firstWeekday = new Date(year, month - 1, 1).getDay();
-  const monthData = calendarData[selectedMonth]?.days || {};
 
   return (
     <div className="calendar-page">
@@ -211,7 +211,6 @@ export default function Calendar() {
           >
             {showEventForm ? 'Hide Add Event' : '+ Add Event'}
           </button>
-
           {showEventForm && (
             <form className="important-event-form" onSubmit={handleAddImportantEvent}>
               <input
@@ -228,7 +227,6 @@ export default function Calendar() {
               <button type="submit">+ Add Event</button>
             </form>
           )}
-
           <ul className="important-event-list">
             {importantEvents.map(ev => (
               <li key={ev._id}>
@@ -247,36 +245,15 @@ export default function Calendar() {
           </div>
 
           <div className="add-appointment">
-            <div className="add-appointment-buttons">
-              <button onClick={() => setShowForm(!showForm)}>
-                {showForm ? 'Close' : '+ Add Appointment'}
-              </button>
-
-              <div className="calendar-controls">
-                <button onClick={() => navigate(`/day/${todayStr}`)}>
-                  Today
-                </button>
-                {isMobile && (
-                  <button onClick={() => setShowMonthMenu(!showMonthMenu)}>
-                    {showMonthMenu ? 'Hide Months' : 'Month'}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {isMobile && showMonthMenu && (
-              <div className="month-tabs">
-                {monthOptions.map(renderMonthTab)}
-              </div>
-            )}
-
+            <button onClick={() => setShowForm(!showForm)}>
+              {showForm ? 'Close' : '+ Add Appointment'}
+            </button>
             {showForm && (
               <form onSubmit={handleSubmit}>
                 <label>
                   Date
                   <input
                     type="date"
-                    name="date"
                     value={newAppointment.date}
                     onChange={e => setNewAppointment({ ...newAppointment, date: e.target.value })}
                   />
@@ -285,7 +262,6 @@ export default function Calendar() {
                   Time
                   <input
                     type="time"
-                    name="time"
                     value={newAppointment.time}
                     onChange={e => setNewAppointment({ ...newAppointment, time: e.target.value })}
                   />
@@ -294,7 +270,6 @@ export default function Calendar() {
                   Details
                   <input
                     type="text"
-                    name="details"
                     value={newAppointment.details}
                     onChange={e => setNewAppointment({ ...newAppointment, details: e.target.value })}
                   />
@@ -308,36 +283,38 @@ export default function Calendar() {
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
               <div key={d} className="day-of-week">{d}</div>
             ))}
-
             {Array.from({ length: firstWeekday }, (_, i) => (
               <div key={`empty-${i}`} className="empty-cell" />
             ))}
-
             {Array.from({ length: daysInMonth }, (_, i) => {
               const day = i + 1;
               const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
               const dayData = monthData[dateStr];
-              const isImportant = importantEventDates.has(dateStr);
-              const isPast = dateStr < todayStr;
-              const isToday = dateStr === todayStr;
-
               return (
                 <div
                   key={dateStr}
-                  className={`calendar-day ${dayData ? 'has-note' : ''} ${isImportant ? 'has-important' : ''} ${isPast ? 'past-day' : ''} ${isToday ? 'today' : ''}`}
+                  className={`calendar-day ${dayData ? 'has-note' : ''} ${dateStr === todayStr ? 'today' : ''}`}
                   onClick={() => handleDayClick(dateStr)}
                 >
-                  <div className="date-label">
-                    {day}
-                    {isImportant && <span className="star">★</span>}
-                  </div>
+                  <div className="date-label">{day}</div>
                   {dayData?.schedule &&
-                    Object.entries(dayData.schedule).map(([time, details]) => (
-                      <div key={time} className="day-appointment">
-                        <span>{time} - {details}</span>
-                        <button onClick={(e) => handleDeleteAppointment(dateStr, time, e)}>🗑️</button>
-                      </div>
-                    ))}
+                    Object.entries(dayData.schedule).map(([time, entry]) => {
+                      if (!entry) return null;
+                      const details = typeof entry === 'string' ? entry : (entry.details ?? '');
+                      return (
+                        <div key={time} className="day-appointment">
+                          <span>{time} - {details}</span>
+                          {entry._id && (
+                            <button
+                              className="delete-button"
+                              onClick={(e) => handleDeleteAppointment(entry._id, e)}
+                            >
+                              🗑️
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               );
             })}

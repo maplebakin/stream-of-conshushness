@@ -12,7 +12,6 @@ import { AuthContext } from './AuthContext.jsx';
 function DailyPage() {
   const { date } = useParams();
   const { token } = useContext(AuthContext);
-  const [seedAppointments, setSeedAppointments] = useState({});
   const [importantEvents, setImportantEvents] = useState([]);
 
   // NEW: Schedule open/closed state
@@ -32,41 +31,16 @@ function DailyPage() {
   };
 
   useEffect(() => {
-  if (!date || !token) return;
-
-  axios.get(`/api/appointments/${date}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-    .then(res => {
-      const raw = res.data || [];
-      const map = {};
-
-      raw.forEach(item => {
-        if (item.time && item.details) {
-          map[item.time] = item.details;
-        }
-      });
-
-      setSeedAppointments(map);
-    })
-    .catch(err => {
-      console.error('Error fetching appointments:', err);
-      setSeedAppointments({});
-    });
-}, [date, token]);
-
-
-  useEffect(() => {
     if (!date || !token) return;
 
     axios.get(`/api/important-events/${date.slice(0, 7)}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then(res => {
-        const filtered = (res.data || []).filter(ev => ev.date === date);
-        setImportantEvents(filtered);
-      })
-      .catch(() => setImportantEvents([]));
+    .then(res => {
+      const filtered = (res.data || []).filter(ev => ev.date === date);
+      setImportantEvents(filtered);
+    })
+    .catch(() => setImportantEvents([]));
   }, [date, token]);
 
   const [yyyy, mm, dd] = date.split('-');
@@ -79,7 +53,51 @@ function DailyPage() {
     year: 'numeric',
     month: 'long',
     day: 'numeric'
+
+    
   });
+const [appointments, setAppointments] = useState([]);
+
+useEffect(() => {
+  if (!date || !token) return;
+  axios.get(`/api/appointments/${date}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+    .then(res => setAppointments(res.data || []))
+    .catch(() => setAppointments([]));
+}, [date, token]);
+<section className="appointments-section">
+  <h2>Appointments</h2>
+  <ul>
+    {appointments.map(appt => (
+      <li key={appt._id}>
+        {appt.time} - {appt.details}
+      </li>
+    ))}
+  </ul>
+</section>
+useEffect(() => {
+  if (!date || !token) return;
+  setLoading(true);
+  axios.get(`/api/entries/${date}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+    .then(res => {
+      if (Array.isArray(res.data)) {
+        setEntries(res.data);
+      } else {
+        console.warn('⚠️ Server returned non-array entries', res.data);
+        setEntries([]);
+      }
+    })
+    .catch((err) => {
+      console.error('⚠️ Error fetching entries:', err);
+      setEntries([]);
+    })
+    .finally(() => setLoading(false));
+}, [date, token]);
 
   return (
     <div className="daily-page">
@@ -90,16 +108,15 @@ function DailyPage() {
 
       <main className="daily-page-content">
         <div className={`schedule-section ${isScheduleOpen ? 'open' : ''}`}>
-  <button className="schedule-toggle" onClick={toggleSchedule}>
-    {isScheduleOpen ? '▼ Schedule' : '► Schedule'}
-  </button>
-  {isScheduleOpen && (
-    <div className="schedule-content">
-      <HourlySchedule date={date} seedAppointments={seedAppointments} />
-    </div>
-  )}
-</div>
-
+          <button className="schedule-toggle" onClick={toggleSchedule}>
+            {isScheduleOpen ? '▼ Schedule' : '► Schedule'}
+          </button>
+          {isScheduleOpen && (
+            <div className="schedule-content">
+              <HourlySchedule date={date} />
+            </div>
+          )}
+        </div>
 
         <section className="todo-section">
           <h2>To-Do List</h2>

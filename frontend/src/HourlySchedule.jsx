@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
+import './HourlySchedule.css';
 
-function HourlySchedule({ date, seedAppointments }) {
-  const [appointments, setAppointments] = useState({});
+function HourlySchedule({ date }) {
+  const [schedule, setSchedule] = useState({});
+  const [appointments, setAppointments] = useState([]);
   const [editingHour, setEditingHour] = useState(null);
   const [inputValue, setInputValue] = useState('');
   const { token } = useContext(AuthContext);
 
-  // Build hour labels (8AM to 6PM)
+  // Hour labels for the schedule (8AM–6PM)
   const hours = [];
   for (let hour = 8; hour <= 18; hour++) {
     let displayHour = hour;
@@ -19,76 +21,71 @@ function HourlySchedule({ date, seedAppointments }) {
     } else if (hour === 12) {
       period = 'PM';
     }
-    hours.push(`${displayHour}:00 ${period}`);
+    hours.push(`${String(hour).padStart(2, '0')}:00`);
   }
 
-  // Load appointments from server, merging with seedAppointments
+  // Load rough day plan (DailySchedule)
   useEffect(() => {
     if (!date || !token) return;
+    axios.get(`/api/schedule/${date}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => {
+        const mapped = {};
+        res.data.forEach(item => {
+          mapped[item.hour] = item.text;
+        });
+        setSchedule(mapped);
+      })
+      .catch(err => {
+        console.error('Error loading daily schedule:', err);
+        setSchedule({});
+      });
+  }, [date, token]);
 
+  // Load appointments for the day
+  useEffect(() => {
+    if (!date || !token) return;
     axios.get(`/api/appointments/${date}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => {
-        const fetched = res.data || {};
-        // Merge: server wins if overlapping keys
-        const merged = { ...seedAppointments, ...fetched };
-        setAppointments(merged);
+        setAppointments(res.data || []);
       })
-      .catch(() => {
-        // Fallback to seedAppointments only
-        setAppointments({ ...seedAppointments });
+      .catch(err => {
+        console.error('Error loading appointments:', err);
+        setAppointments([]);
       });
-  }, [date, token, seedAppointments]);
+  }, [date, token]);
 
-  // Handle clicking to edit
-  const handleEditClick = (hourLabel) => {
-    setEditingHour(hourLabel);
-    setInputValue(appointments[hourLabel] || '');
+  // Handle editing
+  const handleEditClick = (hour) => {
+    setEditingHour(hour);
+    setInputValue(schedule[hour] || '');
   };
 
-  // Handle saving
-  const handleSave = (hourLabel) => {
-    const updated = {
-      ...appointments,
-      [hourLabel]: inputValue
-    };
-    setAppointments(updated);
+  const handleSave = (hour) => {
+    const newSchedule = { ...schedule, [hour]: inputValue };
+    setSchedule(newSchedule);
     setEditingHour(null);
 
-    axios.post('/api/add-appointment', {
+    axios.post('/api/schedule', {
       date,
-      time: hourLabel,
-      details: inputValue
+      hour,
+      text: inputValue
     }, {
       headers: { Authorization: `Bearer ${token}` }
-    }).catch(err => console.error(err));
-  };
-
-  // Handle deleting
-  const handleDelete = (hourLabel) => {
-    axios.delete('/api/delete-appointment', {
-      headers: { Authorization: `Bearer ${token}` },
-      data: {
-        date,
-        time: hourLabel
-      }
-    })
-      .then(() => {
-        const updated = { ...appointments };
-        delete updated[hourLabel];
-        setAppointments(updated);
-      })
-      .catch(err => console.error(err));
+    }).catch(err => console.error('Error saving schedule item:', err));
   };
 
   return (
     <div className="hourly-schedule">
-      <ul>
-        {hours.map((label) => (
-          <li key={label}>
-            <strong>{label}</strong>
-            {editingHour === label ? (
+      <h3>Daily Schedule Plan</h3>
+      <ul className="schedule-list">
+        {hours.map(hour => (
+          <li key={hour} className="schedule-item">
+            <span className="hour-label">{hour}</span>
+            {editingHour === hour ? (
               <>
                 <input
                   type="text"
@@ -96,35 +93,38 @@ function HourlySchedule({ date, seedAppointments }) {
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
-                      handleSave(label);
+                      handleSave(hour);
                     }
                   }}
                   autoFocus
                 />
-                <button onClick={() => handleSave(label)}>Save</button>
+                <button onClick={() => handleSave(hour)}>Save</button>
               </>
             ) : (
-              <>
-                <span
-                  className="appointment-text"
-                  onClick={() => handleEditClick(label)}
-                >
-                  {appointments[label] ?? ''}
-                </span>
-                {appointments[label] && (
-                  <button
-                    className="delete-button"
-                    onClick={() => handleDelete(label)}
-                    title="Clear this time slot"
-                  >
-                    🗑️
-                  </button>
-                )}
-              </>
+              <span
+                className="schedule-text"
+                onClick={() => handleEditClick(hour)}
+              >
+                {schedule[hour] || '—'}
+              </span>
             )}
           </li>
         ))}
       </ul>
+
+      <div className="appointments-section">
+        <h3>Appointments for This Day</h3>
+        {appointments.length === 0 && <p className="no-appointments">No appointments yet.</p>}
+        <ul className="appointments-list">
+          {appointments
+            .sort((a, b) => a.time.localeCompare(b.time))
+            .map(app => (
+              <li key={app._id} className="appointment-item">
+                <strong>{app.time}</strong> — {app.details}
+              </li>
+            ))}
+        </ul>
+      </div>
     </div>
   );
 }
