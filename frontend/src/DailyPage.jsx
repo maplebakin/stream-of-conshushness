@@ -13,6 +13,7 @@ function DailyPage() {
   const { date } = useParams();
   const { token } = useContext(AuthContext);
   const [importantEvents, setImportantEvents] = useState([]);
+const [loading, setLoading] = useState(false);
 
   // NEW: Schedule open/closed state
   const [isScheduleOpen, setIsScheduleOpen] = useState(true);
@@ -76,28 +77,6 @@ useEffect(() => {
     ))}
   </ul>
 </section>
-useEffect(() => {
-  if (!date || !token) return;
-  setLoading(true);
-  axios.get(`/api/entries/${date}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
-    .then(res => {
-      if (Array.isArray(res.data)) {
-        setEntries(res.data);
-      } else {
-        console.warn('⚠️ Server returned non-array entries', res.data);
-        setEntries([]);
-      }
-    })
-    .catch((err) => {
-      console.error('⚠️ Error fetching entries:', err);
-      setEntries([]);
-    })
-    .finally(() => setLoading(false));
-}, [date, token]);
 
   return (
     <div className="daily-page">

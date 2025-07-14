@@ -41,6 +41,11 @@ useEffect(() => {
   fetchCalendar();
 }, [token, selectedMonth]);
 
+const goToToday = () => {
+  const now = new Date();
+  const todayMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  setSelectedMonth(todayMonth);
+};
 
   // ✅ Fetch calendar + events safely
  const fetchCalendar = () => {
@@ -238,46 +243,60 @@ useEffect(() => {
         </aside>
 
         <section className="calendar-content">
-          <div className="calendar-header">
-            <button onClick={() => handleMonthChange(-1)}>&lt;</button>
-            <h2>{formatMonthYear(selectedMonth)}</h2>
-            <button onClick={() => handleMonthChange(1)}>&gt;</button>
-          </div>
+         <div className="calendar-header">
+<div className="calendar-header">
+  <div className="month-nav">
+    <button onClick={() => handleMonthChange(-1)}>&lt;</button>
+    <h2>{formatMonthYear(selectedMonth)}</h2>
+    <button onClick={() => handleMonthChange(1)}>&gt;</button>
+  </div>
+</div>
 
+
+  
+</div>
+
+
+
+         
           <div className="add-appointment">
-            <button onClick={() => setShowForm(!showForm)}>
-              {showForm ? 'Close' : '+ Add Appointment'}
-            </button>
-            {showForm && (
-              <form onSubmit={handleSubmit}>
-                <label>
-                  Date
-                  <input
-                    type="date"
-                    value={newAppointment.date}
-                    onChange={e => setNewAppointment({ ...newAppointment, date: e.target.value })}
-                  />
-                </label>
-                <label>
-                  Time
-                  <input
-                    type="time"
-                    value={newAppointment.time}
-                    onChange={e => setNewAppointment({ ...newAppointment, time: e.target.value })}
-                  />
-                </label>
-                <label>
-                  Details
-                  <input
-                    type="text"
-                    value={newAppointment.details}
-                    onChange={e => setNewAppointment({ ...newAppointment, details: e.target.value })}
-                  />
-                </label>
-                <button type="submit">Save Appointment</button>
-              </form>
-            )}
-          </div>
+  <div className="add-appointment-buttons">
+    <button onClick={() => setShowForm(!showForm)}>
+      {showForm ? 'Close' : '+ Add Appointment'}
+    </button>
+    <button onClick={goToToday}>Today</button>
+  </div>
+  {showForm && (
+    <form onSubmit={handleSubmit}>
+      <label>
+        Date
+        <input
+          type="date"
+          value={newAppointment.date}
+          onChange={e => setNewAppointment({ ...newAppointment, date: e.target.value })}
+        />
+      </label>
+      <label>
+        Time
+        <input
+          type="time"
+          value={newAppointment.time}
+          onChange={e => setNewAppointment({ ...newAppointment, time: e.target.value })}
+        />
+      </label>
+      <label>
+        Details
+        <input
+          type="text"
+          value={newAppointment.details}
+          onChange={e => setNewAppointment({ ...newAppointment, details: e.target.value })}
+        />
+      </label>
+      <button type="submit">Save Appointment</button>
+    </form>
+  )}
+</div>
+
 
           <div className="calendar-grid">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (

@@ -316,6 +316,15 @@
 }
 
 
+.add-appointment-buttons {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+
 /*──────────────────────────────────────────────────────
   Month Tabs (Sidebar)
 ──────────────────────────────────────────────────────*/
