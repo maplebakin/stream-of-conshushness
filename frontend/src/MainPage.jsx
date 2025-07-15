@@ -40,39 +40,40 @@ export default function MainPage() {
   };
 
   const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!newEntry.content.trim()) return;
+  e.preventDefault();
+  if (!newEntry.content.trim()) return;
 
-    const isoDate = editingId ? newEntry.date : getTodayISO();
+  const isoDate = editingId ? newEntry.date : getTodayISO();
 
-    const entryToSave = {
-      ...newEntry,
-      date: isoDate,
-      tags: newEntry.tags
-        ? newEntry.tags.split(',').map(t => t.trim()).filter(Boolean)
-        : [],
-    };
-
-    const config = {
-      headers: { Authorization: `Bearer ${token}` }
-    };
-
-    if (editingId) {
-      axios.put(`/api/edit-entry/${editingId}`, entryToSave, config)
-        .then(() => {
-          setEntries(entries.map(e => e.id === editingId ? { ...e, ...entryToSave } : e));
-          resetForm();
-        })
-        .catch(err => console.error('Error updating entry:', err));
-    } else {
-      axios.post('/api/add-entry', entryToSave, config)
-        .then(res => {
-          setEntries([res.data, ...entries]);
-          resetForm();
-        })
-        .catch(err => console.error('Error adding entry:', err));
-    }
+  const entryToSave = {
+    ...newEntry,
+    date: isoDate,
+    tags: newEntry.tags
+      ? newEntry.tags.split(',').map(t => t.trim()).filter(Boolean)
+      : [],
   };
+
+  const config = {
+    headers: { Authorization: `Bearer ${token}` }
+  };
+
+  if (editingId) {
+    axios.put(`/api/entries/${editingId}`, entryToSave, config)
+      .then(() => {
+        setEntries(entries.map(e => e.id === editingId ? { ...e, ...entryToSave } : e));
+        resetForm();
+      })
+      .catch(err => console.error('Error updating entry:', err));
+  } else {
+    axios.post('/api/entries', entryToSave, config)
+      .then(res => {
+        setEntries([res.data, ...entries]);
+        resetForm();
+      })
+      .catch(err => console.error('Error adding entry:', err));
+  }
+};
+
 
   const resetForm = () => {
     setEditingId(null);
@@ -96,14 +97,14 @@ export default function MainPage() {
     setShowForm(true);
   };
 
-  const handleDelete = (id) => {
-    if (!window.confirm('Delete this entry?')) return;
-    axios.delete(`/api/delete-entry/${id}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(() => setEntries(entries.filter(e => e.id !== id)))
-      .catch(err => console.error('Error deleting entry:', err));
-  };
+ const handleDelete = (id) => {
+  if (!window.confirm('Delete this entry?')) return;
+  axios.delete(`/api/entries/${id}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+    .then(() => setEntries(entries.filter(e => e._id !== id)))
+    .catch(err => console.error('Error deleting entry:', err));
+};
 
   const allTags = Array.from(new Set(
     entries
@@ -210,7 +211,8 @@ export default function MainPage() {
               )}
               <div className="main-entry-controls">
                 <button onClick={() => startEdit(entry)}>Edit</button>
-                <button onClick={() => handleDelete(entry.id)}>Delete</button>
+                <button onClick={() => handleDelete(entry._id)}>Delete</button>
+
               </div>
             </div>
           ))}

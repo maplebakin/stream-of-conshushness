@@ -283,6 +283,39 @@ app.get('/api/entries', authenticateToken, async (req, res) => {
   }
 });
 
+app.post('/api/entries', authenticateToken, async (req, res) => {
+  const { date, section, tags, content } = req.body;
+  if (!date || !section || !content) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const newEntry = new Entry({
+      userId: req.user.userId,
+      date,
+      section,
+      tags: tags || [],
+      content
+    });
+    await newEntry.save();
+    res.json(newEntry);
+  } catch {
+    res.status(500).json({ error: 'Server error saving entry' });
+  }
+});
+app.delete('/api/entries/:id', authenticateToken, async (req, res) => {
+  try {
+    const deleted = await Entry.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.user.userId
+    });
+    if (!deleted) return res.status(404).json({ error: 'Entry not found' });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: 'Server error deleting entry' });
+  }
+});
+
 
 // ─── Serve Frontend ─────────────────────────────
 const CLIENT_BUILD_PATH = path.join(__dirname, 'frontend', 'dist');
