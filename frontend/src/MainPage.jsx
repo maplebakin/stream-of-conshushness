@@ -13,6 +13,10 @@ function getTodayISO() {
   ).padStart(2, '0')}`;
 }
 
+function sortEntriesByDateDesc(list) {
+  return [...list].sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
 export default function MainPage() {
   const { token, logout } = useContext(AuthContext);
   const [entries, setEntries] = useState([]);
@@ -27,7 +31,18 @@ export default function MainPage() {
       .get('/api/entries', {
         headers: { Authorization: `Bearer ${token}` },
       })
-      .then((res) => setEntries(res.data))
+      .then((res) => {
+  const sorted = res.data.sort((a, b) => {
+    const dateA = new Date(a.date);
+    const dateB = new Date(b.date);
+    if (dateA > dateB) return -1;
+    if (dateA < dateB) return 1;
+    // If same day, use MongoDB _id timestamp
+    return b._id.localeCompare(a._id); // Newest entry first
+  });
+  setEntries(sorted);
+})
+
       .catch((err) => console.error('Error fetching entries:', err));
   }, [token]);
 
@@ -54,9 +69,8 @@ export default function MainPage() {
           }
         )
         .then(() => {
-          setEntries((prev) =>
-            prev.map((e) => (e._id === entryData._id ? { ...e, ...entryData } : e))
-          );
+          setEntries((prev) => sortEntriesByDateDesc([...prev, res.data]));
+
         })
         .catch(() => {});
     } else {
@@ -71,7 +85,7 @@ export default function MainPage() {
           }
         )
         .then((res) => {
-          setEntries((prev) => [res.data, ...prev]);
+          setEntries((prev) => sortEntriesByDateDesc([res.data, ...prev]));
         })
         .catch(() => {});
     }
