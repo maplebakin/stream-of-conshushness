@@ -4,15 +4,13 @@ import './Main.css';
 import { Link } from 'react-router-dom';
 import { AuthContext } from './AuthContext.jsx';
 
-
 function getTodayISO() {
   const today = new Date();
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 }
 
 export default function MainPage() {
-  const { token, logout } = useContext(AuthContext);
-  
+  const { token } = useContext(AuthContext);
   const [entries, setEntries] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [newEntry, setNewEntry] = useState({
@@ -136,7 +134,6 @@ export default function MainPage() {
         <nav>
           <Link to="/">The Stream</Link>
           <Link to="/calendar">📅 Calendar</Link>
-          <button onClick={logout}>Log Out</button>
         </nav>
       </header>
 

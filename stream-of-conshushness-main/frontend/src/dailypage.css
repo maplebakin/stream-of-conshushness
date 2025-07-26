@@ -1,0 +1,387 @@
+/*──────────────────────────────────────────────────────
+  Stream of Conshushness — DailyPage.css
+──────────────────────────────────────────────────────*/
+
+/*──────────────────────────────────────────────────────
+  Base Page
+──────────────────────────────────────────────────────*/
+body {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-serif);
+  margin: 0;
+  padding: 0;
+  line-height: 1.6;
+}
+
+/*──────────────────────────────────────────────────────
+  Header
+──────────────────────────────────────────────────────*/
+.daily-page-header {
+  background-color: var(--color-header);
+  color: var(--color-surface);
+  padding: 16px 20px;
+  border-radius: var(--radius-card);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  font-family: var(--font-decorative);
+  margin-bottom: 2rem;
+}
+
+.daily-page-header h1 {
+  margin: 0;
+  font-size: 2.2rem;
+}
+
+.daily-page-header a {
+  text-decoration: none;
+  background-color: var(--color-accent);
+  color: var(--color-surface);
+  padding: 6px 12px;
+  border-radius: var(--radius-button);
+  font-family: var(--font-handwritten);
+  transition: background-color 0.3s ease;
+}
+
+.daily-page-header a:hover {
+  background-color: var(--color-hover);
+}
+
+/*──────────────────────────────────────────────────────
+  Main Content Grid Layout
+──────────────────────────────────────────────────────*/
+.daily-page-content {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 0 1rem;
+  align-items: stretch;
+}
+
+@media (min-width: 800px) {
+  .daily-page-content {
+    grid-template-areas:
+      "schedule todo priorities"
+      "notes entries entries";
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto auto;
+  }
+}
+
+.schedule-section { grid-area: schedule; }
+.todo-section     { grid-area: todo; }
+.priorities-section { grid-area: priorities; }
+.notes-section    { grid-area: notes; }
+.entries-section  { grid-area: entries; }
+
+/*──────────────────────────────────────────────────────
+  Card Styling
+──────────────────────────────────────────────────────*/
+.schedule-section,
+.todo-section,
+.priorities-section,
+.notes-section,
+.entries-section {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 1.25rem;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  min-height: 350px;
+  display: flex;
+  flex-direction: column;
+}
+
+/*──────────────────────────────────────────────────────
+  Section Headers
+──────────────────────────────────────────────────────*/
+.schedule-section h2,
+.todo-section h2,
+.priorities-section h2,
+.notes-section h2,
+.entries-section h2 {
+  margin-top: 0;
+  font-family: var(--font-serif);
+  font-size: 1.4rem;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+/*──────────────────────────────────────────────────────
+  Hourly Schedule Styling
+──────────────────────────────────────────────────────*/
+.hourly-schedule ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.hourly-schedule li {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  border-bottom: 1px dashed var(--color-border);
+  padding: 0.4rem 0;
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  color: var(--color-text);
+  gap: 1rem;
+  transition: background-color 0.2s ease;
+}
+
+.hourly-schedule li:hover {
+  background-color: var(--color-hover);
+  cursor: pointer;
+}
+
+.hourly-schedule strong {
+  flex-shrink: 0;
+  width: 100px;
+  text-align: left;
+  font-weight: normal;
+  color: var(--color-text);
+}
+
+.appointment-text {
+  flex: 1;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-input);
+  background-color: var(--color-input-bg);
+  color: var(--color-text);
+  cursor: text;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.appointment-text:hover {
+  background-color: var(--color-hover);
+  border-color: var(--color-border);
+}
+
+.hourly-schedule input[type="text"] {
+  flex: 1;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-serif);
+}
+
+.hourly-schedule .delete-button {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--radius-button);
+  font-size: 0.85rem;
+  margin-left: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.hourly-schedule .delete-button:hover {
+  background-color: var(--color-hover);
+}
+
+.hourly-schedule button {
+  background-color: var(--color-accent);
+  color: var(--color-surface);
+  border: none;
+  padding: 4px 8px;
+  border-radius: var(--radius-button);
+  font-family: var(--font-handwritten);
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.hourly-schedule button:hover {
+  background-color: var(--color-hover);
+}
+
+/*──────────────────────────────────────────────────────
+  Hourly Schedule Section Fix
+──────────────────────────────────────────────────────*/
+.schedule-section {
+  min-height: auto;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 1.25rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+/* Optional pretty scrollbar */
+.schedule-section::-webkit-scrollbar {
+  width: 8px;
+}
+
+.schedule-section::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 4px;
+}
+
+
+/*──────────────────────────────────────────────────────
+  To-Do and Top Priorities Styling
+──────────────────────────────────────────────────────*/
+.to-do-box ul,
+.top-priorities ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.to-do-box li,
+.top-priorities li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px dashed var(--color-border);
+  padding-bottom: 0.25rem;
+  font-family: var(--font-handwritten);
+  font-size: 1.1rem;
+}
+
+.todo-text,
+.priority-text {
+  font-family: var(--font-handwritten);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0.25rem 0;
+  cursor: text;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.todo-text:hover,
+.priority-text:hover {
+  background-color: var(--color-hover);
+}
+
+.to-do-box li.done .todo-text {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.add-todo,
+.add-priority {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/*──────────────────────────────────────────────────────
+  Notes Section
+──────────────────────────────────────────────────────*/
+.notes-section textarea {
+  width: 100%;
+  padding: 0.75rem;
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  resize: vertical;
+  min-height: 150px;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}
+
+/*──────────────────────────────────────────────────────
+  Entries Section
+──────────────────────────────────────────────────────*/
+.entries-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.entry-item {
+  border-top: 1px dashed var(--color-border);
+  padding: 0.75rem 0;
+}
+
+.entry-section {
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+  font-family: var(--font-serif);
+  color: var(--color-text);
+}
+
+.entry-content {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.entry-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.entry-tag {
+  background-color: var(--color-accent);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-tag);
+  font-size: 0.85rem;
+  color: var(--color-surface);
+}
+
+/*──────────────────────────────────────────────────────
+  Buttons
+──────────────────────────────────────────────────────*/
+button {
+  background-color: var(--color-accent);
+  color: var(--color-surface);
+  border: none;
+  padding: 6px 12px;
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  font-family: var(--font-handwritten);
+  transition: background-color 0.3s ease;
+  font-size: 0.95rem;
+}
+
+button:hover {
+  background-color: var(--color-hover);
+}
+
+/*──────────────────────────────────────────────────────
+  Responsive
+──────────────────────────────────────────────────────*/
+@media (max-width: 800px) {
+  .daily-page-content {
+    grid-template-areas:
+      "schedule"
+      "todo"
+      "priorities"
+      "notes"
+      "entries";
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 0 0.5rem;
+  }
+
+  .daily-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px;
+  }
+
+  .daily-page-header h1 {
+    font-size: 1.8rem;
+  }
+
+  .daily-page-header a {
+    margin-top: 0.5rem;
+  }
+}
