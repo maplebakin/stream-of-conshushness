@@ -77,7 +77,11 @@ app.post('/api/login', async (req, res) => {
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ userId: user._id, username: user.username }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign(
+      { userId: user._id, username: user.username },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
     res.json({ success: true, token });
   } catch {
     res.status(500).json({ error: 'Server error during login' });
@@ -90,19 +94,19 @@ app.get('/api/calendar-data/:month', authenticateToken, async (req, res) => {
     const month = req.params.month;
     const appointments = await Appointment.find({
       userId: req.user.userId,
-      date: { $regex: `^${month}` }
+      date: { $regex: `^${month}` },
     });
 
     const calendarData = {};
     if (!calendarData[month]) calendarData[month] = { days: {} };
 
-    appointments.forEach(appt => {
+    appointments.forEach((appt) => {
       if (!calendarData[month].days[appt.date]) {
         calendarData[month].days[appt.date] = { schedule: {} };
       }
       calendarData[month].days[appt.date].schedule[appt.time] = {
         details: appt.details,
-        _id: appt._id
+        _id: appt._id,
       };
     });
 
@@ -113,11 +117,13 @@ app.get('/api/calendar-data/:month', authenticateToken, async (req, res) => {
   }
 });
 
-
 // ─── Appointments ─────────────────────────────
 app.get('/api/appointments/:date', authenticateToken, async (req, res) => {
   try {
-    const appointments = await Appointment.find({ userId: req.user.userId, date: req.params.date }).sort({ time: 1 });
+    const appointments = await Appointment.find({
+      userId: req.user.userId,
+      date: req.params.date,
+    }).sort({ time: 1 });
     res.json(appointments);
   } catch {
     res.status(500).json({ error: 'Server error fetching appointments' });
@@ -133,7 +139,12 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
     return res.status(400).json({ error: 'Invalid date format' });
   }
   try {
-    const newAppointment = new Appointment({ userId: req.user.userId, date, time, details });
+    const newAppointment = new Appointment({
+      userId: req.user.userId,
+      date,
+      time,
+      details,
+    });
     await newAppointment.save();
     res.json(newAppointment);
   } catch {
@@ -143,7 +154,10 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
 
 app.delete('/api/appointments/:id', authenticateToken, async (req, res) => {
   try {
-    const deleted = await Appointment.findOneAndDelete({ _id: req.params.id, userId: req.user.userId });
+    const deleted = await Appointment.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.user.userId,
+    });
     if (!deleted) return res.status(404).json({ error: 'Appointment not found' });
     res.json({ success: true });
   } catch {
@@ -154,7 +168,10 @@ app.delete('/api/appointments/:id', authenticateToken, async (req, res) => {
 // ─── Important Events ─────────────────────────────
 app.get('/api/important-events/:month', authenticateToken, async (req, res) => {
   try {
-    const events = await ImportantEvent.find({ userId: req.user.userId, date: { $regex: `^${req.params.month}` } });
+    const events = await ImportantEvent.find({
+      userId: req.user.userId,
+      date: { $regex: `^${req.params.month}` },
+    });
     res.json(events);
   } catch {
     res.status(500).json({ error: 'Server error fetching important events' });
@@ -165,7 +182,11 @@ app.post('/api/important-events', authenticateToken, async (req, res) => {
   const { title, date } = req.body;
   if (!title || !date) return res.status(400).json({ error: 'Missing fields' });
   try {
-    const newEvent = new ImportantEvent({ userId: req.user.userId, title, date });
+    const newEvent = new ImportantEvent({
+      userId: req.user.userId,
+      title,
+      date,
+    });
     await newEvent.save();
     res.json(newEvent);
   } catch {
@@ -175,11 +196,14 @@ app.post('/api/important-events', authenticateToken, async (req, res) => {
 
 app.delete('/api/important-events/:id', authenticateToken, async (req, res) => {
   try {
-    const deleted = await ImportantEvent.findOneAndDelete({ _id: req.params.id, userId: req.user.userId });
+    const deleted = await ImportantEvent.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.user.userId,
+    });
     if (!deleted) return res.status(404).json({ error: 'Event not found' });
     res.json({ success: true });
   } catch {
-    res.status(500).json({ error: 'Server error deleting important event' });
+    res.status(500).json({ error: 'Server error deleting event' });
   }
 });
 
@@ -262,18 +286,21 @@ app.post('/api/schedule', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Server error saving daily schedule' });
   }
 });
+
 // Get entries for a specific day
 app.get('/api/entries/:date', authenticateToken, async (req, res) => {
   try {
     const entries = await Entry.find({
       userId: req.user.userId,
-      date: req.params.date
+      date: req.params.date,
     });
     res.json(entries);
   } catch {
     res.status(500).json({ error: 'Server error fetching entries' });
   }
 });
+
+// Get all entries
 app.get('/api/entries', authenticateToken, async (req, res) => {
   try {
     const entries = await Entry.find({ userId: req.user.userId }).sort({ date: -1 });
@@ -283,6 +310,7 @@ app.get('/api/entries', authenticateToken, async (req, res) => {
   }
 });
 
+// Add a new entry
 app.post('/api/entries', authenticateToken, async (req, res) => {
   const { date, section, tags, content } = req.body;
   if (!date || !section || !content) {
@@ -295,7 +323,7 @@ app.post('/api/entries', authenticateToken, async (req, res) => {
       date,
       section,
       tags: tags || [],
-      content
+      content,
     });
     await newEntry.save();
     res.json(newEntry);
@@ -303,11 +331,38 @@ app.post('/api/entries', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Server error saving entry' });
   }
 });
+
+// Update an existing entry
+app.put('/api/entries/:id', authenticateToken, async (req, res) => {
+  const { date, section, tags, content } = req.body;
+  if (!date || !section || !content) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  try {
+    const updateData = {
+      date,
+      section,
+      tags: Array.isArray(tags) ? tags : tags || [],
+      content,
+    };
+    const updated = await Entry.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.userId },
+      updateData,
+      { new: true }
+    );
+    if (!updated) return res.status(404).json({ error: 'Entry not found' });
+    res.json(updated);
+  } catch {
+    res.status(500).json({ error: 'Server error updating entry' });
+  }
+});
+
+// Delete an entry
 app.delete('/api/entries/:id', authenticateToken, async (req, res) => {
   try {
     const deleted = await Entry.findOneAndDelete({
       _id: req.params.id,
-      userId: req.user.userId
+      userId: req.user.userId,
     });
     if (!deleted) return res.status(404).json({ error: 'Entry not found' });
     res.json({ success: true });
@@ -315,7 +370,6 @@ app.delete('/api/entries/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Server error deleting entry' });
   }
 });
-
 
 // ─── Serve Frontend ─────────────────────────────
 const CLIENT_BUILD_PATH = path.join(__dirname, 'frontend', 'dist');

@@ -3,7 +3,7 @@ import { useEffect, useState, useContext } from 'react';
 import './Main.css';
 import { Link } from 'react-router-dom';
 import { AuthContext } from './AuthContext.jsx';
-
+import toast from 'react-hot-toast';
 
 function getTodayISO() {
   const today = new Date();
@@ -12,7 +12,7 @@ function getTodayISO() {
 
 export default function MainPage() {
   const { token, logout } = useContext(AuthContext);
-  
+
   const [entries, setEntries] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [newEntry, setNewEntry] = useState({
@@ -27,11 +27,12 @@ export default function MainPage() {
 
   useEffect(() => {
     if (!token) return;
-    axios.get('/api/entries', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => setEntries(res.data))
-      .catch(err => console.error('Error fetching entries:', err));
+    axios
+      .get('/api/entries', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then((res) => setEntries(res.data))
+      .catch((err) => console.error('Error fetching entries:', err));
   }, [token]);
 
   const toggleForm = () => setShowForm(!showForm);
@@ -42,40 +43,58 @@ export default function MainPage() {
   };
 
   const handleSubmit = (e) => {
-  e.preventDefault();
-  if (!newEntry.content.trim()) return;
+    e.preventDefault();
+    if (!newEntry.content.trim()) return;
 
-  const isoDate = editingId ? newEntry.date : getTodayISO();
+    const isoDate = editingId ? newEntry.date : getTodayISO();
 
-  const entryToSave = {
-    ...newEntry,
-    date: isoDate,
-    tags: newEntry.tags
-      ? newEntry.tags.split(',').map(t => t.trim()).filter(Boolean)
-      : [],
+    const entryToSave = {
+      ...newEntry,
+      date: isoDate,
+      tags: newEntry.tags
+        ? newEntry.tags.split(',').map((t) => t.trim()).filter(Boolean)
+        : [],
+    };
+
+    const config = {
+      headers: { Authorization: `Bearer ${token}` },
+    };
+
+    if (editingId) {
+      // Update existing entry with toast notifications
+      toast
+        .promise(
+          axios.put(`/api/entries/${editingId}`, entryToSave, config),
+          {
+            loading: 'Updating entry…',
+            success: 'Entry updated!',
+            error: 'Error updating entry',
+          }
+        )
+        .then((res) => {
+          const updated = res.data || entryToSave;
+          setEntries(entries.map((e) => (e._id === editingId ? { ...e, ...updated } : e)));
+          resetForm();
+        })
+        .catch(() => {});
+    } else {
+      // Create new entry with toast notifications
+      toast
+        .promise(
+          axios.post('/api/entries', entryToSave, config),
+          {
+            loading: 'Saving entry…',
+            success: 'Entry added!',
+            error: 'Error adding entry',
+          }
+        )
+        .then((res) => {
+          setEntries([res.data, ...entries]);
+          resetForm();
+        })
+        .catch(() => {});
+    }
   };
-
-  const config = {
-    headers: { Authorization: `Bearer ${token}` }
-  };
-
-  if (editingId) {
-    axios.put(`/api/entries/${editingId}`, entryToSave, config)
-      .then(() => {
-        setEntries(entries.map(e => e.id === editingId ? { ...e, ...entryToSave } : e));
-        resetForm();
-      })
-      .catch(err => console.error('Error updating entry:', err));
-  } else {
-    axios.post('/api/entries', entryToSave, config)
-      .then(res => {
-        setEntries([res.data, ...entries]);
-        resetForm();
-      })
-      .catch(err => console.error('Error adding entry:', err));
-  }
-};
-
 
   const resetForm = () => {
     setEditingId(null);
@@ -89,43 +108,51 @@ export default function MainPage() {
   };
 
   const startEdit = (entry) => {
-    setEditingId(entry.id);
+    setEditingId(entry._id);
     setNewEntry({
       section: entry.section,
-      tags: Array.isArray(entry.tags) ? entry.tags.join(', ') : (entry.tags || ''),
+      tags: Array.isArray(entry.tags) ? entry.tags.join(', ') : entry.tags || '',
       content: entry.content,
       date: entry.date,
     });
     setShowForm(true);
   };
 
- const handleDelete = (id) => {
-  if (!window.confirm('Delete this entry?')) return;
-  axios.delete(`/api/entries/${id}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-    .then(() => setEntries(entries.filter(e => e._id !== id)))
-    .catch(err => console.error('Error deleting entry:', err));
-};
+  const handleDelete = (id) => {
+    if (!window.confirm('Delete this entry?')) return;
+    toast
+      .promise(
+        axios.delete(`/api/entries/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        {
+          loading: 'Deleting entry…',
+          success: 'Entry deleted!',
+          error: 'Error deleting entry',
+        }
+      )
+      .then(() => setEntries(entries.filter((e) => e._id !== id)))
+      .catch(() => {});
+  };
 
-  const allTags = Array.from(new Set(
-    entries
-      .flatMap(e => Array.isArray(e.tags) ? e.tags : (e.tags || '').split(','))
-      .map(t => t.trim())
-      .filter(t => t.length > 0)
-  )).sort();
+  const allTags = Array.from(
+    new Set(
+      entries
+        .flatMap((e) => (Array.isArray(e.tags) ? e.tags : (e.tags || '').split(',')))
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0)
+    )
+  ).sort();
 
   const filteredEntries = entries.filter((entry) => {
     const matchesSection = !selectedSection || entry.section === selectedSection;
-    const searchLower = searchQuery.toLowerCase();
-
-    const matchesSearch = !searchQuery || (
-      (entry.content && entry.content.toLowerCase().includes(searchLower)) ||
-      (entry.date && entry.date.toLowerCase().includes(searchLower)) ||
-      (entry.section && entry.section.toLowerCase().includes(searchLower)) ||
-      (Array.isArray(entry.tags) && entry.tags.join(', ').toLowerCase().includes(searchLower))
-    );
-
+    const normalizedSearch = searchQuery.replace(/^#/, '').toLowerCase();
+    const matchesSearch =
+      !normalizedSearch ||
+      (entry.content && entry.content.toLowerCase().includes(normalizedSearch)) ||
+      (entry.date && entry.date.toLowerCase().includes(normalizedSearch)) ||
+      (entry.section && entry.section.toLowerCase().includes(normalizedSearch)) ||
+      (Array.isArray(entry.tags) && entry.tags.join(', ').toLowerCase().includes(normalizedSearch));
     return matchesSection && matchesSearch;
   });
 
@@ -140,12 +167,8 @@ export default function MainPage() {
         </nav>
       </header>
 
-      <button
-        id="toggle-entry-form"
-        className="toggle-entry-btn"
-        onClick={toggleForm}
-      >
-        {showForm ? 'Close Entry' : (editingId ? 'Edit Entry' : 'New Entry')}
+      <button id="toggle-entry-form" className="toggle-entry-btn" onClick={toggleForm}>
+        {showForm ? 'Close Entry' : editingId ? 'Edit Entry' : 'New Entry'}
       </button>
 
       <div className={`main-add-entry ${showForm ? 'active' : ''}`}>
@@ -196,26 +219,22 @@ export default function MainPage() {
       <div className="main-container">
         <section className="main-feed">
           {filteredEntries.map((entry) => (
-  <div className="main-entry" key={entry._id}>
-
+            <div className="main-entry" key={entry._id}>
               <h3>{entry.date}</h3>
               <h4>{entry.section}</h4>
               <p>{entry.content}</p>
               {entry.tags && entry.tags.toString().trim().length > 0 && (
                 <div className="tags">
-                  {[...new Set(
-                    (Array.isArray(entry.tags) ? entry.tags : entry.tags.split(','))
-                      .map(tag => tag.trim())
-                      .filter(Boolean)
-                  )].map((tag, i) => (
-                    <span key={`${entry.id}-tag-${i}`} className="tag-pill">#{tag}</span>
+                  {[...new Set((Array.isArray(entry.tags) ? entry.tags : entry.tags.split(',')).map((tag) => tag.trim()).filter(Boolean))].map((tag, i) => (
+                    <span key={`${entry._id}-tag-${i}`} className="tag-pill">
+                      #{tag}
+                    </span>
                   ))}
                 </div>
               )}
               <div className="main-entry-controls">
                 <button onClick={() => startEdit(entry)}>Edit</button>
                 <button onClick={() => handleDelete(entry._id)}>Delete</button>
-
               </div>
             </div>
           ))}
@@ -225,7 +244,7 @@ export default function MainPage() {
           <input
             type="text"
             id="search"
-            placeholder="Search..."
+            placeholder="Search…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -245,10 +264,10 @@ export default function MainPage() {
           <a
             key={`tag-footer-${tag}`}
             href="#"
-            className={searchQuery === `#${tag}` ? 'active' : ''}
+            className={searchQuery === tag ? 'active' : ''}
             onClick={(e) => {
               e.preventDefault();
-              setSearchQuery(`${tag}`);
+              setSearchQuery(tag);
             }}
           >
             #{tag}

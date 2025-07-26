@@ -13,7 +13,7 @@ function DailyPage() {
   const { date } = useParams();
   const { token } = useContext(AuthContext);
   const [importantEvents, setImportantEvents] = useState([]);
-const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // NEW: Schedule open/closed state
   const [isScheduleOpen, setIsScheduleOpen] = useState(true);
@@ -28,55 +28,47 @@ const [loading, setLoading] = useState(false);
   }, []);
 
   const toggleSchedule = () => {
-    setIsScheduleOpen(prev => !prev);
+    setIsScheduleOpen((prev) => !prev);
   };
 
+  // Fetch important events
   useEffect(() => {
     if (!date || !token) return;
 
-    axios.get(`/api/important-events/${date.slice(0, 7)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    .then(res => {
-      const filtered = (res.data || []).filter(ev => ev.date === date);
-      setImportantEvents(filtered);
-    })
-    .catch(() => setImportantEvents([]));
+    axios
+      .get(`/api/important-events/${date.slice(0, 7)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then((res) => {
+        const filtered = (res.data || []).filter((ev) => ev.date === date);
+        setImportantEvents(filtered);
+      })
+      .catch(() => setImportantEvents([]));
   }, [date, token]);
 
   const [yyyy, mm, dd] = date.split('-');
-  const formattedDate = new Date(
-    Number(yyyy),
-    Number(mm) - 1,
-    Number(dd)
-  ).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
+  const formattedDate = new Date(Number(yyyy), Number(mm) - 1, Number(dd)).toLocaleDateString(
+    'en-US',
+    {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }
+  );
 
-    
-  });
-const [appointments, setAppointments] = useState([]);
+  const [appointments, setAppointments] = useState([]);
 
-useEffect(() => {
-  if (!date || !token) return;
-  axios.get(`/api/appointments/${date}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-    .then(res => setAppointments(res.data || []))
-    .catch(() => setAppointments([]));
-}, [date, token]);
-<section className="appointments-section">
-  <h2>Appointments</h2>
-  <ul>
-    {appointments.map(appt => (
-      <li key={appt._id}>
-        {appt.time} - {appt.details}
-      </li>
-    ))}
-  </ul>
-</section>
+  // Fetch appointments for the day
+  useEffect(() => {
+    if (!date || !token) return;
+    axios
+      .get(`/api/appointments/${date}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then((res) => setAppointments(res.data || []))
+      .catch(() => setAppointments([]));
+  }, [date, token]);
 
   return (
     <div className="daily-page">
@@ -96,6 +88,18 @@ useEffect(() => {
             </div>
           )}
         </div>
+
+        {/* Appointments list for the day */}
+        <section className="appointments-section">
+          <h2>Appointments</h2>
+          <ul>
+            {appointments.map((appt) => (
+              <li key={appt._id}>
+                {appt.time} - {appt.details}
+              </li>
+            ))}
+          </ul>
+        </section>
 
         <section className="todo-section">
           <h2>To-Do List</h2>
