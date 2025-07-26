@@ -88,6 +88,10 @@ img {
 /*──────────────────────────────────────────────────────
   Mobile Responsiveness
 ──────────────────────────────────────────────────────*/
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
 @media (max-width: 600px) {
   html, body {
     font-size: 15px;
