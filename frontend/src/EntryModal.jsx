@@ -10,7 +10,7 @@ import './EntryModal.css';
  *   entry (object|null): the existing entry to edit; if null, a new entry is created
  *   onSave (function): called with the entry data when the user saves
  */
-export default function EntryModal({ isOpen, onClose, entry, onSave }) {
+export default function EntryModal({ isOpen, onClose, entry, onSave, existingSections = [] }) {
   // Initialize form state from the provided entry, falling back to defaults
   const [formData, setFormData] = useState({
     section: entry?.section || 'Floating in the Stream',
@@ -73,19 +73,37 @@ export default function EntryModal({ isOpen, onClose, entry, onSave }) {
       <div className="entry-modal" onClick={(e) => e.stopPropagation()}>
         <h2>{entry ? 'Edit Entry' : 'New Entry'}</h2>
         <form onSubmit={handleSubmit} className="entry-modal-form">
-          <label>
-            Section
-            <select name="section" value={formData.section} onChange={handleChange}>
-              <option value="Floating in the Stream">Floating in the Stream</option>
-              <option value="Reflections">Reflections</option>
-              <option value="Ideas & Plans">Ideas & Plans</option>
-              <option value="Creative Stream">Creative Stream</option>
-              <option value="Notes & Research">Notes & Research</option>
-              <option value="Free Writing">Free Writing</option>
-              <option value="Personal Log">Personal Log</option>
-              <option value="Open Thoughts">Open Thoughts</option>
-            </select>
-          </label>
+        <label>
+  Section:
+  <select
+  name="section"
+  value={formData.section}
+  onChange={handleChange}
+>
+  <option value="">-- Select Section --</option>
+  {existingSections.map((section, i) => (
+    <option key={i} value={section}>
+      {section}
+    </option>
+  ))}
+  <option value="__custom">✏️ Enter Custom Section</option>
+</select>
+
+{formData.section === '__custom' && (
+  <input
+    type="text"
+    name="section"
+    value=""
+    placeholder="Type your custom section"
+    onChange={(e) =>
+      setFormData((prev) => ({ ...prev, section: e.target.value }))
+    }
+  />
+)}
+
+</label>
+
+
           <label>
             Tags (comma-separated)
             <input

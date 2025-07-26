@@ -18,11 +18,9 @@ export default function MainPage() {
   const [entries, setEntries] = useState([]);
   const [selectedSection, setSelectedSection] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  // Modal state for adding/editing entries
   const [showModal, setShowModal] = useState(false);
   const [editEntry, setEditEntry] = useState(null);
 
-  // Fetch all entries on mount or when token changes
   useEffect(() => {
     if (!token) return;
     axios
@@ -33,22 +31,18 @@ export default function MainPage() {
       .catch((err) => console.error('Error fetching entries:', err));
   }, [token]);
 
-  // Open modal for new entry
   const openNewEntry = () => {
     setEditEntry(null);
     setShowModal(true);
   };
 
-  // Open modal for editing an existing entry
   const openEditEntry = (entry) => {
     setEditEntry(entry);
     setShowModal(true);
   };
 
-  // Handle saving an entry (create or update)
   const handleSaveEntry = async (entryData) => {
     const config = { headers: { Authorization: `Bearer ${token}` } };
-    // If an ID exists, update the entry
     if (entryData._id) {
       await toast
         .promise(
@@ -66,7 +60,6 @@ export default function MainPage() {
         })
         .catch(() => {});
     } else {
-      // Otherwise create a new entry, defaulting to today’s date
       const payload = { ...entryData, date: getTodayISO() };
       await toast
         .promise(
@@ -85,7 +78,6 @@ export default function MainPage() {
     setShowModal(false);
   };
 
-  // Delete an entry with confirmation and toast feedback
   const handleDelete = (id) => {
     if (!window.confirm('Delete this entry?')) return;
     toast
@@ -103,7 +95,6 @@ export default function MainPage() {
       .catch(() => {});
   };
 
-  // Collect all unique tags from entries for footer
   const allTags = Array.from(
     new Set(
       entries
@@ -113,7 +104,10 @@ export default function MainPage() {
     )
   ).sort();
 
-  // Filter entries based on selected section and search query
+  const allSections = Array.from(
+    new Set(entries.map((entry) => entry.section).filter(Boolean))
+  ).sort();
+
   const filteredEntries = entries.filter((entry) => {
     const matchesSection = !selectedSection || entry.section === selectedSection;
     const normalizedSearch = searchQuery.replace(/^#/, '').toLowerCase();
@@ -141,12 +135,12 @@ export default function MainPage() {
         New Entry
       </button>
 
-      {/* Modal for adding or editing an entry */}
       <EntryModal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
         entry={editEntry}
         onSave={handleSaveEntry}
+        existingSections={allSections}
       />
 
       <div className="main-container">
@@ -156,6 +150,22 @@ export default function MainPage() {
               <h3>{entry.date}</h3>
               <h4>{entry.section}</h4>
               <p>{entry.content}</p>
+
+              {entry.image && (
+                <div className="entry-image">
+                  <img
+                    src={entry.image}
+                    alt="Attached"
+                    style={{
+                      maxWidth: '100%',
+                      borderRadius: '12px',
+                      marginTop: '0.5rem',
+                      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)',
+                    }}
+                  />
+                </div>
+              )}
+
               {entry.tags && entry.tags.toString().trim().length > 0 && (
                 <div className="tags">
                   {[...new Set(
@@ -189,9 +199,18 @@ export default function MainPage() {
             <Link to="/calendar">📅 Open Calendar</Link>
           </div>
           <div className="sections">
-            <div className="sections placeholder-sections">
-              <p>Future Place for User Created Sections</p>
-            </div>
+            {allSections.map((section) => (
+              <button
+                key={section}
+                className={selectedSection === section ? 'active' : ''}
+                onClick={() => setSelectedSection(section)}
+              >
+                {section}
+              </button>
+            ))}
+            {selectedSection && (
+              <button onClick={() => setSelectedSection('')}>Clear Filter</button>
+            )}
           </div>
         </aside>
       </div>
