@@ -63,20 +63,31 @@ body {
 }
 
 @media (min-width: 800px) {
+  /*
+   * On wider screens the daily page uses a three-row grid:
+   * Row 1 contains the schedule, to-do, and top priorities.
+   * Row 2 is reserved exclusively for the appointments list and
+   * spans all three columns.
+   * Row 3 holds the notes and entries sections with entries
+   * spanning two columns.
+   */
   .daily-page-content {
     grid-template-areas:
       "schedule todo priorities"
+      "appointments appointments appointments"
       "notes entries entries";
     grid-template-columns: 1fr 1fr 1fr;
-    grid-template-rows: auto auto;
+    grid-template-rows: auto auto auto;
   }
 }
+
 
 .schedule-section { grid-area: schedule; }
 .todo-section     { grid-area: todo; }
 .priorities-section { grid-area: priorities; }
 .notes-section    { grid-area: notes; }
 .entries-section  { grid-area: entries; }
+.appointments-section { grid-area: appointments; }
 
 /*──────────────────────────────────────────────────────
   Card Styling
@@ -147,22 +158,46 @@ body {
   font-weight: normal;
   color: var(--color-text);
 }
+.appointments-section {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 1.25rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+}
 
-.appointment-text {
-  flex: 1;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid transparent;
-  border-radius: var(--radius-input);
-  background-color: var(--color-input-bg);
+.appointments-section h2 {
+  margin-top: 0;
+  font-family: var(--font-serif);
+  font-size: 1.4rem;
   color: var(--color-text);
-  cursor: text;
-  transition: background-color 0.2s, border-color 0.2s;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.25rem;
+  margin-bottom: 1rem;
 }
 
-.appointment-text:hover {
-  background-color: var(--color-hover);
-  border-color: var(--color-border);
+.appointments-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-family: var(--font-serif);
 }
+
+.appointments-section li {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  border-bottom: 1px dashed var(--color-border);
+  padding: 0.4rem 0;
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+
+
+
 
 .hourly-schedule input[type="text"] {
   flex: 1;

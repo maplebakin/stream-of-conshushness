@@ -2,6 +2,9 @@ import React, { useState, useEffect, useContext } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 
+// 🟣 Import toast for user feedback
+import toast from 'react-hot-toast';
+
 function ToDoBox({ date }) {
   const [todos, setTodos] = useState([]);
   const [inputValue, setInputValue] = useState('');
@@ -13,25 +16,39 @@ function ToDoBox({ date }) {
   useEffect(() => {
     if (!date || !token) return;
 
-    axios.get(`/api/todos/${date}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(res => setTodos(res.data || []))
+    axios
+      .get(`/api/todos/${date}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then((res) => setTodos(res.data || []))
       .catch(() => setTodos([]));
   }, [date, token]);
 
-  // Save helper - only called explicitly after user edits
-  const saveTodos = (updated) => {
+  /**
+   * Save the updated todo list to the server with toast notifications.
+   *
+   * @param {Array} updated - The updated array of todo items
+   * @param {Object} messages - Optional custom toast messages
+   */
+  const saveTodos = (updated, messages) => {
     if (!date || !token) return;
 
-    if (!Array.isArray(updated) || updated.length === 0) {
-      console.log('✅ No todos to save. Skipping POST.');
-      return;
-    }
-
-    axios.post(`/api/todos/${date}`, { items: updated }, {
-      headers: { Authorization: `Bearer ${token}` },
-    }).catch(err => console.error('❌ Error saving todos:', err));
+    // Always send the updated list, even if empty, so the server stays in sync
+    const config = { headers: { Authorization: `Bearer ${token}` } };
+    const defaultMessages = {
+      loading: 'Saving to-dos…',
+      success: 'To-dos saved!',
+      error: 'Error saving to-dos',
+    };
+    // Fire off the POST request wrapped in a toast promise for user feedback
+    return toast
+      .promise(
+        axios.post(`/api/todos/${date}`, { items: updated }, config),
+        messages || defaultMessages
+      )
+      .catch((err) => {
+        console.error('❌ Error saving todos:', err);
+      });
   };
 
   // User-initiated changes
@@ -39,7 +56,11 @@ function ToDoBox({ date }) {
     if (!inputValue.trim()) return;
     const updated = [...todos, { text: inputValue.trim(), done: false }];
     setTodos(updated);
-    saveTodos(updated);
+    saveTodos(updated, {
+      loading: 'Adding to-do…',
+      success: 'To-do added!',
+      error: 'Error adding to-do',
+    });
     setInputValue('');
   };
 
@@ -47,7 +68,11 @@ function ToDoBox({ date }) {
     const updated = [...todos];
     updated[index].done = !updated[index].done;
     setTodos(updated);
-    saveTodos(updated);
+    saveTodos(updated, {
+      loading: 'Updating to-do…',
+      success: 'To-do updated!',
+      error: 'Error updating to-do',
+    });
   };
 
   const handleStartEdit = (index) => {
@@ -59,7 +84,11 @@ function ToDoBox({ date }) {
     const updated = [...todos];
     updated[index].text = editingText;
     setTodos(updated);
-    saveTodos(updated);
+    saveTodos(updated, {
+      loading: 'Saving changes…',
+      success: 'Changes saved!',
+      error: 'Error saving changes',
+    });
     setEditingIndex(null);
     setEditingText('');
   };
@@ -67,7 +96,11 @@ function ToDoBox({ date }) {
   const handleDelete = (index) => {
     const updated = todos.filter((_, i) => i !== index);
     setTodos(updated);
-    saveTodos(updated);
+    saveTodos(updated, {
+      loading: 'Deleting to-do…',
+      success: 'To-do deleted!',
+      error: 'Error deleting to-do',
+    });
   };
 
   return (
@@ -95,7 +128,9 @@ function ToDoBox({ date }) {
                   }}
                   autoFocus
                 />
-                <button type="button" onClick={() => handleSaveEdit(index)}>Save</button>
+                <button type="button" onClick={() => handleSaveEdit(index)}>
+                  Save
+                </button>
               </>
             ) : (
               <span
@@ -106,7 +141,9 @@ function ToDoBox({ date }) {
               </span>
             )}
 
-            <button type="button" onClick={() => handleDelete(index)}>🗑️</button>
+            <button type="button" onClick={() => handleDelete(index)}>
+              🗑️
+            </button>
           </li>
         ))}
       </ul>
@@ -124,7 +161,9 @@ function ToDoBox({ date }) {
             }
           }}
         />
-        <button type="button" onClick={handleAdd}>+ Add</button>
+        <button type="button" onClick={handleAdd}>
+          + Add
+        </button>
       </div>
     </div>
   );

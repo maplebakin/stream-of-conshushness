@@ -449,6 +449,7 @@
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
+    order: 1;
   }
 
   /* Header */
@@ -495,6 +496,7 @@
     border-radius: var(--radius-card);
     background-color: var(--color-surface);
     box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    order: 2;
   }
 
   .important-events h3 {

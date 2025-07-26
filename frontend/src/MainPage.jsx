@@ -1,3 +1,4 @@
+import EntryModal from './EntryModal.jsx';
 import axios from './api/axiosInstance';
 import { useEffect, useState, useContext } from 'react';
 import './Main.css';
@@ -7,24 +8,21 @@ import toast from 'react-hot-toast';
 
 function getTodayISO() {
   const today = new Date();
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
+    today.getDate()
+  ).padStart(2, '0')}`;
 }
 
 export default function MainPage() {
   const { token, logout } = useContext(AuthContext);
-
   const [entries, setEntries] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [newEntry, setNewEntry] = useState({
-    section: 'Floating in the Stream',
-    tags: '',
-    content: '',
-    date: '',
-  });
-  const [editingId, setEditingId] = useState(null);
   const [selectedSection, setSelectedSection] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  // Modal state for adding/editing entries
+  const [showModal, setShowModal] = useState(false);
+  const [editEntry, setEditEntry] = useState(null);
 
+  // Fetch all entries on mount or when token changes
   useEffect(() => {
     if (!token) return;
     axios
@@ -35,53 +33,44 @@ export default function MainPage() {
       .catch((err) => console.error('Error fetching entries:', err));
   }, [token]);
 
-  const toggleForm = () => setShowForm(!showForm);
-
-  const handleChange = (e) => {
-    const { id, value } = e.target;
-    setNewEntry({ ...newEntry, [id]: value });
+  // Open modal for new entry
+  const openNewEntry = () => {
+    setEditEntry(null);
+    setShowModal(true);
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!newEntry.content.trim()) return;
+  // Open modal for editing an existing entry
+  const openEditEntry = (entry) => {
+    setEditEntry(entry);
+    setShowModal(true);
+  };
 
-    const isoDate = editingId ? newEntry.date : getTodayISO();
-
-    const entryToSave = {
-      ...newEntry,
-      date: isoDate,
-      tags: newEntry.tags
-        ? newEntry.tags.split(',').map((t) => t.trim()).filter(Boolean)
-        : [],
-    };
-
-    const config = {
-      headers: { Authorization: `Bearer ${token}` },
-    };
-
-    if (editingId) {
-      // Update existing entry with toast notifications
-      toast
+  // Handle saving an entry (create or update)
+  const handleSaveEntry = async (entryData) => {
+    const config = { headers: { Authorization: `Bearer ${token}` } };
+    // If an ID exists, update the entry
+    if (entryData._id) {
+      await toast
         .promise(
-          axios.put(`/api/entries/${editingId}`, entryToSave, config),
+          axios.put(`/api/entries/${entryData._id}`, entryData, config),
           {
             loading: 'Updating entry…',
             success: 'Entry updated!',
             error: 'Error updating entry',
           }
         )
-        .then((res) => {
-          const updated = res.data || entryToSave;
-          setEntries(entries.map((e) => (e._id === editingId ? { ...e, ...updated } : e)));
-          resetForm();
+        .then(() => {
+          setEntries((prev) =>
+            prev.map((e) => (e._id === entryData._id ? { ...e, ...entryData } : e))
+          );
         })
         .catch(() => {});
     } else {
-      // Create new entry with toast notifications
-      toast
+      // Otherwise create a new entry, defaulting to today’s date
+      const payload = { ...entryData, date: getTodayISO() };
+      await toast
         .promise(
-          axios.post('/api/entries', entryToSave, config),
+          axios.post('/api/entries', payload, config),
           {
             loading: 'Saving entry…',
             success: 'Entry added!',
@@ -89,35 +78,14 @@ export default function MainPage() {
           }
         )
         .then((res) => {
-          setEntries([res.data, ...entries]);
-          resetForm();
+          setEntries((prev) => [res.data, ...prev]);
         })
         .catch(() => {});
     }
+    setShowModal(false);
   };
 
-  const resetForm = () => {
-    setEditingId(null);
-    setNewEntry({
-      section: 'Floating in the Stream',
-      tags: '',
-      content: '',
-      date: '',
-    });
-    setShowForm(false);
-  };
-
-  const startEdit = (entry) => {
-    setEditingId(entry._id);
-    setNewEntry({
-      section: entry.section,
-      tags: Array.isArray(entry.tags) ? entry.tags.join(', ') : entry.tags || '',
-      content: entry.content,
-      date: entry.date,
-    });
-    setShowForm(true);
-  };
-
+  // Delete an entry with confirmation and toast feedback
   const handleDelete = (id) => {
     if (!window.confirm('Delete this entry?')) return;
     toast
@@ -131,10 +99,11 @@ export default function MainPage() {
           error: 'Error deleting entry',
         }
       )
-      .then(() => setEntries(entries.filter((e) => e._id !== id)))
+      .then(() => setEntries((prev) => prev.filter((e) => e._id !== id)))
       .catch(() => {});
   };
 
+  // Collect all unique tags from entries for footer
   const allTags = Array.from(
     new Set(
       entries
@@ -144,6 +113,7 @@ export default function MainPage() {
     )
   ).sort();
 
+  // Filter entries based on selected section and search query
   const filteredEntries = entries.filter((entry) => {
     const matchesSection = !selectedSection || entry.section === selectedSection;
     const normalizedSearch = searchQuery.replace(/^#/, '').toLowerCase();
@@ -167,54 +137,17 @@ export default function MainPage() {
         </nav>
       </header>
 
-      <button id="toggle-entry-form" className="toggle-entry-btn" onClick={toggleForm}>
-        {showForm ? 'Close Entry' : editingId ? 'Edit Entry' : 'New Entry'}
+      <button id="toggle-entry-form" className="toggle-entry-btn" onClick={openNewEntry}>
+        New Entry
       </button>
 
-      <div className={`main-add-entry ${showForm ? 'active' : ''}`}>
-        {showForm && (
-          <form onSubmit={handleSubmit}>
-            <h2>{editingId ? 'Edit Entry' : 'Add New Entry'}</h2>
-
-            <label>
-              Section
-              <select id="section" value={newEntry.section} onChange={handleChange}>
-                <option value="Floating in the Stream">Floating in the Stream</option>
-                <option value="Reflections">Reflections</option>
-                <option value="Ideas & Plans">Ideas & Plans</option>
-                <option value="Creative Stream">Creative Stream</option>
-                <option value="Notes & Research">Notes & Research</option>
-                <option value="Free Writing">Free Writing</option>
-                <option value="Personal Log">Personal Log</option>
-                <option value="Open Thoughts">Open Thoughts</option>
-              </select>
-            </label>
-
-            <label>
-              Tags (comma-separated)
-              <input
-                id="tags"
-                type="text"
-                placeholder="e.g. ideas, daily"
-                value={newEntry.tags}
-                onChange={handleChange}
-              />
-            </label>
-
-            <label>
-              Content
-              <textarea
-                id="content"
-                placeholder="Write your thoughts here"
-                value={newEntry.content}
-                onChange={handleChange}
-              />
-            </label>
-
-            <button type="submit">{editingId ? 'Save Changes' : 'Add Entry'}</button>
-          </form>
-        )}
-      </div>
+      {/* Modal for adding or editing an entry */}
+      <EntryModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        entry={editEntry}
+        onSave={handleSaveEntry}
+      />
 
       <div className="main-container">
         <section className="main-feed">
@@ -225,7 +158,11 @@ export default function MainPage() {
               <p>{entry.content}</p>
               {entry.tags && entry.tags.toString().trim().length > 0 && (
                 <div className="tags">
-                  {[...new Set((Array.isArray(entry.tags) ? entry.tags : entry.tags.split(',')).map((tag) => tag.trim()).filter(Boolean))].map((tag, i) => (
+                  {[...new Set(
+                    (Array.isArray(entry.tags) ? entry.tags : entry.tags.split(','))
+                      .map((tag) => tag.trim())
+                      .filter(Boolean)
+                  )].map((tag, i) => (
                     <span key={`${entry._id}-tag-${i}`} className="tag-pill">
                       #{tag}
                     </span>
@@ -233,7 +170,7 @@ export default function MainPage() {
                 </div>
               )}
               <div className="main-entry-controls">
-                <button onClick={() => startEdit(entry)}>Edit</button>
+                <button onClick={() => openEditEntry(entry)}>Edit</button>
                 <button onClick={() => handleDelete(entry._id)}>Delete</button>
               </div>
             </div>

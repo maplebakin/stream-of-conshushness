@@ -5,7 +5,6 @@ import './HourlySchedule.css';
 
 function HourlySchedule({ date }) {
   const [schedule, setSchedule] = useState({});
-  const [appointments, setAppointments] = useState([]);
   const [editingHour, setEditingHour] = useState(null);
   const [inputValue, setInputValue] = useState('');
   const { token } = useContext(AuthContext);
@@ -14,12 +13,8 @@ function HourlySchedule({ date }) {
   const hours = [];
   for (let hour = 8; hour <= 18; hour++) {
     let displayHour = hour;
-    let period = 'AM';
     if (hour > 12) {
       displayHour = hour - 12;
-      period = 'PM';
-    } else if (hour === 12) {
-      period = 'PM';
     }
     hours.push(`${String(hour).padStart(2, '0')}:00`);
   }
@@ -27,62 +22,49 @@ function HourlySchedule({ date }) {
   // Load rough day plan (DailySchedule)
   useEffect(() => {
     if (!date || !token) return;
-    axios.get(`/api/schedule/${date}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => {
+    axios
+      .get(`/api/schedule/${date}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then((res) => {
         const mapped = {};
-        res.data.forEach(item => {
+        res.data.forEach((item) => {
           mapped[item.hour] = item.text;
         });
         setSchedule(mapped);
       })
-      .catch(err => {
+      .catch((err) => {
         console.error('Error loading daily schedule:', err);
         setSchedule({});
       });
   }, [date, token]);
 
-  // Load appointments for the day
-  useEffect(() => {
-    if (!date || !token) return;
-    axios.get(`/api/appointments/${date}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => {
-        setAppointments(res.data || []);
-      })
-      .catch(err => {
-        console.error('Error loading appointments:', err);
-        setAppointments([]);
-      });
-  }, [date, token]);
-
-  // Handle editing
+  // Start editing a schedule slot
   const handleEditClick = (hour) => {
     setEditingHour(hour);
     setInputValue(schedule[hour] || '');
   };
 
+  // Save a schedule entry
   const handleSave = (hour) => {
     const newSchedule = { ...schedule, [hour]: inputValue };
     setSchedule(newSchedule);
     setEditingHour(null);
 
-    axios.post('/api/schedule', {
-      date,
-      hour,
-      text: inputValue
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).catch(err => console.error('Error saving schedule item:', err));
+    axios
+      .post(
+        '/api/schedule',
+        { date, hour, text: inputValue },
+        { headers: { Authorization: `Bearer token` } }
+      )
+      .catch((err) => console.error('Error saving schedule item:', err));
   };
 
   return (
     <div className="hourly-schedule">
       <h3>Daily Schedule Plan</h3>
       <ul className="schedule-list">
-        {hours.map(hour => (
+        {hours.map((hour) => (
           <li key={hour} className="schedule-item">
             <span className="hour-label">{hour}</span>
             {editingHour === hour ? (
@@ -112,19 +94,9 @@ function HourlySchedule({ date }) {
         ))}
       </ul>
 
-      <div className="appointments-section">
-        <h3>Appointments for This Day</h3>
-        {appointments.length === 0 && <p className="no-appointments">No appointments yet.</p>}
-        <ul className="appointments-list">
-          {appointments
-            .sort((a, b) => a.time.localeCompare(b.time))
-            .map(app => (
-              <li key={app._id} className="appointment-item">
-                <strong>{app.time}</strong> — {app.details}
-              </li>
-            ))}
-        </ul>
-      </div>
+      {/* Appointments are displayed in the DailyPage component's
+          dedicated card. The HourlySchedule component focuses on
+          the hourly plan only. */}
     </div>
   );
 }

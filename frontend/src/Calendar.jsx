@@ -47,10 +47,9 @@ export default function Calendar() {
   }, [token, selectedMonth]);
 
   const goToToday = () => {
-    const now = new Date();
-    const todayMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    setSelectedMonth(todayMonth);
-  };
+  const isoDate = new Date().toISOString().slice(0, 10);
+  navigate(`/day/${isoDate}`);
+};
 
   // ✅ Fetch calendar + events safely
   const fetchCalendar = () => {
