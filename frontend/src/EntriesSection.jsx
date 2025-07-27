@@ -10,6 +10,7 @@ function EntriesSection({ date }) {
   useEffect(() => {
     if (!date || !token) return;
     setLoading(true);
+
     axios
       .get(`/api/entries/${date}`, {
         headers: {
@@ -20,28 +21,29 @@ function EntriesSection({ date }) {
         if (Array.isArray(res.data)) {
           setEntries(res.data);
         } else {
-          console.warn('⚠️ Server returned non-array entries', res.data);
+          console.warn('⚠️ Expected an array of entries, received:', res.data);
           setEntries([]);
         }
       })
       .catch((err) => {
-        console.error('⚠️ Error fetching entries:', err);
+        console.error('❌ Failed to fetch entries:', err);
         setEntries([]);
       })
       .finally(() => setLoading(false));
   }, [date, token]);
 
-  const safeEntries = Array.isArray(entries) ? entries : [];
-
-  const dailyEntries = [...safeEntries]
-    .filter((entry) => entry.date === date)
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // newest first
+  const dailyEntries = Array.isArray(entries)
+    ? entries
+        .filter((entry) => entry.date === date)
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) // Newest first
+    : [];
 
   return (
     <div className="entries-section">
       <h2>Journal Entries</h2>
+
       {loading ? (
-        <p>Loading entries...</p>
+        <p>Loading entries…</p>
       ) : dailyEntries.length === 0 ? (
         <p>No entries for this day.</p>
       ) : (
@@ -50,21 +52,26 @@ function EntriesSection({ date }) {
             <li key={entry._id || index} className="entry-item">
               <div className="entry-card">
                 <div className="entry-section">{entry.section}</div>
+
                 <div
                   className="entry-content"
                   dangerouslySetInnerHTML={{ __html: entry.content }}
                 />
+
                 {entry.tags && entry.tags.toString().trim().length > 0 && (
                   <div className="entry-tags">
                     {(
                       Array.isArray(entry.tags)
                         ? entry.tags
                         : entry.tags.toString().split(',')
-                    ).map((tag, i) => (
-                      <span key={i} className="entry-tag">
-                        #{tag.trim()}
-                      </span>
-                    ))}
+                    )
+                      .map((tag) => tag.trim())
+                      .filter(Boolean)
+                      .map((tag, i) => (
+                        <span key={i} className="entry-tag">
+                          #{tag}
+                        </span>
+                      ))}
                   </div>
                 )}
               </div>
