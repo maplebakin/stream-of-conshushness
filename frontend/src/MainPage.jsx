@@ -56,41 +56,47 @@ export default function MainPage() {
     setShowModal(true);
   };
 
-  const handleSaveEntry = async (entryData) => {
-    const config = { headers: { Authorization: `Bearer ${token}` } };
-    if (entryData._id) {
-      await toast
-        .promise(
-          axios.put(`/api/entries/${entryData._id}`, entryData, config),
-          {
-            loading: 'Updating entry…',
-            success: 'Entry updated!',
-            error: 'Error updating entry',
-          }
-        )
-        .then(() => {
-          setEntries((prev) => sortEntriesByDateDesc([...prev, res.data]));
+const handleSaveEntry = async (entryData) => {
+  const config = { headers: { Authorization: `Bearer ${token}` } };
 
-        })
-        .catch(() => {});
-    } else {
-      const payload = { ...entryData, date: getTodayISO() };
-      await toast
-        .promise(
-          axios.post('/api/entries', payload, config),
-          {
-            loading: 'Saving entry…',
-            success: 'Entry added!',
-            error: 'Error adding entry',
-          }
-        )
-        .then((res) => {
-          setEntries((prev) => sortEntriesByDateDesc([res.data, ...prev]));
-        })
-        .catch(() => {});
-    }
-    setShowModal(false);
-  };
+  if (entryData._id) {
+    await toast
+      .promise(
+        axios.put(`/api/entries/${entryData._id}`, entryData, config),
+        {
+          loading: 'Updating entry…',
+          success: 'Entry updated!',
+          error: 'Error updating entry',
+        }
+      )
+      .then((res) => {
+        setEntries((prev) =>
+          sortEntriesByDateDesc(
+            prev.map((e) => (e._id === entryData._id ? res.data : e))
+          )
+        );
+      })
+      .catch(() => {});
+  } else {
+    const payload = { ...entryData, date: getTodayISO() };
+    await toast
+      .promise(
+        axios.post('/api/entries', payload, config),
+        {
+          loading: 'Saving entry…',
+          success: 'Entry added!',
+          error: 'Error adding entry',
+        }
+      )
+      .then((res) => {
+        setEntries((prev) => sortEntriesByDateDesc([res.data, ...prev]));
+      })
+      .catch(() => {});
+  }
+
+  setShowModal(false);
+};
+
 
   const handleDelete = (id) => {
     if (!window.confirm('Delete this entry?')) return;
@@ -163,7 +169,10 @@ export default function MainPage() {
             <div className="main-entry" key={entry._id}>
               <h3>{entry.date}</h3>
               <h4>{entry.section}</h4>
-              <p>{entry.content}</p>
+              <div
+             className="entry-content"
+                dangerouslySetInnerHTML={{ __html: entry.content }}
+              />
 
               {entry.image && (
                 <div className="entry-image">

@@ -1,83 +1,367 @@
+/*──────────────────────────────────────────────────────
+  Entry Modal Styles — Stream of Conshushness
+──────────────────────────────────────────────────────*/
+
 /* Full-screen dark overlay */
-.entry-modal-overlay {
+.modal-backdrop {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
-/* Modal container */
-.entry-modal {
+/* Floating card container */
+.modal {
+  max-height: 90vh;                /* Keeps it from taking over the whole screen */
+  overflow-y: auto;
   background: var(--color-background, #f7f5ed);
   color: var(--color-text, #2c2c2c);
-  width: 90%;
-  max-width: 600px;
-  border-radius: 8px;
+  width: 100%;
+  max-width: 650px;
+  border-radius: var(--radius-card, 12px);
   padding: 1.5rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-  font-family: 'Cormorant Garamond', serif;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  font-family: var(--font-serif, 'Cormorant Garamond', serif);
+  position: relative;
+  z-index: 1100;
 }
 
-/* Form labels and inputs */
-.entry-modal-form label {
+/* Form labels and fields */
+.modal label {
   display: block;
   margin-bottom: 1rem;
   font-weight: 600;
 }
 
-.entry-modal-form select,
-.entry-modal-form input[type="text"],
-.entry-modal-form textarea {
+.modal select,
+.modal input[type="text"] {
   width: 100%;
-  padding: 0.5rem;
+  padding: 0.6rem;
   margin-top: 0.3rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radius-input, 6px);
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  background-color: var(--color-surface, #fff);
+  color: var(--color-text);
+}
+.modal input[list] {
+  width: 100%;
+  padding: 0.6rem;
+  margin-top: 0.3rem;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radius-input, 6px);
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  background-color: var(--color-surface, #fff);
+  color: var(--color-text);
+  appearance: none; /* Helps remove weird browser quirks */
+}
+
+.modal input[list]:focus {
+  border-color: var(--color-accent, #8a6c88);
+  outline: none;
+}
+
+.tiptap-editor {
+  min-height: 200px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: .6rem;
+  border: 1px solid var(--color-border, #aaa); /* <- punchier */
+  border-radius: var(--radius-input, 6px);
+  background-color: var(--color-surface, #fff); /* <- lighter for contrast */
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-top: 0.5rem;
+  cursor: text;
+  white-space: pre-wrap;
+  transition: border-color 0.3s ease, background-color 0.3s ease;
+}
+
+.tiptap-editor p {
+  margin: 0;
+  padding: 0.6rem 0;
+  font-weight: normal !important;  /* 👈 force regular weight */
+  font-style: normal !important;
   font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: inherit;
 }
 
-.entry-modal-form textarea {
-  resize: vertical;
+
+.tiptap-editor:focus-within {
+  border-color: var(--color-accent, #8a6c88); /* subtle glow on focus */
+  background-color: #fffdfb;
+}
+/* TipTap formatting output styles */
+.tiptap-editor strong {
+  font-weight: 600;
+}
+.tiptap-editor strong:empty::before {
+  content: '';
+  display: inline;
 }
 
-/* Actions */
-.entry-modal-actions {
+.tiptap-editor em {
+  font-style: italic;
+}
+
+.tiptap-editor ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
+}
+
+.tiptap-editor ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
+}
+
+.tiptap-editor li {
+  margin-bottom: 0.25em;
+}
+.tiptap-editor {
+  user-select: text;
+}
+
+/* Empty state placeholder */
+.tiptap-editor:empty::before {
+  content: 'Write your entry here...';
+  color: var(--color-border, #aaa);
+  font-style: italic;
+  pointer-events: none;
+  display: block;
+}
+
+
+
+/* TipTap toolbar buttons */
+/* Remove button outlines globally in TipTap toolbar */
+.tiptap-toolbar button:focus,
+.tiptap-toolbar button:focus-visible,
+.tiptap-toolbar button:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+  border: 1px solid var(--color-border, #ccc) !important; /* maintain shape */
+}
+.tiptap-editor:focus {
+  outline: none !important;
+}
+
+.tiptap-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.tiptap-toolbar button {
+  font-family: var(--font-handwritten, 'Libre Baskerville');
+  font-size: 0.9rem;
+  background-color: var(--color-surface, #fff);
+  color: var(--color-text, #2c2c2c);
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radius-button, 6px);
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.tiptap-toolbar button:hover {
+  background-color: var(--color-accent, #8a6c88);
+  color: var(--color-surface, #fff);
+}
+
+.tiptap-toolbar button.active {
+  background-color: var(--color-accent, #8a6c88);
+  color: var(--color-surface, #fff);
+  font-weight: bold;
+}
+
+/* Modal action buttons */
+.modal-buttons {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 1rem;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
 }
 
-.cancel-btn,
-.save-btn {
-  padding: 0.4rem 1rem;
-  border-radius: 4px;
+.modal-buttons button {
+  padding: 0.5rem 1.25rem;
+  border-radius: var(--radius-button, 6px);
   font-size: 1rem;
   cursor: pointer;
-}
-
-.cancel-btn {
-  background-color: transparent;
-  border: 1px solid #888;
-  color: #444;
-}
-
-.save-btn {
-  background-color: var(--color-accent, #8a6c88);
+  font-family: var(--font-handwritten, 'Libre Baskerville');
   border: none;
-  color: #fff;
+  transition: background-color 0.2s ease;
 }
 
-.cancel-btn:hover {
-  background-color: #f5f5f5;
+.modal-buttons button:nth-child(1) {
+  background-color: transparent;
+  border: 1px solid var(--color-border, #888);
+  color: var(--color-text, #444);
 }
 
-.save-btn:hover {
+.modal-buttons button:nth-child(2) {
+  background-color: var(--color-accent, #8a6c88);
+  color: var(--color-surface, #fff);
+}
+
+.modal-buttons button:nth-child(1):hover {
+  background-color: #f1f1f1;
+}
+
+.modal-buttons button:nth-child(2):hover {
   background-color: var(--color-accent-dark, #724a71);
+}
+
+
+/* Remove any remaining box shadows or browser default outlines */
+.tiptap-editor p:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Add soft spacing between paragraphs */
+.tiptap-editor p + p {
+  margin-top: 0.75em;
+}
+/* BANISH THE BLACK OUTLINE COMPLETELY */
+.tiptap-editor *:focus,
+.tiptap-editor *:focus-visible,
+.tiptap-editor *:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* Just in case some browsers try extra shit */
+.tiptap-editor [data-node-view-wrapper],
+.tiptap-editor [contenteditable="true"] {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+/* Fix ghost bold glitch */
+.tiptap-editor strong {
+  font-weight: 600; /* not too heavy */
+}
+
+.tiptap-editor strong:empty::before {
+  content: '';
+  display: inline;
+}
+
+/* Final nuke to black outlines */
+.tiptap-editor:focus {
+  outline: none !important;
+}
+input[list] {
+  appearance: none; /* Some browsers need this to show the dropdown */
+  -webkit-appearance: none;
+  background-color: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radius-input, 6px);
+}
+
+datalist {
+  display: block; /* Force visibility for some browsers */
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+datalist option {
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  padding: 5px;
+}
+.custom-dropdown {
+  position: relative;
+}
+
+.dropdown-input-wrapper {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.dropdown-input-wrapper input {
+  flex: 1;
+  padding-right: 2rem;
+}
+
+.dropdown-toggle-btn {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0;
+  color: #555;
+}
+.custom-dropdown {
+  position: relative;
+}
+
+.dropdown-input-wrapper {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.dropdown-input-wrapper input {
+  flex: 1;
+  padding-right: 2rem;
+}
+
+.dropdown-toggle-btn {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0;
+  color: #555;
+}
+
+.dropdown-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  z-index: 1000;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-top: 4px;
+}
+
+.dropdown-list li {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-family: var(--font-serif);
+}
+
+.dropdown-list li:hover {
+  background-color: var(--color-accent);
+  color: var(--color-surface);
 }

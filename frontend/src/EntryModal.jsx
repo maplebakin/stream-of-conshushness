@@ -1,138 +1,198 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import './EntryModal.css';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
 
-/**
- * A modal dialog for creating or editing a journal entry.
- *
- * Props:
- *   isOpen (boolean): whether the modal is visible
- *   onClose (function): called when the modal should be closed
- *   entry (object|null): the existing entry to edit; if null, a new entry is created
- *   onSave (function): called with the entry data when the user saves
- */
 export default function EntryModal({ isOpen, onClose, entry, onSave, existingSections = [] }) {
-  // Initialize form state from the provided entry, falling back to defaults
+  const initialSection = entry?.section || 'Floating in the Stream';
+  const initialTags = Array.isArray(entry?.tags) ? entry.tags.join(', ') : entry?.tags || '';
+  const initialContent = entry?.content || '';
+
+  const [isCustomSection, setIsCustomSection] = useState(false);
+  const [customSection, setCustomSection] = useState('');
+
   const [formData, setFormData] = useState({
-    section: entry?.section || 'Floating in the Stream',
-    tags: Array.isArray(entry?.tags) ? entry.tags.join(', ') : entry?.tags || '',
-    content: entry?.content || '',
+    section: initialSection,
+    tags: initialTags,
+    content: initialContent,
   });
 
-  // Update form when the entry prop changes (e.g. editing a different entry)
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        bold: true,
+        italic: true,
+        underline: true,
+      }),
+    ],
+    content: initialContent || '<p></p>',
+    autofocus: true,
+    editable: true,
+    editorProps: {
+      attributes: {
+        class: 'tiptap-editor',
+        spellcheck: 'true',
+      },
+    },
+    onUpdate: ({ editor }) => {
+      setFormData((prev) => ({
+        ...prev,
+        content: editor.getHTML(),
+      }));
+    },
+  });
+
   useEffect(() => {
+    const startingSection = entry?.section || 'Floating in the Stream';
+    const custom = !existingSections.includes(startingSection);
+    setIsCustomSection(custom);
+    setCustomSection(custom ? startingSection : '');
     setFormData({
-      section: entry?.section || 'Floating in the Stream',
-      tags: Array.isArray(entry?.tags) ? entry.tags.join(', ') : entry?.tags || '',
-      content: entry?.content || '',
+      section: startingSection,
+      tags: initialTags,
+      content: initialContent,
     });
-  }, [entry]);
 
-  // Close the modal when the user presses Escape
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
+    if (editor && initialContent) {
+      editor.commands.setContent(initialContent);
     }
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
+  }, [entry, editor, existingSections]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    // Prepare tags as an array of trimmed, non-empty strings
+  const handleSectionChange = (e) => {
+    const selected = e.target.value;
+    if (selected === '__custom') {
+      setIsCustomSection(true);
+      setFormData((prev) => ({ ...prev, section: customSection }));
+    } else {
+      setIsCustomSection(false);
+      setFormData((prev) => ({ ...prev, section: selected }));
+    }
+  };
+
+  const handleCustomSectionChange = (e) => {
+    setCustomSection(e.target.value);
+    setFormData((prev) => ({ ...prev, section: e.target.value }));
+  };
+
+  const handleSave = () => {
     const tagsArray = formData.tags
-      ? formData.tags
-          .split(',')
-          .map((t) => t.trim())
-          .filter((t) => t.length > 0)
-      : [];
-    // Call onSave with the data; the parent component decides whether to create or update
-    onSave({
-      ...entry,
-      section: formData.section,
-      tags: tagsArray,
-      content: formData.content,
-    });
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter((tag) => tag !== '');
+
+    onSave({ ...entry, ...formData, tags: tagsArray });
     onClose();
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="entry-modal-overlay" onClick={onClose}>
-      <div className="entry-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-backdrop">
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>{entry ? 'Edit Entry' : 'New Entry'}</h2>
-        <form onSubmit={handleSubmit} className="entry-modal-form">
+
         <label>
-  Section:
-  <select
-  name="section"
-  value={formData.section}
-  onChange={handleChange}
->
-  <option value="">-- Select Section --</option>
-  {existingSections.map((section, i) => (
-    <option key={i} value={section}>
-      {section}
-    </option>
-  ))}
-  <option value="__custom">✏️ Enter Custom Section</option>
-</select>
-
-{formData.section === '__custom' && (
-  <input
-    type="text"
-    name="section"
-    value=""
-    placeholder="Type your custom section"
-    onChange={(e) =>
-      setFormData((prev) => ({ ...prev, section: e.target.value }))
-    }
-  />
-)}
-
-</label>
-
-
-          <label>
-            Tags (comma-separated)
+          Section:
+          <select
+            name="section"
+            value={isCustomSection ? '__custom' : formData.section}
+            onChange={handleSectionChange}
+          >
+            <option value="">-- Select Section --</option>
+            {existingSections.map((section, i) => (
+              <option key={i} value={section}>
+                {section}
+              </option>
+            ))}
+            <option value="__custom">✏️ Enter Custom Section</option>
+          </select>
+          {isCustomSection && (
             <input
               type="text"
-              name="tags"
-              placeholder="e.g. ideas, daily"
-              value={formData.tags}
-              onChange={handleChange}
+              name="custom-section"
+              value={customSection}
+              placeholder="Type your custom section"
+              onChange={handleCustomSectionChange}
             />
-          </label>
-          <label>
-            Content
-            <textarea
-              name="content"
-              placeholder="Write your thoughts here"
-              value={formData.content}
-              onChange={handleChange}
-              rows={6}
-            />
-          </label>
-          <div className="entry-modal-actions">
-            <button type="button" onClick={onClose} className="cancel-btn">
-              Cancel
-            </button>
-            <button type="submit" className="save-btn">
-              Save
-            </button>
-          </div>
-        </form>
+          )}
+        </label>
+
+        <label>
+          Tags (comma-separated):
+          <input name="tags" value={formData.tags} onChange={handleChange} />
+        </label>
+
+        <div>
+          <label>Content:</label>
+
+          {editor && (
+            <>
+              <div className="tiptap-toolbar">
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    editor.chain().focus().toggleBold().run();
+                  }}
+                  className={editor.isActive('bold') ? 'active' : ''}
+                >
+                  Bold
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    editor.chain().focus().toggleItalic().run();
+                  }}
+                  className={editor.isActive('italic') ? 'active' : ''}
+                >
+                  Italic
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    editor.chain().focus().toggleBulletList().run();
+                  }}
+                  className={editor.isActive('bulletList') ? 'active' : ''}
+                >
+                  • List
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    editor.chain().focus().toggleOrderedList().run();
+                  }}
+                  className={editor.isActive('orderedList') ? 'active' : ''}
+                >
+                  1. List
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    editor.chain().focus().unsetAllMarks().clearNodes().run();
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+
+              <EditorContent editor={editor} />
+            </>
+          )}
+        </div>
+
+        <div className="modal-buttons">
+          <button onClick={handleSave}>Save</button>
+          <button onClick={onClose}>Cancel</button>
+        </div>
       </div>
     </div>
   );
