@@ -13,6 +13,8 @@ export default function SectionPage() {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const isGames = sectionName.toLowerCase() === 'games';
+
   useEffect(() => {
     if (!token || !sectionName) return;
 
@@ -31,17 +33,16 @@ export default function SectionPage() {
           return acc;
         }, {});
 
-        // Sort dates newest to oldest, and within each date, newest to oldest
         const groupedSorted = Object.entries(grouped)
           .sort((a, b) => new Date(b[0]) - new Date(a[0]))
-          .map(([date, dayEntries]) => [
+          .map(([date, entries]) => [
             date,
-            dayEntries.sort((a, b) => new Date(b.createdAt || b._id) - new Date(a.createdAt || a._id))
+            entries.sort((a, b) => new Date(b.createdAt || b._id) - new Date(a.createdAt || a._id)),
           ]);
 
         setEntries(groupedSorted);
 
-        if (sectionName.toLowerCase() === 'games') {
+        if (isGames) {
           const gameRes = await axios.get('/api/games', {
             headers: { Authorization: `Bearer ${token}` },
           });
@@ -67,6 +68,23 @@ export default function SectionPage() {
     <>
       <Header />
       <div className="main-container">
+        {isGames && (
+          <aside className="main-sidebar">
+            <h3>🎮 Game Library</h3>
+            {games.length === 0 ? (
+              <p>No games added yet.</p>
+            ) : (
+              <ul className="game-list">
+                {games.map((game) => (
+                  <li key={game._id}>
+                    <Link to={`/section/games/${game.slug}`}>{game.title}</Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </aside>
+        )}
+
         <div className="main-feed">
           {entries.length === 0 ? (
             <p>No entries found for this section.</p>
@@ -74,7 +92,7 @@ export default function SectionPage() {
             entries.map(([date, dayEntries]) => (
               <div key={date} className="entry-day-group">
                 <h3>{date}</h3>
-                {dayEntries.map(entry => (
+                {dayEntries.map((entry) => (
                   <div key={entry._id} className="entry-card">
                     <div
                       className="entry-content"
@@ -82,8 +100,8 @@ export default function SectionPage() {
                     />
                     {entry.tags?.length > 0 && (
                       <div className="tags">
-                        {entry.tags.map(tag => (
-                          <span key={tag} className="tag-pill">{tag}</span>
+                        {entry.tags.map((tag) => (
+                          <span key={tag} className="tag-pill">#{tag}</span>
                         ))}
                       </div>
                     )}
@@ -92,27 +110,9 @@ export default function SectionPage() {
               </div>
             ))
           )}
-
-          {sectionName.toLowerCase() === 'games' && (
-            <>
-              <h3 style={{ marginTop: '2rem' }}>🎮 Game List</h3>
-              <div className="game-list">
-                {games.length === 0 ? (
-                  <p>No games added yet.</p>
-                ) : (
-                  games.map(game => (
-                    <div key={game._id} className="game-card">
-                      <Link to={`/section/games/${game.slug}`}>{game.title}</Link>
-                      {game.description && <p>{game.description}</p>}
-                    </div>
-                  ))
-                )}
-              </div>
-            </>
-          )}
         </div>
 
-        <Sidebar sectionName={sectionName} />
+        {!isGames && <Sidebar sectionName={sectionName} />}
       </div>
     </>
   );
