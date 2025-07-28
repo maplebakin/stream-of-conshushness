@@ -1,43 +1,90 @@
-import { useNavigate, Link } from 'react-router-dom';
+// SectionSidebar.jsx
+import { useState, useEffect, useContext } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import axios from './api/axiosInstance';
+import { AuthContext } from './AuthContext.jsx';
 import './Sidebar.css';
 
-export default function SectionSidebar({ sectionName, games = [], pages = [] }) {
-  const navigate = useNavigate();
+export default function SectionSidebar() {
+  const { sectionName } = useParams();
+  const { token } = useContext(AuthContext);
+  const [pages, setPages] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newContent, setNewContent] = useState('');
 
-  const handleNewPage = () => {
-    const title = prompt('Enter a title for the new page:');
-    if (!title) return;
-    const slug = title.toLowerCase().replace(/\s+/g, '-');
-    navigate(`/section/${sectionName}/pages/${slug}/new`, { state: { title } });
+  useEffect(() => {
+    if (!token || !sectionName) return;
+    axios
+      .get(`/api/section-pages?section=${sectionName}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then((res) => {
+        setPages(res.data);
+      })
+      .catch((err) => {
+        console.error('❌ Error loading section data:', err);
+      });
+  }, [sectionName, token]);
+
+  const handleCreatePage = async (e) => {
+    e.preventDefault();
+    if (!newTitle.trim()) return;
+    try {
+      const slug = newTitle.toLowerCase().replace(/\s+/g, '-').replace(/[^\w\-]+/g, '');
+      const response = await axios.post(
+        '/api/pages',
+        {
+          section: sectionName,
+          slug,
+          title: newTitle,
+          content: newContent,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setPages([response.data, ...pages]);
+      setNewTitle('');
+      setNewContent('');
+      setShowForm(false);
+    } catch (err) {
+      console.error('❌ Failed to create page:', err);
+    }
   };
 
   return (
-    <aside className="section-sidebar">
-      <h2>{sectionName}</h2>
-
-      {sectionName.toLowerCase() === 'games' && (
-        <>
-          <h3>🎮 Games</h3>
-          <ul>
-            {games.map((game) => (
-              <li key={game._id}>
-                <Link to={`/section/games/${game.slug}`}>{game.title}</Link>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-
-      <h3>📄 Pages</h3>
+    <div className="sidebar">
+      <h3>{sectionName}</h3>
       <ul>
         {pages.map((page) => (
           <li key={page._id}>
-            <Link to={`/section/${sectionName}/pages/${page.slug}`}>{page.title}</Link>
+            <Link to={`/section/${sectionName}/${page.slug}`}>{page.title}</Link>
           </li>
         ))}
       </ul>
 
-      <button onClick={handleNewPage}>+ New Page</button>
-    </aside>
+      <button onClick={() => setShowForm(!showForm)}>
+        {showForm ? 'Cancel' : '➕ New Page'}
+      </button>
+
+      {showForm && (
+        <form onSubmit={handleCreatePage} className="new-page-form">
+          <input
+            type="text"
+            placeholder="Page title"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+          />
+          <textarea
+            placeholder="Optional content"
+            value={newContent}
+            onChange={(e) => setNewContent(e.target.value)}
+            rows={4}
+          />
+          <button type="submit">Create</button>
+        </form>
+      )}
+    </div>
   );
 }

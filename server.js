@@ -410,6 +410,23 @@ app.get('/api/entries', authenticateToken, async (req, res) => {
 
 
 
+app.post('/api/pages', authenticateToken, async (req, res) => {
+  const { section, slug, title, content } = req.body;
+  try {
+    const newPage = new SectionPage({
+      section,
+      slug,
+      title,
+      content,
+      userId: req.user.userId,
+    });
+    await newPage.save();
+    res.json(newPage);
+  } catch (err) {
+    console.error('❌ Error creating section page:', err);
+    res.status(500).json({ message: 'Server error creating page' });
+  }
+});
 
 // PUT /api/sections/rename
 

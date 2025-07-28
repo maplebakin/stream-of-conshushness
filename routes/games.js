@@ -1,18 +1,19 @@
 import express from 'express';
 import Game from '../models/Game.js';
 import GameNote from '../models/GameNote.js';
-import authMiddleware from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/auth.js';
+
 
 const router = express.Router();
 
 // GET all games for logged-in user
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   const games = await Game.find({ userId: req.user.id }).sort({ createdAt: -1 });
   res.json(games);
 });
 
 // POST create a new game
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   const { title, description, imageUrl } = req.body;
   const slug = title.toLowerCase().replace(/\s+/g, '-');
   const newGame = new Game({ title, slug, description, imageUrl, userId: req.user.id });
@@ -21,7 +22,7 @@ router.post('/', authMiddleware, async (req, res) => {
 });
 
 // GET one game + note
-router.get('/:slug', authMiddleware, async (req, res) => {
+router.get('/:slug', authenticateToken, async (req, res) => {
   const game = await Game.findOne({ userId: req.user.id, slug: req.params.slug });
   if (!game) return res.status(404).json({ message: 'Game not found' });
 
@@ -30,7 +31,7 @@ router.get('/:slug', authMiddleware, async (req, res) => {
 });
 
 // POST create/update note for a game
-router.post('/:slug/notes', authMiddleware, async (req, res) => {
+router.post('/:slug/notes', authenticateToken, async (req, res) => {
   const game = await Game.findOne({ userId: req.user.id, slug: req.params.slug });
   if (!game) return res.status(404).json({ message: 'Game not found' });
 

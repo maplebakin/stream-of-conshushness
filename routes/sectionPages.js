@@ -1,16 +1,17 @@
 import express from 'express';
 import SectionPage from '../models/SectionPage.js';
-import auth from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/auth.js';
+
 const router = express.Router();
 
 // Get all pages for a section
-router.get('/:section', auth, async (req, res) => {
+router.get('/:section', authenticateToken, async (req, res) => {
   const pages = await SectionPage.find({ section: req.params.section, userId: req.user._id });
   res.json(pages);
 });
 
 // Get a single page
-router.get('/:section/:slug', auth, async (req, res) => {
+router.get('/:section/:slug', authenticateToken, async (req, res) => {
   const page = await SectionPage.findOne({
     section: req.params.section,
     slug: req.params.slug,
@@ -21,7 +22,7 @@ router.get('/:section/:slug', auth, async (req, res) => {
 });
 
 // Create a page
-router.post('/', auth, async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   const { section, slug, title, content } = req.body;
   const page = new SectionPage({ section, slug, title, content, userId: req.user._id });
   await page.save();
@@ -29,7 +30,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 // Update a page
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   const page = await SectionPage.findOneAndUpdate(
     { _id: req.params.id, userId: req.user._id },
     req.body,
@@ -40,7 +41,7 @@ router.put('/:id', auth, async (req, res) => {
 });
 
 // Delete a page
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   const deleted = await SectionPage.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
   if (!deleted) return res.status(404).json({ error: 'Page not found' });
   res.json({ success: true });

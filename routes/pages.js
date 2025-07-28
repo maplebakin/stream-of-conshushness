@@ -1,20 +1,26 @@
 import express from 'express';
-import Page from '../models/Page.js';
-import authMiddleware from '../middleware/auth.js';
+import SectionPage from '../models/SectionPage.js';
+import { authenticateToken } from '../middleware/auth.js';
+
 const router = express.Router();
 
-router.get('/', authMiddleware, async (req, res) => {
-  const { section } = req.query;
-  const pages = await Page.find({ userId: req.user.id, section }).sort({ createdAt: -1 });
-  res.json(pages);
-});
-
-router.post('/', authMiddleware, async (req, res) => {
-  const { title, section, content } = req.body;
-  const slug = title.toLowerCase().replace(/\s+/g, '-');
-  const newPage = new Page({ title, slug, section, content, userId: req.user.id });
-  await newPage.save();
-  res.status(201).json(newPage);
+// Create a new page in a section
+router.post('/', authenticateToken, async (req, res) => {
+  const { section, slug, title, content } = req.body;
+  try {
+    const newPage = new SectionPage({
+      section,
+      slug,
+      title,
+      content,
+      userId: req.user.userId,
+    });
+    await newPage.save();
+    res.json(newPage);
+  } catch (err) {
+    console.error('❌ Error creating section page:', err);
+    res.status(500).json({ message: 'Server error creating page' });
+  }
 });
 
 export default router;
