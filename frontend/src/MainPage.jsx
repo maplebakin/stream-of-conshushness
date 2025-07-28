@@ -225,7 +225,7 @@ const handleSaveEntry = async (entryData) => {
   {allSections.map((section) => (
     <Link
       key={section}
-      to={`/section/${section.toLowerCase().replace(/\s+/g, '-')}`}
+      to={`/section/${encodeURIComponent(section)}`}
       className="section-link"
     >
       {section}

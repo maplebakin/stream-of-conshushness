@@ -10,6 +10,9 @@ import { AuthProvider, AuthContext } from './AuthContext.jsx';
 import GameList from './GameList.jsx';
 import GamePage from './GamePage.jsx';
 import SectionPage from './SectionPage.jsx';
+import SectionsPage from './SectionsPage.jsx';
+
+
 
 
 
@@ -30,7 +33,7 @@ function AppRoutes() {
           <Route path="/section/games" element={<GameList />} />
           <Route path="/section/games/:slug" element={<GamePage />} />v
           <Route path="/section/:sectionName" element={<SectionPage />} />
-
+          <Route path="/sections" element={<SectionsPage />} />
         </>
       ) : (
         <Route path="*" element={<Navigate to="/login" replace />} />

@@ -304,15 +304,6 @@ app.get('/api/entries/:date', authenticateToken, async (req, res) => {
   }
 });
 
-// Get all entries
-app.get('/api/entries', authenticateToken, async (req, res) => {
-  try {
-    const entries = await Entry.find({ userId: req.user.userId }).sort({ date: -1 });
-    res.json(entries);
-  } catch {
-    res.status(500).json({ error: 'Server error fetching entries' });
-  }
-});
 
 // Add a new entry
 app.post('/api/entries', authenticateToken, async (req, res) => {
@@ -374,6 +365,72 @@ app.delete('/api/entries/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Server error deleting entry' });
   }
 });
+
+app.get('/api/entries', authenticateToken, async (req, res) => {
+  const { section } = req.query;
+  const query = { userId: req.user.userId };
+
+  if (section) {
+    query.section = section;
+  }
+
+  try {
+    const entries = await Entry.find(query).sort({ date: -1 });
+    res.json(entries);
+  } catch (err) {
+    console.error('Failed to get entries:', err);
+    res.status(500).json({ error: 'Failed to fetch entries' });
+  }
+});
+
+
+
+
+// PUT /api/sections/rename
+
+
+app.put('/api/sections/rename', authenticateToken, async (req, res) => {
+  const { oldName, newName } = req.body;
+  if (!oldName || !newName) {
+    return res.status(400).json({ error: 'Missing section names' });
+  }
+
+  try {
+    const result = await Entry.updateMany(
+      { userId: req.user._id, section: oldName },
+      { $set: { section: newName } }
+    );
+    res.json({ message: 'Section reassigned', updated: result.modifiedCount });
+  } catch (err) {
+    console.error('⚠️ Failed to reassign section:', err);
+    res.status(500).json({ error: 'Server error while reassigning section' });
+  }
+});
+
+app.delete('/api/sections/:sectionName', authenticateToken, async (req, res) => {
+  const sectionName = decodeURIComponent(req.params.sectionName);
+  if (!sectionName) return res.status(400).json({ error: 'Missing section name' });
+
+  try {
+    const result = await Entry.deleteMany({ userId: req.user._id, section: sectionName });
+    res.json({ message: 'Section deleted', deleted: result.deletedCount });
+  } catch (err) {
+    console.error('Section delete failed:', err);
+    res.status(500).json({ error: 'Failed to delete section' });
+  }
+});
+// Get list of unique sections for the user
+app.get('/api/sections', authenticateToken, async (req, res) => {
+  try {
+    const entries = await Entry.find({ userId: req.user.userId });
+    const uniqueSections = [...new Set(entries.map((e) => e.section))].filter(Boolean).sort();
+    res.json(uniqueSections);
+  } catch (err) {
+    console.error('⚠️ Failed to get sections:', err);
+    res.status(500).json({ error: 'Server error fetching sections' });
+  }
+});
+
 
 // ─── Serve Frontend ─────────────────────────────
 const CLIENT_BUILD_PATH = path.join(__dirname, 'frontend', 'dist');

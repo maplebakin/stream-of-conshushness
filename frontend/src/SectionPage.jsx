@@ -22,7 +22,24 @@ export default function SectionPage() {
         const entryRes = await axios.get(`/api/entries?section=${sectionName}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setEntries(Array.isArray(entryRes.data) ? entryRes.data : []);
+
+        const rawEntries = Array.isArray(entryRes.data) ? entryRes.data : [];
+
+        const grouped = rawEntries.reduce((acc, entry) => {
+          if (!acc[entry.date]) acc[entry.date] = [];
+          acc[entry.date].push(entry);
+          return acc;
+        }, {});
+
+        // Sort dates newest to oldest, and within each date, newest to oldest
+        const groupedSorted = Object.entries(grouped)
+          .sort((a, b) => new Date(b[0]) - new Date(a[0]))
+          .map(([date, dayEntries]) => [
+            date,
+            dayEntries.sort((a, b) => new Date(b.createdAt || b._id) - new Date(a.createdAt || a._id))
+          ]);
+
+        setEntries(groupedSorted);
 
         if (sectionName.toLowerCase() === 'games') {
           const gameRes = await axios.get('/api/games', {
@@ -54,20 +71,24 @@ export default function SectionPage() {
           {entries.length === 0 ? (
             <p>No entries found for this section.</p>
           ) : (
-            entries.map(entry => (
-              <div key={entry._id} className="entry-card">
-                <h3>{entry.date}</h3>
-                <div
-                  className="entry-content"
-                  dangerouslySetInnerHTML={{ __html: entry.content }}
-                />
-                {entry.tags?.length > 0 && (
-                  <div className="tags">
-                    {entry.tags.map(tag => (
-                      <span key={tag} className="tag-pill">{tag}</span>
-                    ))}
+            entries.map(([date, dayEntries]) => (
+              <div key={date} className="entry-day-group">
+                <h3>{date}</h3>
+                {dayEntries.map(entry => (
+                  <div key={entry._id} className="entry-card">
+                    <div
+                      className="entry-content"
+                      dangerouslySetInnerHTML={{ __html: entry.content }}
+                    />
+                    {entry.tags?.length > 0 && (
+                      <div className="tags">
+                        {entry.tags.map(tag => (
+                          <span key={tag} className="tag-pill">{tag}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
+                ))}
               </div>
             ))
           )}
