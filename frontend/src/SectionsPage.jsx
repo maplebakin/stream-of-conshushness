@@ -13,6 +13,7 @@ export default function SectionsPage() {
   const [reassignTo, setReassignTo] = useState('');
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
+const normalizedSection = sectionName.toLowerCase();
 
   const fetchSections = () => {
     if (!token) return;

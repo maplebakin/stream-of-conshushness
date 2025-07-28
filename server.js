@@ -18,18 +18,24 @@ import Note from './models/Note.js';
 import Todo from './models/Todo.js';
 import DailySchedule from './models/DailySchedule.js';
 import gameRoutes from './routes/games.js';
+import pageRoutes from './routes/pages.js';
+import sectionPagesRouter from './routes/sectionPages.js';
+import SectionPage from './models/SectionPage.js';
 
 
 // ─── Paths ─────────────────────────────
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const router = express.Router();
+
 
 // ─── Express App ─────────────────────────────
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use('/api/games', gameRoutes);
-
+app.use('/api/pages', pageRoutes);
+app.use('/api/section-pages', sectionPagesRouter);
 
 // ─── MongoDB ─────────────────────────────
 (async () => {
@@ -89,6 +95,24 @@ app.post('/api/login', async (req, res) => {
     res.json({ success: true, token });
   } catch {
     res.status(500).json({ error: 'Server error during login' });
+  }
+});
+
+app.get('/api/section-pages', authenticateToken, async (req, res) => {
+  try {
+    const { section } = req.query;
+    const userId = req.user.userId;
+
+    const query = { userId };
+    if (section) {
+      query.section = new RegExp(`^${section}$`, 'i'); // case-insensitive match
+    }
+
+    const pages = await SectionPage.find(query).sort({ createdAt: -1 });
+    res.json(pages);
+  } catch (err) {
+    console.error('Error fetching section pages:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -371,7 +395,7 @@ app.get('/api/entries', authenticateToken, async (req, res) => {
   const query = { userId: req.user.userId };
 
   if (section) {
-    query.section = section;
+    query.section = new RegExp(`^${section}$`, 'i'); // Case-insensitive
   }
 
   try {
@@ -382,6 +406,7 @@ app.get('/api/entries', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch entries' });
   }
 });
+
 
 
 

@@ -11,6 +11,7 @@ import GameList from './GameList.jsx';
 import GamePage from './GamePage.jsx';
 import SectionPage from './SectionPage.jsx';
 import SectionsPage from './SectionsPage.jsx';
+import SectionPageView from './SectionPageView.jsx';
 
 
 
@@ -34,6 +35,8 @@ function AppRoutes() {
           <Route path="/section/games/:slug" element={<GamePage />} />v
           <Route path="/section/:sectionName" element={<SectionPage />} />
           <Route path="/sections" element={<SectionsPage />} />
+          <Route path="/section/:sectionName/:pageSlug" element={<SectionPageView />} />
+
         </>
       ) : (
         <Route path="*" element={<Navigate to="/login" replace />} />

@@ -3,6 +3,7 @@ import { useState, useEffect, useContext } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import Header from './Header.jsx';
+import SectionSidebar from './SectionSidebar.jsx';
 import Sidebar from './Sidebar.jsx';
 import './Main.css';
 
@@ -11,9 +12,11 @@ export default function SectionPage() {
   const { token } = useContext(AuthContext);
   const [entries, setEntries] = useState([]);
   const [games, setGames] = useState([]);
+  const [pages, setPages] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const isGames = sectionName.toLowerCase() === 'games';
+  const normalizedSection = sectionName.toLowerCase();
+  const isGames = normalizedSection === 'games';
 
   useEffect(() => {
     if (!token || !sectionName) return;
@@ -21,7 +24,8 @@ export default function SectionPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const entryRes = await axios.get(`/api/entries?section=${sectionName}`, {
+        // Fetch entries for this section
+        const entryRes = await axios.get(`/api/entries?section=${normalizedSection}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -42,6 +46,7 @@ export default function SectionPage() {
 
         setEntries(groupedSorted);
 
+        // If it's the Games section, load games
         if (isGames) {
           const gameRes = await axios.get('/api/games', {
             headers: { Authorization: `Bearer ${token}` },
@@ -50,10 +55,18 @@ export default function SectionPage() {
         } else {
           setGames([]);
         }
+
+        // Load custom pages for this section
+        const pageRes = await axios.get(`/api/section-pages?section=${normalizedSection}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setPages(Array.isArray(pageRes.data) ? pageRes.data : []);
+
       } catch (err) {
-        console.error('Error loading section data:', err);
+        console.error('❌ Error loading section data:', err);
         setEntries([]);
         setGames([]);
+        setPages([]);
       } finally {
         setLoading(false);
       }
@@ -68,22 +81,7 @@ export default function SectionPage() {
     <>
       <Header />
       <div className="main-container">
-        {isGames && (
-          <aside className="main-sidebar">
-            <h3>🎮 Game Library</h3>
-            {games.length === 0 ? (
-              <p>No games added yet.</p>
-            ) : (
-              <ul className="game-list">
-                {games.map((game) => (
-                  <li key={game._id}>
-                    <Link to={`/section/games/${game.slug}`}>{game.title}</Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </aside>
-        )}
+        <SectionSidebar sectionName={sectionName} games={games} pages={pages} />
 
         <div className="main-feed">
           {entries.length === 0 ? (
