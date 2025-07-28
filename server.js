@@ -17,6 +17,8 @@ import ImportantEvent from './models/ImportantEvent.js';
 import Note from './models/Note.js';
 import Todo from './models/Todo.js';
 import DailySchedule from './models/DailySchedule.js';
+import gameRoutes from './routes/games.js';
+
 
 // ─── Paths ─────────────────────────────
 const __filename = fileURLToPath(import.meta.url);
@@ -26,6 +28,8 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
+app.use('/api/games', gameRoutes);
+
 
 // ─── MongoDB ─────────────────────────────
 (async () => {

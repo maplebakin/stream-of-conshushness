@@ -7,6 +7,12 @@ import Calendar from './Calendar.jsx';
 import LoginPage from './LoginPage.jsx';
 import RegisterPage from './RegisterPage.jsx';
 import { AuthProvider, AuthContext } from './AuthContext.jsx';
+import GameList from './GameList.jsx';
+import GamePage from './GamePage.jsx';
+import SectionPage from './SectionPage.jsx';
+
+
+
 
 function AppRoutes() {
   const { isAuthenticated } = useContext(AuthContext);
@@ -21,6 +27,10 @@ function AppRoutes() {
           <Route path="/" element={<MainPage />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/day/:date" element={<DailyPage />} />
+          <Route path="/section/games" element={<GameList />} />
+          <Route path="/section/games/:slug" element={<GamePage />} />v
+          <Route path="/section/:sectionName" element={<SectionPage />} />
+
         </>
       ) : (
         <Route path="*" element={<Navigate to="/login" replace />} />

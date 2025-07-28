@@ -221,20 +221,18 @@ const handleSaveEntry = async (entryData) => {
           <div className="calendar">
             <Link to="/calendar">📅 Open Calendar</Link>
           </div>
-          <div className="sections">
-            {allSections.map((section) => (
-              <button
-                key={section}
-                className={selectedSection === section ? 'active' : ''}
-                onClick={() => setSelectedSection(section)}
-              >
-                {section}
-              </button>
-            ))}
-            {selectedSection && (
-              <button onClick={() => setSelectedSection('')}>Clear Filter</button>
-            )}
-          </div>
+ <div className="sections">
+  {allSections.map((section) => (
+    <Link
+      key={section}
+      to={`/section/${section.toLowerCase().replace(/\s+/g, '-')}`}
+      className="section-link"
+    >
+      {section}
+    </Link>
+  ))}
+</div>
+
         </aside>
       </div>
 
