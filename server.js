@@ -9,7 +9,7 @@ import { dirname } from 'path';
 import mongoose from 'mongoose';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-
+import auth from './middleware/auth.js';
 import User from './models/User.js';
 import Entry from './models/Entry.js';
 import Appointment from './models/Appointment.js';
@@ -22,6 +22,9 @@ import pageRoutes from './routes/pages.js';
 import sectionPagesRouter from './routes/sectionPages.js';
 import SectionPage from './models/SectionPage.js';
 
+import { createHandler } from 'graphql-http/lib/use/express';
+import schema from './graphql/schema.js';
+import root from './graphql/resolvers.js';
 
 // ─── Paths ─────────────────────────────
 const __filename = fileURLToPath(import.meta.url);
@@ -59,6 +62,26 @@ function authenticateToken(req, res, next) {
     next();
   });
 }
+app.use('/graphql', createHandler({
+  schema,
+  rootValue: root,
+  context: (req, res) => {
+    // manually extract token and decode
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) return { user: null };
+
+    const token = authHeader.split(' ')[1];
+    if (!token) return { user: null };
+
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      return { user: decoded };
+    } catch (err) {
+      console.warn('Invalid or expired token in GraphQL:', err.message);
+      return { user: null };
+    }
+  }
+}));
 
 // ─── Health Check ─────────────────────────────
 app.get('/health', (req, res) => res.send('OK'));

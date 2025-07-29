@@ -1,12 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import './EntryModal.css';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { AuthContext } from './AuthContext.jsx';
 
-export default function EntryModal({ isOpen, onClose, entry, onSave, existingSections = [] }) {
+
+
+
+export default function EntryModal({ isOpen, onClose, date, entry, existingSections = [] }) {
   const initialSection = entry?.section || 'Floating in the Stream';
   const initialTags = Array.isArray(entry?.tags) ? entry.tags.join(', ') : entry?.tags || '';
   const initialContent = entry?.content || '';
+
+  const { token } = useContext(AuthContext);
 
   const [isCustomSection, setIsCustomSection] = useState(false);
   const [customSection, setCustomSection] = useState('');
@@ -18,13 +24,7 @@ export default function EntryModal({ isOpen, onClose, entry, onSave, existingSec
   });
 
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        bold: true,
-        italic: true,
-        underline: true,
-      }),
-    ],
+    extensions: [StarterKit],
     content: initialContent || '<p></p>',
     autofocus: true,
     editable: true,
@@ -79,14 +79,55 @@ export default function EntryModal({ isOpen, onClose, entry, onSave, existingSec
     setFormData((prev) => ({ ...prev, section: e.target.value }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const tagsArray = formData.tags
       .split(',')
       .map((tag) => tag.trim())
       .filter((tag) => tag !== '');
 
-    onSave({ ...entry, ...formData, tags: tagsArray });
-    onClose();
+    const payload = {
+      query: `
+        mutation CreateEntry($input: EntryInput!) {
+          createEntry(input: $input) {
+            _id
+            date
+            section
+            tags
+            content
+          }
+        }
+      `,
+      variables: {
+        input: {
+          date: date || new Date().toISOString().slice(0, 10),
+          section: formData.section,
+          tags: tagsArray,
+          content: formData.content,
+        }
+      }
+    };
+
+    try {
+      const res = await fetch('/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await res.json();
+      if (result.errors) {
+        console.error('❌ GraphQL error:', result.errors);
+        return;
+      }
+
+      console.log('✅ Entry saved:', result.data.createEntry);
+      onClose();
+    } catch (err) {
+      console.error('❌ Network error:', err);
+    }
   };
 
   if (!isOpen) return null;
@@ -129,7 +170,6 @@ export default function EntryModal({ isOpen, onClose, entry, onSave, existingSec
 
         <div>
           <label>Content:</label>
-
           {editor && (
             <>
               <div className="tiptap-toolbar">

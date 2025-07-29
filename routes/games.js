@@ -1,13 +1,14 @@
 import express from 'express';
 import Game from '../models/Game.js';
 import GameNote from '../models/GameNote.js';
+import auth from '../middleware/auth.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 
 const router = express.Router();
 
 // GET all games for logged-in user
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', auth, async (req, res) => {
   const games = await Game.find({ userId: req.user.id }).sort({ createdAt: -1 });
   res.json(games);
 });

@@ -12,6 +12,7 @@ import GamePage from './GamePage.jsx';
 import SectionPage from './SectionPage.jsx';
 import SectionsPage from './SectionsPage.jsx';
 import SectionPageView from './SectionPageView.jsx';
+import TestGraphQL from './TestGraphQL.jsx';
 
 
 
@@ -28,7 +29,13 @@ function AppRoutes() {
 
       {isAuthenticated ? (
         <>
-          <Route path="/" element={<MainPage />} />
+          <Route path="/" element={
+  <>
+    <MainPage />
+    <TestGraphQL />
+  </>
+} />
+
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/day/:date" element={<DailyPage />} />
           <Route path="/section/games" element={<GameList />} />
