@@ -12,13 +12,13 @@ const entrySchema = new mongoose.Schema({
   content: String,
   mood: String,
   linkedGoal: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: String,
     ref: 'Goal'
   },
   cluster: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Cluster'
-  }
+  type: String,
+},
+
 }, { timestamps: true });
 
 export default mongoose.model('Entry', entrySchema);
