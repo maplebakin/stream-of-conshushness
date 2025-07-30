@@ -13,9 +13,18 @@ export default function Calendar() {
   const navigate = useNavigate();
   const { token } = useContext(AuthContext);
 
-  const now = new Date();
-  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const todayStr = now.toISOString().slice(0, 10);
+const getTodayISO = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const now = new Date();
+const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+const todayStr = getTodayISO(); // ✅ Now safe
+
 
   const [calendarData, setCalendarData] = useState({});
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
@@ -47,7 +56,12 @@ export default function Calendar() {
   }, [token, selectedMonth]);
 
   const goToToday = () => {
-  const isoDate = new Date().toISOString().slice(0, 10);
+  const today = new Date();
+const yyyy = today.getFullYear();
+const mm = String(today.getMonth() + 1).padStart(2, '0');
+const dd = String(today.getDate()).padStart(2, '0');
+const isoDate = `${yyyy}-${mm}-${dd}`;
+
   navigate(`/day/${isoDate}`);
 };
 
@@ -81,36 +95,42 @@ export default function Calendar() {
   };
 
   // 🟣 Handle adding appointments
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!newAppointment.date || !newAppointment.time || !newAppointment.details) {
-      toast.error('Please fill all fields');
-      return;
-    }
-    // Ensure date string is normalized (YYYY-MM-DD) before sending
-    const normalizedDate = new Date(newAppointment.date).toISOString().slice(0, 10);
-    const payload = {
-      ...newAppointment,
-      date: normalizedDate,
-    };
-    toast
-      .promise(
-        axios.post('/api/appointments', payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        {
-          loading: 'Saving appointment…',
-          success: 'Appointment saved!',
-          error: 'Error saving appointment',
-        }
-      )
-      .then(() => {
-        fetchCalendar();
-        setShowForm(false);
-        setNewAppointment({ date: '', time: '', details: '' });
-      })
-      .catch(() => {});
+const handleSubmit = (e) => {
+  e.preventDefault();
+  if (!newAppointment.date || !newAppointment.time || !newAppointment.details) {
+    toast.error('Please fill all fields');
+    return;
+  }
+
+  const d = new Date(newAppointment.date);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const normalizedDate = `${yyyy}-${mm}-${dd}`;
+
+  const payload = {
+    ...newAppointment,
+    date: normalizedDate,
   };
+
+  toast
+    .promise(
+      axios.post('/api/appointments', payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      {
+        loading: 'Saving appointment…',
+        success: 'Appointment saved!',
+        error: 'Error saving appointment',
+      }
+    )
+    .then(() => {
+      fetchCalendar();
+      setShowForm(false);
+      setNewAppointment({ date: '', time: '', details: '' });
+    })
+    .catch(() => {});
+};
 
   // 🟣 Delete appointment
   const handleDeleteAppointment = (id, e) => {
@@ -278,7 +298,11 @@ export default function Calendar() {
                 selected={newEvent.date ? new Date(newEvent.date) : null}
                 onChange={(date) => {
                   if (date) {
-                    setNewEvent({ ...newEvent, date: date.toISOString().slice(0, 10) });
+                    const yyyy = date.getFullYear();
+const mm = String(date.getMonth() + 1).padStart(2, '0');
+const dd = String(date.getDate()).padStart(2, '0');
+setNewEvent({ ...newEvent, date: `${yyyy}-${mm}-${dd}` });
+
                   }
                 }}
                 dateFormat="yyyy-MM-dd"
@@ -319,20 +343,25 @@ export default function Calendar() {
             {showForm && (
               <form onSubmit={handleSubmit}>
                 <label>
-                  Date
-                  <DatePicker
-                    selected={newAppointment.date ? new Date(newAppointment.date) : null}
-                    onChange={(date) => {
-                      if (date) {
-                        setNewAppointment({
-                          ...newAppointment,
-                          date: date.toISOString().slice(0, 10),
-                        });
-                      }
-                    }}
-                    dateFormat="yyyy-MM-dd"
-                  />
-                </label>
+  Date
+  <DatePicker
+    selected={newAppointment.date ? new Date(newAppointment.date) : null}
+    onChange={(date) => {
+      if (date) {
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+
+        setNewAppointment({
+          ...newAppointment,
+          date: `${yyyy}-${mm}-${dd}`,
+        });
+      }
+    }}
+    dateFormat="yyyy-MM-dd"
+  />
+</label>
+
                 <label>
                   Time
                   <DatePicker

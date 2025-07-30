@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useContext } from 'react';
-import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 
 function EntriesSection({ date }) {
@@ -9,76 +8,69 @@ function EntriesSection({ date }) {
 
   useEffect(() => {
     if (!date || !token) return;
+
     setLoading(true);
 
-    axios
-      .get(`/api/entries/${date}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      .then((res) => {
-        if (Array.isArray(res.data)) {
-          setEntries(res.data);
-        } else {
-          console.warn('⚠️ Expected an array of entries, received:', res.data);
+    const payload = {
+      query: `
+        query EntriesByDate($date: String!) {
+          entries(date: $date) {
+            _id
+            date
+            section
+            mood
+            tags
+            content
+          }
+        }
+      `,
+      variables: { date },
+    };
+
+    fetch('/graphql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    })
+      .then((res) => res.json())
+      .then((result) => {
+        if (result.errors) {
+          console.error('❌ GraphQL error:', result.errors);
           setEntries([]);
+        } else {
+          setEntries(result.data.entries || []);
         }
       })
       .catch((err) => {
-        console.error('❌ Failed to fetch entries:', err);
+        console.error('❌ Fetch error:', err);
         setEntries([]);
       })
       .finally(() => setLoading(false));
   }, [date, token]);
 
-  const dailyEntries = Array.isArray(entries)
-    ? entries
-        .filter((entry) => entry.date === date)
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) // Newest first
-    : [];
+  const safeEntries = Array.isArray(entries) ? entries : [];
 
   return (
     <div className="entries-section">
-      <h2>Journal Entries</h2>
-
-      {loading ? (
-        <p>Loading entries…</p>
-      ) : dailyEntries.length === 0 ? (
-        <p>No entries for this day.</p>
-      ) : (
-        <ul className="entries-list">
-          {dailyEntries.map((entry, index) => (
-            <li key={entry._id || index} className="entry-item">
-              <div className="entry-card">
-                <div className="entry-section">{entry.section}</div>
-
-                <div
-                  className="entry-content"
-                  dangerouslySetInnerHTML={{ __html: entry.content }}
-                />
-
-                {entry.tags && entry.tags.toString().trim().length > 0 && (
-                  <div className="entry-tags">
-                    {(
-                      Array.isArray(entry.tags)
-                        ? entry.tags
-                        : entry.tags.toString().split(',')
-                    )
-                      .map((tag) => tag.trim())
-                      .filter(Boolean)
-                      .map((tag, i) => (
-                        <span key={i} className="entry-tag">
-                          #{tag}
-                        </span>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+      <h2>Entries</h2>
+      {loading && <p>Loading entries...</p>}
+      {safeEntries.length === 0 && !loading && <p>No entries yet for this day.</p>}
+      {safeEntries.map((entry) => (
+        <div key={entry._id} className="entry-card">
+          <h3>{entry.section || 'No Section'}</h3>
+          {entry.mood && <p><strong>Mood:</strong> {entry.mood}</p>}
+          {entry.tags?.length > 0 && (
+            <p><strong>Tags:</strong> {entry.tags.join(', ')}</p>
+          )}
+          <div
+            className="entry-content"
+            dangerouslySetInnerHTML={{ __html: entry.content }}
+          />
+        </div>
+      ))}
     </div>
   );
 }

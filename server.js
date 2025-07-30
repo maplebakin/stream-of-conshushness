@@ -185,7 +185,11 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
   let { date, time, details } = req.body;
   if (!date || !time || !details) return res.status(400).json({ error: 'Missing fields' });
   try {
-    date = new Date(date).toISOString().slice(0, 10);
+    const localDate = new Date(date);
+    const year = localDate.getFullYear();
+    const month = String(localDate.getMonth() + 1).padStart(2, '0');
+    const day = String(localDate.getDate()).padStart(2, '0');
+    date = `${year}-${month}-${day}`;
   } catch {
     return res.status(400).json({ error: 'Invalid date format' });
   }
@@ -202,6 +206,7 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Server error adding appointment' });
   }
 });
+
 
 app.delete('/api/appointments/:id', authenticateToken, async (req, res) => {
   try {

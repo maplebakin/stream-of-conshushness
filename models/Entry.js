@@ -9,7 +9,16 @@ const entrySchema = new mongoose.Schema({
   date: String,
   section: String,
   tags: [String],
-  content: String
+  content: String,
+  mood: String,
+  linkedGoal: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Goal'
+  },
+  cluster: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Cluster'
+  }
 }, { timestamps: true });
 
 export default mongoose.model('Entry', entrySchema);

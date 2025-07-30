@@ -11,6 +11,10 @@ export default function EntryModal({ isOpen, onClose, date, entry, existingSecti
   const initialSection = entry?.section || 'Floating in the Stream';
   const initialTags = Array.isArray(entry?.tags) ? entry.tags.join(', ') : entry?.tags || '';
   const initialContent = entry?.content || '';
+const [mood, setMood] = useState(entry?.mood || '');
+const [tagsInput, setTagsInput] = useState(entry?.tags?.join(', ') || '');
+const [linkedGoal, setLinkedGoal] = useState(entry?.linkedGoal || '');
+const [cluster, setCluster] = useState(entry?.cluster || '');
 
   const { token } = useContext(AuthContext);
 
@@ -79,56 +83,70 @@ export default function EntryModal({ isOpen, onClose, date, entry, existingSecti
     setFormData((prev) => ({ ...prev, section: e.target.value }));
   };
 
-  const handleSave = async () => {
-    const tagsArray = formData.tags
-      .split(',')
-      .map((tag) => tag.trim())
-      .filter((tag) => tag !== '');
+const handleSave = async () => {
+  const tagsArray = tagsInput
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter((tag) => tag !== '');
 
-    const payload = {
-      query: `
-        mutation CreateEntry($input: EntryInput!) {
-          createEntry(input: $input) {
-            _id
-            date
-            section
-            tags
-            content
-          }
-        }
-      `,
-      variables: {
-        input: {
-          date: date || new Date().toISOString().slice(0, 10),
-          section: formData.section,
-          tags: tagsArray,
-          content: formData.content,
+  const todayLocal = new Date();
+const yyyy = todayLocal.getFullYear();
+const mm = String(todayLocal.getMonth() + 1).padStart(2, '0');
+const dd = String(todayLocal.getDate()).padStart(2, '0');
+const localToday = `${yyyy}-${mm}-${dd}`;
+
+const input = {
+  date: date || localToday,
+  section: formData.section,
+  tags: tagsArray,
+  content: formData.content,
+  mood,
+  linkedGoal,
+  cluster,
+};
+
+
+  const payload = {
+    query: `
+      mutation CreateEntry($input: EntryInput!) {
+        createEntry(input: $input) {
+          _id
+          date
+          section
+          tags
+          content
+          mood
+          linkedGoal
+          cluster
         }
       }
-    };
-
-    try {
-      const res = await fetch('/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const result = await res.json();
-      if (result.errors) {
-        console.error('❌ GraphQL error:', result.errors);
-        return;
-      }
-
-      console.log('✅ Entry saved:', result.data.createEntry);
-      onClose();
-    } catch (err) {
-      console.error('❌ Network error:', err);
-    }
+    `,
+    variables: { input },
   };
+
+  try {
+    const res = await fetch('/graphql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const result = await res.json();
+    if (result.errors) {
+      console.error('❌ GraphQL error:', result.errors);
+      return;
+    }
+
+    console.log('✅ Entry saved:', result.data.createEntry);
+    onClose();
+  } catch (err) {
+    console.error('❌ Network error:', err);
+  }
+};
+
 
   if (!isOpen) return null;
 
@@ -223,6 +241,46 @@ export default function EntryModal({ isOpen, onClose, date, entry, existingSecti
                   Clear
                 </button>
               </div>
+              <div className="field">
+  <label>Mood</label>
+  <input
+    type="text"
+    value={mood}
+    onChange={(e) => setMood(e.target.value)}
+    placeholder="e.g. cozy, drained, inspired"
+  />
+</div>
+
+<div className="field">
+  <label>Tags (comma separated)</label>
+  <input
+    type="text"
+    value={tagsInput}
+    onChange={(e) => setTagsInput(e.target.value)}
+    placeholder="e.g. morning, idea, ritual"
+  />
+</div>
+
+<div className="field">
+  <label>Linked Goal (optional)</label>
+  <input
+    type="text"
+    value={linkedGoal}
+    onChange={(e) => setLinkedGoal(e.target.value)}
+    placeholder="Goal ID or leave blank"
+  />
+</div>
+
+<div className="field">
+  <label>Cluster (optional)</label>
+  <input
+    type="text"
+    value={cluster}
+    onChange={(e) => setCluster(e.target.value)}
+    placeholder="Cluster ID or leave blank"
+  />
+</div>
+
 
               <EditorContent editor={editor} />
             </>

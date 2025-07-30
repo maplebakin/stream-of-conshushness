@@ -10,7 +10,11 @@ export default function Calendar() {
 
   const now = new Date();
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const todayStr = now.toISOString().slice(0, 10);
+  const yyyy = now.getFullYear();
+const mm = String(now.getMonth() + 1).padStart(2, '0');
+const dd = String(now.getDate()).padStart(2, '0');
+const todayStr = `${yyyy}-${mm}-${dd}`;
+
 
   const [calendarData, setCalendarData] = useState({});
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
@@ -82,7 +86,12 @@ const goToToday = () => {
       alert('Please fill all fields');
       return;
     }
-    const normalizedDate = new Date(newAppointment.date).toISOString().slice(0, 10);
+    const dateObj = new Date(newAppointment.date);
+const yyyy = dateObj.getFullYear();
+const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+const dd = String(dateObj.getDate()).padStart(2, '0');
+const normalizedDate = `${yyyy}-${mm}-${dd}`;
+
     axios.post('/api/appointments', {
       ...newAppointment,
       date: normalizedDate
