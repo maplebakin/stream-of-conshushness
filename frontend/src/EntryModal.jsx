@@ -5,7 +5,15 @@ import StarterKit from '@tiptap/starter-kit';
 import { AuthContext } from './AuthContext.jsx';
 import suggestMetadata from "./utils/suggestMetadata.js";
 
-export default function EntryModal({ isOpen, onClose, date, entry, existingSections = [] }) {
+export default function EntryModal({
+  isOpen,
+  onClose,
+  date,
+  entry,
+  existingSections = [],
+  availableGoals = [],
+  availableClusters = [],
+}) {
   const initialSection = entry?.section || 'Floating in the Stream';
   const initialTags = Array.isArray(entry?.tags) ? entry.tags.join(', ') : entry?.tags || '';
   const initialContent = entry?.content || '';
@@ -21,7 +29,6 @@ export default function EntryModal({ isOpen, onClose, date, entry, existingSecti
   const [cluster, setCluster] = useState(entry?.cluster || '');
 
   const { token } = useContext(AuthContext);
-
   const [isCustomSection, setIsCustomSection] = useState(false);
   const [customSection, setCustomSection] = useState('');
 
@@ -153,131 +160,90 @@ export default function EntryModal({ isOpen, onClose, date, entry, existingSecti
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>{entry ? 'Edit Entry' : 'New Entry'}</h2>
 
-        <label>
-          Section:
-          <select
-            name="section"
-            value={isCustomSection ? '__custom' : formData.section}
-            onChange={handleSectionChange}
-          >
-            <option value="">-- Select Section --</option>
-            {existingSections.map((section, i) => (
-              <option key={i} value={section}>
-                {section}
-              </option>
-            ))}
-            <option value="__custom">✏️ Enter Custom Section</option>
-          </select>
-          {isCustomSection && (
-            <input
-              type="text"
-              name="custom-section"
-              value={customSection}
-              placeholder="Type your custom section"
-              onChange={handleCustomSectionChange}
-            />
-          )}
-        </label>
+        <div className="modal-body">
+          <div className="field-group">
+            <label>
+              Section:
+              <select
+                name="section"
+                value={isCustomSection ? '__custom' : formData.section}
+                onChange={handleSectionChange}
+              >
+                <option value="">-- Select Section --</option>
+                {existingSections.map((section, i) => (
+                  <option key={i} value={section}>{section}</option>
+                ))}
+                <option value="__custom">✏️ Enter Custom Section</option>
+              </select>
+            </label>
+            {isCustomSection && (
+              <input
+                type="text"
+                name="custom-section"
+                value={customSection}
+                placeholder="Type your custom section"
+                onChange={handleCustomSectionChange}
+              />
+            )}
 
-        <label>
-          Tags (comma-separated):
-          <input name="tags" value={formData.tags} onChange={handleChange} />
-        </label>
+            <label>
+              Tags (comma-separated):
+              <input name="tags" value={formData.tags} onChange={handleChange} />
+            </label>
 
-        <div>
-          <label>Content:</label>
-          {editor && (
-            <>
-              <div className="tiptap-toolbar">
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    editor.chain().focus().toggleBold().run();
-                  }}
-                  className={editor.isActive('bold') ? 'active' : ''}
-                >
-                  Bold
-                </button>
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    editor.chain().focus().toggleItalic().run();
-                  }}
-                  className={editor.isActive('italic') ? 'active' : ''}
-                >
-                  Italic
-                </button>
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    editor.chain().focus().toggleBulletList().run();
-                  }}
-                  className={editor.isActive('bulletList') ? 'active' : ''}
-                >
-                  • List
-                </button>
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    editor.chain().focus().toggleOrderedList().run();
-                  }}
-                  className={editor.isActive('orderedList') ? 'active' : ''}
-                >
-                  1. List
-                </button>
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    editor.chain().focus().unsetAllMarks().clearNodes().run();
-                  }}
-                >
-                  Clear
-                </button>
-              </div>
+            <label>
+              Mood:
+              <input
+                type="text"
+                value={mood}
+                onChange={(e) => setMood(e.target.value)}
+                placeholder="e.g. cozy, drained, inspired"
+              />
+            </label>
+          </div>
 
-              <div className="field">
-                <label>Mood</label>
-                <input
-                  type="text"
-                  value={mood}
-                  onChange={(e) => setMood(e.target.value)}
-                  placeholder="e.g. cozy, drained, inspired"
-                />
-              </div>
+          <div className="field-group">
+            <label>Content:</label>
+            {editor && (
+              <>
+                <div className="tiptap-toolbar">
+                  <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBold().run(); }} className={editor.isActive('bold') ? 'active' : ''}>Bold</button>
+                  <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleItalic().run(); }} className={editor.isActive('italic') ? 'active' : ''}>Italic</button>
+                  <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBulletList().run(); }} className={editor.isActive('bulletList') ? 'active' : ''}>• List</button>
+                  <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleOrderedList().run(); }} className={editor.isActive('orderedList') ? 'active' : ''}>1. List</button>
+                  <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().unsetAllMarks().clearNodes().run(); }}>Clear</button>
+                </div>
+                <EditorContent editor={editor} />
+              </>
+            )}
+          </div>
 
-              <div className="field">
-                <label>Linked Goal (optional)</label>
-                <input
-                  type="text"
-                  value={linkedGoal}
-                  onChange={(e) => setLinkedGoal(e.target.value)}
-                  placeholder="Goal ID or leave blank"
-                />
-              </div>
+          <div className="field-group horizontal">
+            <label>
+              Linked Goal:
+              <select value={linkedGoal} onChange={(e) => setLinkedGoal(e.target.value)}>
+                <option value="">-- None --</option>
+                {availableGoals.map((goal) => (
+                  <option key={goal._id} value={goal._id}>{goal.description}</option>
+                ))}
+              </select>
+            </label>
 
-              <div className="field">
-                <label>Cluster (optional)</label>
-                <input
-                  type="text"
-                  value={cluster}
-                  onChange={(e) => setCluster(e.target.value)}
-                  placeholder="Cluster ID or leave blank"
-                />
-              </div>
+            <label>
+              Cluster:
+              <select value={cluster} onChange={(e) => setCluster(e.target.value)}>
+                <option value="">-- None --</option>
+                {availableClusters.map((cl) => (
+                  <option key={cl._id} value={cl._id}>{cl.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
 
-              <EditorContent editor={editor} />
-            </>
-          )}
-        </div>
-
-        <div className="modal-buttons">
-          <button onClick={handleSave}>Save</button>
-          <button onClick={onClose}>Cancel</button>
+          <div className="modal-buttons">
+            <button onClick={handleSave}>Save</button>
+            <button onClick={onClose}>Cancel</button>
+          </div>
         </div>
       </div>
     </div>

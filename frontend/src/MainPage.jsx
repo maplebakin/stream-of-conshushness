@@ -236,21 +236,7 @@ const handleSaveEntry = async (entryData) => {
         </aside>
       </div>
 
-      <footer id="tag-footer">
-        {allTags.map((tag) => (
-          <a
-            key={`tag-footer-${tag}`}
-            href="#"
-            className={searchQuery === tag ? 'active' : ''}
-            onClick={(e) => {
-              e.preventDefault();
-              setSearchQuery(tag);
-            }}
-          >
-            #{tag}
-          </a>
-        ))}
-      </footer>
+     
     </>
   );
 }
