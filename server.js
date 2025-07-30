@@ -21,10 +21,13 @@ import gameRoutes from './routes/games.js';
 import pageRoutes from './routes/pages.js';
 import sectionPagesRouter from './routes/sectionPages.js';
 import SectionPage from './models/SectionPage.js';
-
+import taskRoutes from './routes/tasks.js';
 import { createHandler } from 'graphql-http/lib/use/express';
 import schema from './graphql/schema.js';
 import root from './graphql/resolvers.js';
+import Ripple from './models/Ripple.js';
+import { extractRipples } from './utils/rippleExtractor.js';
+
 
 // ─── Paths ─────────────────────────────
 const __filename = fileURLToPath(import.meta.url);
@@ -39,6 +42,7 @@ app.use(express.json());
 app.use('/api/games', gameRoutes);
 app.use('/api/pages', pageRoutes);
 app.use('/api/section-pages', sectionPagesRouter);
+app.use('/api/tasks', taskRoutes);
 
 // ─── MongoDB ─────────────────────────────
 (async () => {
@@ -87,6 +91,133 @@ app.use('/graphql', createHandler({
 app.get('/health', (req, res) => res.send('OK'));
 
 // ─── User Routes ─────────────────────────────
+// Extract ripples from entries in a date range
+app.post('/api/ripples/extract', authenticateToken, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.body;
+    
+    // Get entries from the date range
+    const entries = await Entry.find({
+      userId: req.user.userId,
+      date: { 
+        $gte: startDate, 
+        $lte: endDate 
+      }
+    });
+
+    // Extract potential tasks/appointments from the entries
+    const extractedRipples = extractRipples(entries);
+
+    // Save each ripple to the database
+    const savedRipples = [];
+    for (const rippleData of extractedRipples) {
+      const newRipple = new Ripple({
+        userId: req.user.userId,
+        ...rippleData
+      });
+      const saved = await newRipple.save();
+      savedRipples.push(saved);
+    }
+
+    res.json({ 
+      message: `Found ${savedRipples.length} potential tasks/appointments`,
+      ripples: savedRipples 
+    });
+
+  } catch (error) {
+    console.error('Error extracting ripples:', error);
+    res.status(500).json({ error: 'Server error extracting ripples' });
+  }
+});
+// Get pending ripples for review
+app.get('/api/ripples/pending', authenticateToken, async (req, res) => {
+  try {
+    const ripples = await Ripple.find({
+      userId: req.user.userId,
+      status: 'pending'
+    }).populate('sourceEntryId');
+    
+    res.json(ripples);
+  } catch (error) {
+    console.error('Error fetching pending ripples:', error);
+    res.status(500).json({ error: 'Server error fetching ripples' });
+  }
+});
+// Approve a ripple and create a task
+// Approve a ripple and create a todo
+app.put('/api/ripples/:id/approve', authenticateToken, async (req, res) => {
+  try {
+    const { assignedCluster } = req.body;
+    
+    // Find the ripple
+    const ripple = await Ripple.findOne({
+      _id: req.params.id,
+      userId: req.user.userId,
+      status: 'pending'
+    });
+    
+    if (!ripple) {
+      return res.status(404).json({ error: 'Ripple not found or already processed' });
+    }
+
+    // Create a new todo from the ripple
+    const newTodo = new Todo({
+      userId: req.user.userId,
+      content: ripple.extractedText,
+      completed: false,
+      cluster: assignedCluster || null,
+      sourceRippleId: ripple._id
+    });
+    
+    const savedTodo = await newTodo.save();
+
+    // Update the ripple status
+    ripple.status = 'approved';
+    ripple.createdTaskId = savedTodo._id; // keeping this field name for consistency
+    ripple.assignedCluster = assignedCluster;
+    ripple.processedDate = new Date();
+    await ripple.save();
+
+    res.json({ 
+      message: 'Ripple approved and todo created',
+      ripple: ripple,
+      todo: savedTodo 
+    });
+
+  } catch (error) {
+    console.error('Error approving ripple:', error);
+    res.status(500).json({ error: 'Server error approving ripple' });
+  }
+});
+
+// Dismiss a ripple
+app.put('/api/ripples/:id/dismiss', authenticateToken, async (req, res) => {
+  try {
+    const ripple = await Ripple.findOne({
+      _id: req.params.id,
+      userId: req.user.userId,
+      status: 'pending'
+    });
+    
+    if (!ripple) {
+      return res.status(404).json({ error: 'Ripple not found or already processed' });
+    }
+
+    // Update the ripple status
+    ripple.status = 'dismissed';
+    ripple.processedDate = new Date();
+    await ripple.save();
+
+    res.json({ 
+      message: 'Ripple dismissed',
+      ripple: ripple 
+    });
+
+  } catch (error) {
+    console.error('Error dismissing ripple:', error);
+    res.status(500).json({ error: 'Server error dismissing ripple' });
+  }
+});
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
@@ -357,7 +488,7 @@ app.get('/api/entries/:date', authenticateToken, async (req, res) => {
 });
 
 
-// Add a new entry
+// Add a new entry + extract ripples
 app.post('/api/entries', authenticateToken, async (req, res) => {
   const { date, section, tags, content } = req.body;
   if (!date || !section || !content) {
@@ -372,12 +503,29 @@ app.post('/api/entries', authenticateToken, async (req, res) => {
       tags: tags || [],
       content,
     });
+
     await newEntry.save();
-    res.json(newEntry);
-  } catch {
-    res.status(500).json({ error: 'Server error saving entry' });
+
+    // 🧠 Run ripple extraction
+    const extracted = extractRipples([newEntry]);
+    const savedRipples = [];
+
+    for (const r of extracted) {
+      const ripple = new Ripple({
+        userId: req.user.userId,
+        sourceEntryId: newEntry._id,
+        ...r
+      });
+      savedRipples.push(await ripple.save());
+    }
+
+    res.json({ entry: newEntry, ripples: savedRipples });
+  } catch (err) {
+    console.error('Error saving entry or extracting ripples:', err);
+    res.status(500).json({ error: 'Server error saving entry or ripples' });
   }
 });
+
 
 // Update an existing entry
 app.put('/api/entries/:id', authenticateToken, async (req, res) => {

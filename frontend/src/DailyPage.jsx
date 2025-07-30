@@ -8,6 +8,8 @@ import NotesSection from './NotesSection';
 import EntriesSection from './EntriesSection';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
+import DailyRipples from './DailyRipples';
+
 
 function DailyPage() {
   const { date } = useParams();
@@ -101,10 +103,18 @@ function DailyPage() {
           </ul>
         </section>
 
+<section className="ripples-section">
+  <h2>🌊 Ripples from Today's Entry</h2>
+  <DailyRipples date={date} />
+</section>
+
+
         <section className="todo-section">
-          <h2>To-Do List</h2>
-          <ToDoBox date={date} />
-        </section>
+  <DailyRipples date={date} />
+
+  <h2 className="mt-6">To-Do List</h2>
+  <ToDoBox date={date} />
+</section>
 
         <section className="priorities-section">
           <h2>Top Priorities</h2>

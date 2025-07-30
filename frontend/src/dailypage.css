@@ -88,6 +88,7 @@ body {
 .notes-section    { grid-area: notes; }
 .entries-section  { grid-area: entries; }
 .appointments-section { grid-area: appointments; }
+.ripples-section { grid-area: ripples; }
 
 /*──────────────────────────────────────────────────────
   Card Styling
@@ -196,6 +197,26 @@ body {
   color: var(--color-text);
 }
 
+.ripples-section {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 1.25rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+}
+
+.ripples-section h2 {
+  margin-top: 0;
+  font-family: var(--font-serif);
+  font-size: 1.4rem;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.25rem;
+  margin-bottom: 1rem;
+}
 
 
 
@@ -394,17 +415,15 @@ button:hover {
   Responsive
 ──────────────────────────────────────────────────────*/
 @media (max-width: 800px) {
-  .daily-page-content {
-    grid-template-areas:
-      "schedule"
-      "todo"
-      "priorities"
-      "notes"
-      "entries";
-    grid-template-columns: 1fr;
-    gap: 1rem;
-    padding: 0 0.5rem;
-  }
+.daily-page-content {
+  grid-template-areas:
+    "schedule todo priorities"
+    "appointments appointments appointments"
+    "ripples ripples ripples"
+    "notes entries entries";
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: auto auto auto auto;
+}
 
   .daily-page-header {
     flex-direction: column;

@@ -13,7 +13,7 @@ import SectionPage from './SectionPage.jsx';
 import SectionsPage from './SectionsPage.jsx';
 import SectionPageView from './SectionPageView.jsx';
 import TestGraphQL from './TestGraphQL.jsx';
-
+import RippleReviewUI from './RippleReviewUI'; 
 
 
 
@@ -43,6 +43,7 @@ function AppRoutes() {
           <Route path="/section/:sectionName" element={<SectionPage />} />
           <Route path="/sections" element={<SectionsPage />} />
           <Route path="/section/:sectionName/:pageSlug" element={<SectionPageView />} />
+          <Route path="/ripples" element={<RippleReviewUI />} />
 
         </>
       ) : (
