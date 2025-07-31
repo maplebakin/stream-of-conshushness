@@ -27,7 +27,7 @@ import schema from './graphql/schema.js';
 import root from './graphql/resolvers.js';
 import Ripple from './models/Ripple.js';
 import { extractRipples } from './utils/rippleExtractor.js';
-
+import goalRoutes from './routes/goals.js';
 
 // ─── Paths ─────────────────────────────
 const __filename = fileURLToPath(import.meta.url);
@@ -43,6 +43,7 @@ app.use('/api/games', gameRoutes);
 app.use('/api/pages', pageRoutes);
 app.use('/api/section-pages', sectionPagesRouter);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/goals', goalRoutes);
 
 // ─── MongoDB ─────────────────────────────
 (async () => {
