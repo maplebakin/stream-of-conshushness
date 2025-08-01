@@ -15,7 +15,8 @@ import Entry from './models/Entry.js';
 import Appointment from './models/Appointment.js';
 import ImportantEvent from './models/ImportantEvent.js';
 import Note from './models/Note.js';
-import Todo from './models/Todo.js';
+import Task from './models/Task.js';
+import habitRoutes from './routes/habits.js';
 import DailySchedule from './models/DailySchedule.js';
 import gameRoutes from './routes/games.js';
 import pageRoutes from './routes/pages.js';
@@ -44,6 +45,7 @@ app.use('/api/pages', pageRoutes);
 app.use('/api/section-pages', sectionPagesRouter);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/goals', goalRoutes);
+app.use('/api/habits', habitRoutes);
 
 // ─── MongoDB ─────────────────────────────
 (async () => {
@@ -151,39 +153,46 @@ app.put('/api/ripples/:id/approve', authenticateToken, async (req, res) => {
     const { assignedCluster } = req.body;
     
     // Find the ripple
-    const ripple = await Ripple.findOne({
-      _id: req.params.id,
-      userId: req.user.userId,
-      status: 'pending'
-    });
+  const ripple = await Ripple.findOne({
+  _id: req.params.id,
+  userId: req.user.userId,
+  status: 'pending'
+}).populate('sourceEntryId'); // ← this part matters!
+
     
     if (!ripple) {
       return res.status(404).json({ error: 'Ripple not found or already processed' });
     }
 
     // Create a new todo from the ripple
-    const newTodo = new Todo({
-      userId: req.user.userId,
-      content: ripple.extractedText,
-      completed: false,
-      cluster: assignedCluster || null,
-      sourceRippleId: ripple._id
-    });
-    
-    const savedTodo = await newTodo.save();
+    const newTask = new Task({
+  userId: req.user.userId,
+  content: ripple.extractedText,
+  completed: false,
+  cluster: assignedCluster || null,
+  entryId: ripple.sourceEntryId,
+});
+const savedTask = await newTask.save();
 
     // Update the ripple status
-    ripple.status = 'approved';
-    ripple.createdTaskId = savedTodo._id; // keeping this field name for consistency
-    ripple.assignedCluster = assignedCluster;
-    ripple.processedDate = new Date();
-    await ripple.save();
+ripple.status = 'approved';
+ripple.createdTaskId = savedTask._id;
+ripple.assignedCluster = assignedCluster;
+ripple.processedDate = new Date();
 
-    res.json({ 
-      message: 'Ripple approved and todo created',
-      ripple: ripple,
-      todo: savedTodo 
-    });
+// Patch for old ripples
+if (!ripple.entryDate && ripple.sourceEntryId?.date) {
+  ripple.entryDate = ripple.sourceEntryId.date;
+}
+
+await ripple.save();
+
+
+ res.json({ 
+  message: 'Ripple approved and task created',
+  ripple,
+  task: savedTask 
+});
 
   } catch (error) {
     console.error('Error approving ripple:', error);
@@ -304,9 +313,10 @@ app.get('/api/calendar-data/:month', authenticateToken, async (req, res) => {
 app.get('/api/appointments/:date', authenticateToken, async (req, res) => {
   try {
     const appointments = await Appointment.find({
-      userId: req.user.userId,
-      date: req.params.date,
-    }).sort({ time: 1 });
+  userId: req.user.userId,
+  date: req.params.date,
+}).sort({ time: 1 }).populate('entryId');
+
     res.json(appointments);
   } catch {
     res.status(500).json({ error: 'Server error fetching appointments' });
@@ -314,8 +324,9 @@ app.get('/api/appointments/:date', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/appointments', authenticateToken, async (req, res) => {
-  let { date, time, details } = req.body;
+  let { date, time, details, cluster, entryId } = req.body;
   if (!date || !time || !details) return res.status(400).json({ error: 'Missing fields' });
+
   try {
     const localDate = new Date(date);
     const year = localDate.getFullYear();
@@ -325,12 +336,15 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
   } catch {
     return res.status(400).json({ error: 'Invalid date format' });
   }
+
   try {
     const newAppointment = new Appointment({
       userId: req.user.userId,
       date,
       time,
       details,
+      cluster: cluster || null,
+      entryId: entryId || null,
     });
     await newAppointment.save();
     res.json(newAppointment);
@@ -338,6 +352,7 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Server error adding appointment' });
   }
 });
+
 
 
 app.delete('/api/appointments/:id', authenticateToken, async (req, res) => {
@@ -352,14 +367,26 @@ app.delete('/api/appointments/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Server error deleting appointment' });
   }
 });
+app.get('/api/appointments/cluster/:cluster', authenticateToken, async (req, res) => {
+  try {
+    const appointments = await Appointment.find({
+      userId: req.user.userId,
+      cluster: req.params.cluster
+    }).sort({ date: 1, time: 1 }).populate('entryId');
+    res.json(appointments);
+  } catch {
+    res.status(500).json({ error: 'Server error fetching appointments by cluster' });
+  }
+});
+
 
 // ─── Important Events ─────────────────────────────
 app.get('/api/important-events/:month', authenticateToken, async (req, res) => {
   try {
-    const events = await ImportantEvent.find({
-      userId: req.user.userId,
-      date: { $regex: `^${req.params.month}` },
-    });
+   const events = await ImportantEvent.find({
+  userId: req.user.userId,
+  date: { $regex: `^${req.params.month}` },
+}).populate('entryId');
     res.json(events);
   } catch {
     res.status(500).json({ error: 'Server error fetching important events' });
@@ -367,13 +394,16 @@ app.get('/api/important-events/:month', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/important-events', authenticateToken, async (req, res) => {
-  const { title, date } = req.body;
+  const { title, date, cluster, entryId } = req.body;
   if (!title || !date) return res.status(400).json({ error: 'Missing fields' });
+
   try {
     const newEvent = new ImportantEvent({
       userId: req.user.userId,
       title,
       date,
+      cluster: cluster || null,
+      entryId: entryId || null,
     });
     await newEvent.save();
     res.json(newEvent);
@@ -381,6 +411,7 @@ app.post('/api/important-events', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Server error adding important event' });
   }
 });
+
 
 app.delete('/api/important-events/:id', authenticateToken, async (req, res) => {
   try {
@@ -394,59 +425,50 @@ app.delete('/api/important-events/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Server error deleting event' });
   }
 });
+app.get('/api/important-events/cluster/:cluster', authenticateToken, async (req, res) => {
+  try {
+    const events = await ImportantEvent.find({
+      userId: req.user.userId,
+      cluster: req.params.cluster
+    }).sort({ date: 1 }).populate('entryId');
+    res.json(events);
+  } catch {
+    res.status(500).json({ error: 'Server error fetching events by cluster' });
+  }
+});
 
 // ─── Notes ─────────────────────────────
 app.get('/api/note/:date', authenticateToken, async (req, res) => {
   try {
-    const note = await Note.findOne({ userId: req.user.userId, date: req.params.date });
-    res.json(note ? note.content : '');
+    const note = await Note.findOne({ userId: req.user.userId, date: req.params.date }).populate('entryId');
+    res.json(note || null);
   } catch {
     res.status(500).json({ error: 'Server error fetching note' });
   }
 });
 
+
 app.post('/api/note/:date', authenticateToken, async (req, res) => {
+  const { content, cluster, entryId } = req.body;
   try {
     const note = await Note.findOneAndUpdate(
       { userId: req.user.userId, date: req.params.date },
-      { content: req.body.content },
+      {
+        content,
+        cluster: cluster || null,
+        entryId: entryId || null,
+      },
       { upsert: true, new: true }
-    );
+    ).populate('entryId');
+
     res.json(note);
   } catch {
     res.status(500).json({ error: 'Server error saving note' });
   }
 });
 
-// ─── Todos ─────────────────────────────
-app.get('/api/todos/:date', authenticateToken, async (req, res) => {
-  try {
-    let todo = await Todo.findOne({ userId: req.user.userId, date: req.params.date });
-    if (!todo) {
-      todo = await Todo.findOne({ userId: req.user.userId, date: { $regex: `^${req.params.date}` } });
-    }
-    res.json(todo ? todo.items : []);
-  } catch {
-    res.status(500).json({ error: 'Server error fetching todos' });
-  }
-});
 
-app.post('/api/todos/:date', authenticateToken, async (req, res) => {
-  const items = req.body.items;
-  if (!items || !Array.isArray(items)) {
-    return res.status(400).json({ error: 'Invalid items array' });
-  }
-  try {
-    const todo = await Todo.findOneAndUpdate(
-      { userId: req.user.userId, date: req.params.date },
-      { items },
-      { upsert: true, new: true }
-    );
-    res.json(todo);
-  } catch {
-    res.status(500).json({ error: 'Server error saving todos' });
-  }
-});
+
 
 // ─── Daily Schedule ─────────────────────────────
 app.get('/api/schedule/:date', authenticateToken, async (req, res) => {

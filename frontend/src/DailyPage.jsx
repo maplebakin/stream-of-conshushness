@@ -3,7 +3,7 @@ import './dailypage.css';
 import HourlySchedule from './HourlySchedule';
 import React, { useState, useEffect, useContext } from 'react';
 import TopPriorities from './TopPriorities';
-import ToDoBox from './ToDoBox';
+import TaskList from './TaskList.jsx';
 import NotesSection from './NotesSection';
 import EntriesSection from './EntriesSection';
 import axios from './api/axiosInstance';
@@ -112,8 +112,7 @@ function DailyPage() {
         <section className="todo-section">
   <DailyRipples date={date} />
 
-  <h2 className="mt-6">To-Do List</h2>
-  <ToDoBox date={date} />
+ <TaskList selectedDate={selectedDate} />
 </section>
 
         <section className="priorities-section">

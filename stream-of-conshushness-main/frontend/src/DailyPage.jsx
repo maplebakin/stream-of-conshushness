@@ -3,7 +3,7 @@ import './dailypage.css';
 import HourlySchedule from './HourlySchedule';
 import React, { useState, useEffect, useContext } from 'react';
 import TopPriorities from './TopPriorities';
-import ToDoBox from './ToDoBox';
+
 import NotesSection from './NotesSection';
 import EntriesSection from './EntriesSection';
 import axios from './api/axiosInstance';
@@ -97,10 +97,7 @@ useEffect(() => {
           )}
         </div>
 
-        <section className="todo-section">
-          <h2>To-Do List</h2>
-          <ToDoBox date={date} />
-        </section>
+       
 
         <section className="priorities-section">
           <h2>Top Priorities</h2>
