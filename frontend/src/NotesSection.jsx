@@ -1,23 +1,19 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
-
-// 🟣 Import toast for user feedback
 import toast from 'react-hot-toast';
 
 function NotesSection({ date }) {
   const [note, setNote] = useState('');
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
   const { token } = useContext(AuthContext);
-
-  // Ref to track a debounce timer for saving notes
   const saveTimerRef = useRef(null);
 
-  // Load from server whenever the date changes
   useEffect(() => {
     if (!date) return;
     setHasLoaded(false);
-
+    setLoading(true);
     axios
       .get(`/api/note/${date}`, {
         headers: {
@@ -29,20 +25,16 @@ function NotesSection({ date }) {
         console.error('Error fetching note:', err);
         setNote('');
       })
-      .finally(() => setHasLoaded(true));
+      .finally(() => {
+        setHasLoaded(true);
+        setLoading(false);
+      });
   }, [date, token]);
 
-  // Save to server with debounce and toast notifications
   useEffect(() => {
     if (!date || !hasLoaded) return;
-
-    // Clear any existing timer so we only save after the user pauses typing
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
-    }
-
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      // Perform the save with toast feedback
       toast
         .promise(
           axios.post(
@@ -61,25 +53,27 @@ function NotesSection({ date }) {
           }
         )
         .catch((err) => console.error('Error saving note:', err));
-    }, 800); // Save after 800 ms of inactivity
-
-    // Cleanup to cancel pending saves if the component unmounts or dependencies change
+    }, 800);
     return () => {
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-      }
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, [date, note, hasLoaded, token]);
 
   return (
     <>
       <h3>Notes</h3>
-      <textarea
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder="Write your reflections, affirmations, or thoughts for the day..."
-        rows={8}
-      />
+      {loading ? (
+        <div style={{ opacity: 0.5, fontStyle: 'italic' }}>Loading note…</div>
+      ) : (
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Write your reflections, affirmations, or thoughts for the day..."
+          rows={8}
+          disabled={!hasLoaded}
+          style={{ opacity: hasLoaded ? 1 : 0.5 }}
+        />
+      )}
     </>
   );
 }

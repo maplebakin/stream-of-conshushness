@@ -12,10 +12,9 @@ import GamePage from './GamePage.jsx';
 import SectionPage from './SectionPage.jsx';
 import SectionsPage from './SectionsPage.jsx';
 import SectionPageView from './SectionPageView.jsx';
-import TestGraphQL from './TestGraphQL.jsx';
 import RippleReviewUI from './RippleReviewUI'; 
-
-
+import Layout from './Layout.jsx';
+import { SearchProvider } from "./SearchContext.jsx";
 
 
 
@@ -24,27 +23,27 @@ function AppRoutes() {
 
   return (
     <Routes>
+      {/* Public routes */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 
+      {/* Authenticated (main app) routes, wrapped in Layout */}
       {isAuthenticated ? (
         <>
-          <Route path="/" element={
-  <>
-    <MainPage />
-    <TestGraphQL />
-  </>
-} />
-
-          <Route path="/calendar" element={<Calendar />} />
-          <Route path="/day/:date" element={<DailyPage />} />
-          <Route path="/section/games" element={<GameList />} />
-          <Route path="/section/games/:slug" element={<GamePage />} />v
-          <Route path="/section/:sectionName" element={<SectionPage />} />
-          <Route path="/sections" element={<SectionsPage />} />
-          <Route path="/section/:sectionName/:pageSlug" element={<SectionPageView />} />
-          <Route path="/ripples" element={<RippleReviewUI />} />
-
+          <Route element={<Layout />}>
+            <Route path="*" element={<div style={{ padding: 32 }}>Not found.</div>} />
+            <Route path="/" element={<MainPage />} />
+            <Route path="/calendar" element={<Calendar />} />
+            <Route path="/day/:date" element={<DailyPage />} />
+            <Route path="/section/games" element={<GameList />} />
+            <Route path="/section/games/:slug" element={<GamePage />} />
+            <Route path="/section/:sectionName" element={<SectionPage />} />
+            <Route path="/sections" element={<SectionsPage />} />
+            <Route path="/section/:sectionName/:pageSlug" element={<SectionPageView />} />
+            <Route path="/ripples" element={<RippleReviewUI />} />
+            <Route path="*" element={<div style={{ padding: 32 }}>Not found.</div>} />
+          </Route>
+          {/* (Optional) Add a catch-all 404 page for logged-in users here */}
         </>
       ) : (
         <Route path="*" element={<Navigate to="/login" replace />} />
@@ -53,12 +52,15 @@ function AppRoutes() {
   );
 }
 
+
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <SearchProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </SearchProvider>
     </AuthProvider>
   );
 }

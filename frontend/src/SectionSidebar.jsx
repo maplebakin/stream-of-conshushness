@@ -44,7 +44,9 @@ export default function SectionSidebar() {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      setPages([response.data, ...pages]);
+      setPages((prevPages) =>
+        [response.data, ...prevPages].sort((a, b) => a.title.localeCompare(b.title))
+      );
       setNewTitle('');
       setNewContent('');
       setShowForm(false);
@@ -82,7 +84,7 @@ export default function SectionSidebar() {
             onChange={(e) => setNewContent(e.target.value)}
             rows={4}
           />
-          <button type="submit">Create</button>
+          <button type="submit" disabled={!newTitle.trim()}>Create</button>
         </form>
       )}
     </div>

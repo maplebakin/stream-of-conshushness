@@ -2,39 +2,41 @@ import React, { useState, useEffect, useContext } from 'react';
 import axios from "./api/axiosInstance";
 import { AuthContext } from './AuthContext';
 
+const clusters = [
+  { id: 'home', name: 'Home' },
+  { id: 'work', name: 'Work' },
+  { id: 'personal', name: 'Personal' },
+  { id: 'health', name: 'Health' }
+];
+
+const getConfidenceColor = (confidence) => {
+  const colors = {
+    high: 'bg-green-50 border-green-200',
+    medium: 'bg-yellow-50 border-yellow-200',
+    low: 'bg-gray-50 border-gray-200'
+  };
+  return colors[confidence] || 'bg-gray-50 border-gray-200';
+};
+
 const RippleReviewUI = () => {
   const [ripples, setRipples] = useState([]);
-  const [selectedCluster, setSelectedCluster] = useState('');
-  const [editingRipple, setEditingRipple] = useState(null);
-  const [editText, setEditText] = useState('');
   const [filter, setFilter] = useState('all');
+  const [selectedClusters, setSelectedClusters] = useState({});
+  const [loading, setLoading] = useState(true);
   const { token } = useContext(AuthContext);
 
-  const clusters = [
-    { id: 'home', name: 'Home' },
-    { id: 'work', name: 'Work' },
-    { id: 'personal', name: 'Personal' },
-    { id: 'health', name: 'Health' }
-  ];
-
   useEffect(() => {
+    setLoading(true);
     axios.get('/api/ripples/pending', {
       headers: { Authorization: `Bearer ${token}` }
     })
     .then(res => setRipples(res.data))
-    .catch(err => console.error('Failed to fetch ripples:', err));
+    .catch(err => console.error('Failed to fetch ripples:', err))
+    .finally(() => setLoading(false));
   }, [token]);
 
-  const getConfidenceColor = (confidence) => {
-    const colors = {
-      high: 'bg-green-50 border-green-200',
-      medium: 'bg-yellow-50 border-yellow-200',
-      low: 'bg-gray-50 border-gray-200'
-    };
-    return colors[confidence] || 'bg-gray-50 border-gray-200';
-  };
-
   const handleApprove = async (id, cluster) => {
+    if (!cluster) return;
     try {
       await axios.put(`/api/ripples/${id}/approve`, { assignedCluster: cluster }, {
         headers: { Authorization: `Bearer ${token}` }
@@ -63,6 +65,21 @@ const RippleReviewUI = () => {
     if (filter === 'dismissed') return r.status === 'dismissed';
     return r.confidence === filter;
   });
+
+  if (loading) return (
+    <div className="p-8 text-center text-gray-400">
+      Loading ripples…
+    </div>
+  );
+
+  if (!filteredRipples.length) {
+    return (
+      <div className="p-8 text-center text-gray-400">
+        <div style={{ fontSize: 48, opacity: 0.2 }}>🌊</div>
+        <p>No ripples to review!</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -93,41 +110,5 @@ const RippleReviewUI = () => {
           {r.status === 'pending' && (
             <div className="flex gap-2 items-center">
               <select
-                value={selectedCluster}
-                onChange={(e) => setSelectedCluster(e.target.value)}
-                className="border px-2 py-1 rounded"
-              >
-                <option value="">Choose cluster...</option>
-                {clusters.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              <button
-                onClick={() => handleApprove(r._id, selectedCluster)}
-                className="bg-green-600 text-white px-3 py-1 rounded"
-              >
-                ✓ Approve
-              </button>
-              <button
-                onClick={() => handleDismiss(r._id)}
-                className="bg-red-100 text-red-700 px-3 py-1 rounded"
-              >
-                ✕ Dismiss
-              </button>
-            </div>
-          )}
-
-          {r.status === 'approved' && (
-            <div className="text-green-700 text-sm mt-2">✓ Approved into {r.assignedCluster || 'task list'}</div>
-          )}
-
-          {r.status === 'dismissed' && (
-            <div className="text-gray-600 text-sm mt-2">✕ Dismissed</div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-};
-
-export default RippleReviewUI;
+                value={selectedClusters[r._id] || ''}
+                onChange={(e)

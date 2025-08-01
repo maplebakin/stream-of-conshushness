@@ -1,6 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import axios from './api/axiosInstance';
-
+import React, { useEffect, useState } from 'react';
 
 function TopPriorities({ date, importantEvents = [] }) {
   const [priorities, setPriorities] = useState([]);
@@ -10,38 +8,35 @@ function TopPriorities({ date, importantEvents = [] }) {
   const [editingText, setEditingText] = useState('');
 
   // Load saved priorities for this date
- useEffect(() => {
-  if (!date) return;
+  useEffect(() => {
+    if (!date) return;
 
-  const saved = localStorage.getItem(`priorities-${date}`);
-  const parsed = saved ? JSON.parse(saved) : null;
+    const saved = localStorage.getItem(`priorities-${date}`);
+    const parsed = saved ? JSON.parse(saved) : null;
 
-  console.log('⭐ Checking priorities load:', { date, saved: parsed, importantEvents });
+    console.log('⭐ Checking priorities load:', { date, saved: parsed, importantEvents });
 
-  if (parsed && parsed.length > 0) {
-    setPriorities(parsed);
-  } else if (importantEvents.length > 0) {
-    setPriorities(importantEvents.map(ev => ev.title));
-  } else {
-    setPriorities([]);
-  }
+    if (parsed && parsed.length > 0) {
+      setPriorities(parsed);
+    } else if (importantEvents.length > 0) {
+      setPriorities(importantEvents.map(ev => ev.title));
+    } else {
+      setPriorities([]);
+    }
 
-  setHasLoaded(true);
-}, [date, importantEvents]);
-
-
+    setHasLoaded(true);
+  }, [date, importantEvents]);
 
   // Save to localStorage on change
   useEffect(() => {
-  if (!date || !hasLoaded) return;
+    if (!date || !hasLoaded) return;
 
-  if (priorities.length === 0) {
-    localStorage.removeItem(`priorities-${date}`);
-  } else {
-    localStorage.setItem(`priorities-${date}`, JSON.stringify(priorities));
-  }
-}, [date, priorities, hasLoaded]);
-
+    if (priorities.length === 0) {
+      localStorage.removeItem(`priorities-${date}`);
+    } else {
+      localStorage.setItem(`priorities-${date}`, JSON.stringify(priorities));
+    }
+  }, [date, priorities, hasLoaded]);
 
   const handleAdd = () => {
     if (!inputValue.trim()) return;
@@ -55,21 +50,22 @@ function TopPriorities({ date, importantEvents = [] }) {
   };
 
   const handleSaveEdit = (index) => {
+    if (!editingText.trim()) return; // prevent saving empty
     const updated = [...priorities];
-    updated[index] = editingText;
+    updated[index] = editingText.trim();
     setPriorities(updated);
     setEditingIndex(null);
     setEditingText('');
   };
 
   const handleDelete = (index) => {
+    if (!window.confirm('Delete this priority?')) return; // optional confirm
     const updated = priorities.filter((_, i) => i !== index);
     setPriorities(updated);
   };
 
   return (
     <div className="top-priorities">
-      
       <ul>
         {priorities.map((item, index) => (
           <li key={index}>
@@ -90,11 +86,15 @@ function TopPriorities({ date, importantEvents = [] }) {
               <span
                 className="priority-text"
                 onClick={() => handleStartEdit(index)}
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleStartEdit(index); }}
+                role="button"
+                style={{ cursor: 'pointer' }}
               >
                 {item}
               </span>
             )}
-            <button onClick={() => handleDelete(index)}>🗑️</button>
+            <button onClick={() => handleDelete(index)} aria-label="Delete priority">🗑️</button>
           </li>
         ))}
       </ul>
@@ -107,7 +107,7 @@ function TopPriorities({ date, importantEvents = [] }) {
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
         />
-        <button onClick={handleAdd}>+ Add</button>
+        <button onClick={handleAdd} disabled={!inputValue.trim()}>+ Add</button>
       </div>
     </div>
   );

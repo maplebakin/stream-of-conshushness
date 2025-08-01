@@ -3,7 +3,7 @@ import './EntryModal.css';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { AuthContext } from './AuthContext.jsx';
-import suggestMetadata from "./utils/suggestMetadata.js";
+import { analyzeEntry } from './utils/analyzeEntry';
 
 export default function EntryModal({
   isOpen,
@@ -13,6 +13,7 @@ export default function EntryModal({
   existingSections = [],
   availableGoals = [],
   availableClusters = [],
+  onSave, // callback to refresh parent data
 }) {
   const initialSection = entry?.section || 'Floating in the Stream';
   const initialTags = Array.isArray(entry?.tags) ? entry.tags.join(', ') : entry?.tags || '';
@@ -27,10 +28,11 @@ export default function EntryModal({
   const [mood, setMood] = useState(entry?.mood || '');
   const [linkedGoal, setLinkedGoal] = useState(entry?.linkedGoal || '');
   const [cluster, setCluster] = useState(entry?.cluster || '');
-
   const { token } = useContext(AuthContext);
   const [isCustomSection, setIsCustomSection] = useState(false);
   const [customSection, setCustomSection] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const editor = useEditor({
     extensions: [StarterKit],
@@ -49,7 +51,9 @@ export default function EntryModal({
     },
   });
 
+  // Reset modal state on open/close
   useEffect(() => {
+    if (!isOpen) return;
     const startingSection = entry?.section || 'Floating in the Stream';
     const custom = !existingSections.includes(startingSection);
     setIsCustomSection(custom);
@@ -59,21 +63,27 @@ export default function EntryModal({
       tags: initialTags,
       content: initialContent,
     });
-
+    setMood(entry?.mood || '');
+    setLinkedGoal(entry?.linkedGoal || '');
+    setCluster(entry?.cluster || '');
+    setError('');
     if (editor && initialContent) {
       editor.commands.setContent(initialContent);
     }
-  }, [entry, editor, existingSections]);
+    // eslint-disable-next-line
+  }, [isOpen, entry, editor, existingSections]);
 
   useEffect(() => {
     if (formData.content.length < 10) return;
-    const { tags, mood: suggestedMood, cluster: suggestedCluster } = suggestMetadata(formData.content);
+    const { tags, moods, clusters } = analyzeEntry(formData.content);
     setFormData(prev => ({
       ...prev,
-      tags: Array.isArray(prev.tags) ? prev.tags.join(', ') : tags.join(', '),
+      tags: Array.isArray(prev.tags) && prev.tags.join(', ') !== tags.join(', ')
+        ? prev.tags
+        : tags.join(', '),
     }));
-    setMood(prev => prev || suggestedMood);
-    setCluster(prev => prev || suggestedCluster);
+    setMood(prev => prev || (moods[0] || ''));
+    setCluster(prev => prev || (clusters[0] || ''));
   }, [formData.content]);
 
   const handleSectionChange = (e) => {
@@ -98,6 +108,20 @@ export default function EntryModal({
   };
 
   const handleSave = async () => {
+    setSaving(true);
+    setError('');
+
+    if (!formData.section.trim()) {
+      setError('Section is required.');
+      setSaving(false);
+      return;
+    }
+    if (!formData.content.trim() || formData.content === '<p></p>') {
+      setError('Content cannot be empty.');
+      setSaving(false);
+      return;
+    }
+
     const tagsArray = typeof formData.tags === 'string'
       ? formData.tags.split(',').map(tag => tag.trim()).filter(Boolean)
       : [];
@@ -112,22 +136,26 @@ export default function EntryModal({
       ...(cluster ? { cluster } : {}),
     };
 
+    // Use "update" if editing, "create" if new
+    const isEditing = !!entry?._id;
     const payload = {
-      query: `
+      query: isEditing
+        ? `
+        mutation UpdateEntry($id: ID!, $input: EntryInput!) {
+          updateEntry(id: $id, input: $input) {
+            _id date section tags content mood linkedGoal cluster
+          }
+        }`
+        : `
         mutation CreateEntry($input: EntryInput!) {
           createEntry(input: $input) {
-            _id
-            date
-            section
-            tags
-            content
-            mood
-            linkedGoal
-            cluster
+            _id date section tags content mood linkedGoal cluster
           }
         }
       `,
-      variables: { input },
+      variables: isEditing
+        ? { id: entry._id, input }
+        : { input },
     };
 
     try {
@@ -142,25 +170,30 @@ export default function EntryModal({
 
       const result = await res.json();
       if (result.errors) {
-        console.error('❌ GraphQL error:', result.errors);
+        setError('❌ Error saving entry: ' + (result.errors[0]?.message || 'Unknown error'));
+        setSaving(false);
         return;
       }
 
-      console.log('✅ Entry saved:', result.data.createEntry);
+      if (onSave) onSave(result.data[isEditing ? 'updateEntry' : 'createEntry']);
       onClose();
     } catch (err) {
-      console.error('❌ Network error:', err);
+      setError('❌ Network error: ' + err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
         <h2>{entry ? 'Edit Entry' : 'New Entry'}</h2>
 
         <div className="modal-body">
+          {error && <div className="error-msg">{error}</div>}
+
           <div className="field-group">
             <label>
               Section:
@@ -241,8 +274,10 @@ export default function EntryModal({
           </div>
 
           <div className="modal-buttons">
-            <button onClick={handleSave}>Save</button>
-            <button onClick={onClose}>Cancel</button>
+            <button onClick={handleSave} disabled={saving || !formData.section || !formData.content || formData.content === '<p></p>'}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button onClick={onClose} disabled={saving}>Cancel</button>
           </div>
         </div>
       </div>

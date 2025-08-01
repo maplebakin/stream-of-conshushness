@@ -1,10 +1,9 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useState, useEffect, useContext } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import Header from './Header.jsx';
 import SectionSidebar from './SectionSidebar.jsx';
-import Sidebar from './Sidebar.jsx';
 import './Main.css';
 
 export default function SectionPage() {
@@ -85,7 +84,12 @@ export default function SectionPage() {
 
         <div className="main-feed">
           {entries.length === 0 ? (
-            <p>No entries found for this section.</p>
+            <div className="empty-state" style={{ textAlign: 'center', padding: '2em' }}>
+              <div style={{ fontSize: 48, opacity: 0.3 }}>🗃️</div>
+              <p>No entries found for this section.</p>
+              {/* Optional: Button to add new entry */}
+              {/* <button className="add-entry-btn">+ New Entry</button> */}
+            </div>
           ) : (
             entries.map(([date, dayEntries]) => (
               <div key={date} className="entry-day-group">
@@ -96,21 +100,32 @@ export default function SectionPage() {
                       className="entry-content"
                       dangerouslySetInnerHTML={{ __html: entry.content }}
                     />
-                    {entry.tags?.length > 0 && (
+                    {/* Robust tags: array or string */}
+                    {entry.tags && (
                       <div className="tags">
-                        {entry.tags.map((tag) => (
-                          <span key={tag} className="tag-pill">#{tag}</span>
-                        ))}
+                        {(
+                          Array.isArray(entry.tags)
+                            ? entry.tags
+                            : entry.tags.split(',')
+                        )
+                          .map((tag) => tag.trim())
+                          .filter(Boolean)
+                          .map((tag) => (
+                            <span key={tag} className="tag-pill">#{tag}</span>
+                          ))}
                       </div>
                     )}
+                    {/* Optional: Edit/Delete buttons */}
+                    {/* <div className="entry-controls">
+                      <button>Edit</button>
+                      <button>Delete</button>
+                    </div> */}
                   </div>
                 ))}
               </div>
             ))
           )}
         </div>
-
-        {!isGames && <Sidebar sectionName={sectionName} />}
       </div>
     </>
   );

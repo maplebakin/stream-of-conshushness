@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useRef } from 'react';
 import { AuthContext } from './AuthContext.jsx';
 import { useNavigate, Link } from 'react-router-dom';
 
@@ -7,11 +7,14 @@ export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const usernameRef = useRef();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
     try {
       const res = await fetch('/api/login', {
@@ -27,6 +30,8 @@ export default function LoginPage() {
       navigate('/');
     } catch (err) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -36,25 +41,37 @@ export default function LoginPage() {
       {error && <p className="error">{error}</p>}
 
       <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <button type="submit">Log In</button>
+        <label>
+          Username
+          <input
+            type="text"
+            placeholder="Username"
+            autoFocus
+            ref={usernameRef}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            disabled={loading}
+          />
+        </label>
+        <label>
+          Password
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={loading}
+          />
+        </label>
+        <button type="submit" disabled={loading}>
+          {loading ? 'Logging in…' : 'Log In'}
+        </button>
       </form>
 
       <div className="auth-switch">
         <p>Don't have an account?</p>
         <Link to="/register">
-          <button className="register-link">Register Here</button>
+          <button className="register-link" disabled={loading}>Register Here</button>
         </Link>
       </div>
     </div>

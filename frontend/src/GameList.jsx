@@ -83,13 +83,22 @@ export default function GameList() {
         </div>
       )}
 
-      <ul>
-        {games.map((game) => (
-          <li key={game._id}>
-            <Link to={`/section/games/${game.slug}`}>{game.title}</Link>
-          </li>
-        ))}
-      </ul>
+      {games.length === 0 ? (
+        <div className="empty-state" style={{ textAlign: 'center', marginTop: 32 }}>
+          <div style={{ fontSize: 36, opacity: 0.3 }}>🎮</div>
+          <p>No games yet. Add your first game!</p>
+        </div>
+      ) : (
+        <ul>
+          {games.map((game) => (
+            <li key={game._id}>
+              <Link to={`/section/games/${game.slug}`}>{game.title}</Link>
+              {/* Optionally show description: */}
+              {/* <div style={{ fontSize: '0.9em', color: '#888' }}>{game.description}</div> */}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

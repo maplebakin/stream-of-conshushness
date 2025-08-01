@@ -5,6 +5,7 @@ import './Main.css';
 import { Link } from 'react-router-dom';
 import { AuthContext } from './AuthContext.jsx';
 import toast from 'react-hot-toast';
+import { useSearch } from "./SearchContext.jsx";
 
 function getTodayISO() {
   const today = new Date();
@@ -21,9 +22,9 @@ export default function MainPage() {
   const { token, logout } = useContext(AuthContext);
   const [entries, setEntries] = useState([]);
   const [selectedSection, setSelectedSection] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editEntry, setEditEntry] = useState(null);
+  const { search } = useSearch();
 
   useEffect(() => {
     if (!token) return;
@@ -32,17 +33,16 @@ export default function MainPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then((res) => {
-  const sorted = res.data.sort((a, b) => {
-    const dateA = new Date(a.date);
-    const dateB = new Date(b.date);
-    if (dateA > dateB) return -1;
-    if (dateA < dateB) return 1;
-    // If same day, use MongoDB _id timestamp
-    return b._id.localeCompare(a._id); // Newest entry first
-  });
-  setEntries(sorted);
-})
-
+        const sorted = res.data.sort((a, b) => {
+          const dateA = new Date(a.date);
+          const dateB = new Date(b.date);
+          if (dateA > dateB) return -1;
+          if (dateA < dateB) return 1;
+          // If same day, use MongoDB _id timestamp
+          return b._id.localeCompare(a._id); // Newest entry first
+        });
+        setEntries(sorted);
+      })
       .catch((err) => console.error('Error fetching entries:', err));
   }, [token]);
 
@@ -56,47 +56,46 @@ export default function MainPage() {
     setShowModal(true);
   };
 
-const handleSaveEntry = async (entryData) => {
-  const config = { headers: { Authorization: `Bearer ${token}` } };
+  const handleSaveEntry = async (entryData) => {
+    const config = { headers: { Authorization: `Bearer ${token}` } };
 
-  if (entryData._id) {
-    await toast
-      .promise(
-        axios.put(`/api/entries/${entryData._id}`, entryData, config),
-        {
-          loading: 'Updating entry…',
-          success: 'Entry updated!',
-          error: 'Error updating entry',
-        }
-      )
-      .then((res) => {
-        setEntries((prev) =>
-          sortEntriesByDateDesc(
-            prev.map((e) => (e._id === entryData._id ? res.data : e))
-          )
-        );
-      })
-      .catch(() => {});
-  } else {
-    const payload = { ...entryData, date: getTodayISO() };
-    await toast
-      .promise(
-        axios.post('/api/entries', payload, config),
-        {
-          loading: 'Saving entry…',
-          success: 'Entry added!',
-          error: 'Error adding entry',
-        }
-      )
-      .then((res) => {
-        setEntries((prev) => sortEntriesByDateDesc([res.data, ...prev]));
-      })
-      .catch(() => {});
-  }
+    if (entryData._id) {
+      await toast
+        .promise(
+          axios.put(`/api/entries/${entryData._id}`, entryData, config),
+          {
+            loading: 'Updating entry…',
+            success: 'Entry updated!',
+            error: 'Error updating entry',
+          }
+        )
+        .then((res) => {
+          setEntries((prev) =>
+            sortEntriesByDateDesc(
+              prev.map((e) => (e._id === entryData._id ? res.data : e))
+            )
+          );
+        })
+        .catch(() => {});
+    } else {
+      const payload = { ...entryData, date: getTodayISO() };
+      await toast
+        .promise(
+          axios.post('/api/entries', payload, config),
+          {
+            loading: 'Saving entry…',
+            success: 'Entry added!',
+            error: 'Error adding entry',
+          }
+        )
+        .then((res) => {
+          setEntries((prev) => sortEntriesByDateDesc([res.data, ...prev]));
+        })
+        .catch(() => {});
+    }
 
-  setShowModal(false);
-};
-
+    setShowModal(false);
+  };
 
   const handleDelete = (id) => {
     if (!window.confirm('Delete this entry?')) return;
@@ -130,7 +129,7 @@ const handleSaveEntry = async (entryData) => {
 
   const filteredEntries = entries.filter((entry) => {
     const matchesSection = !selectedSection || entry.section === selectedSection;
-    const normalizedSearch = searchQuery.replace(/^#/, '').toLowerCase();
+    const normalizedSearch = (search || "").replace(/^#/, '').toLowerCase();
     const matchesSearch =
       !normalizedSearch ||
       (entry.content && entry.content.toLowerCase().includes(normalizedSearch)) ||
@@ -163,17 +162,37 @@ const handleSaveEntry = async (entryData) => {
         existingSections={allSections}
       />
 
-      <div className="main-container">
-        <section className="main-feed">
-          {filteredEntries.map((entry) => (
+      <div className="main-feed">
+        <div className="entry-filters">
+          <div className="section-pills">
+            <button
+              className={!selectedSection ? "pill active" : "pill"}
+              onClick={() => setSelectedSection("")}
+            >
+              All
+            </button>
+            {allSections.map((section) => (
+              <button
+                key={section}
+                className={selectedSection === section ? "pill active" : "pill"}
+                onClick={() => setSelectedSection(section)}
+              >
+                {section}
+              </button>
+            ))}
+          </div>
+        </div>
+        {filteredEntries.length === 0 ? (
+          <div className="empty-state">No entries found.</div>
+        ) : (
+          filteredEntries.map((entry) => (
             <div className="main-entry" key={entry._id}>
               <h3>{entry.date}</h3>
               <h4>{entry.section}</h4>
               <div
-             className="entry-content"
+                className="entry-content"
                 dangerouslySetInnerHTML={{ __html: entry.content }}
               />
-
               {entry.image && (
                 <div className="entry-image">
                   <img
@@ -188,7 +207,6 @@ const handleSaveEntry = async (entryData) => {
                   />
                 </div>
               )}
-
               {entry.tags && entry.tags.toString().trim().length > 0 && (
                 <div className="tags">
                   {[...new Set(
@@ -203,40 +221,13 @@ const handleSaveEntry = async (entryData) => {
                 </div>
               )}
               <div className="main-entry-controls">
-                <button onClick={() => openEditEntry(entry)}>Edit</button>
-                <button onClick={() => handleDelete(entry._id)}>Delete</button>
+                <button onClick={() => openEditEntry(entry)} aria-label="Edit Entry">Edit</button>
+                <button onClick={() => handleDelete(entry._id)} aria-label="Delete Entry">Delete</button>
               </div>
             </div>
-          ))}
-        </section>
-
-        <aside className="main-sidebar">
-          <input
-            type="text"
-            id="search"
-            placeholder="Search…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          <div className="calendar">
-            <Link to="/calendar">📅 Open Calendar</Link>
-          </div>
- <div className="sections">
-  {allSections.map((section) => (
-    <Link
-      key={section}
-      to={`/section/${encodeURIComponent(section)}`}
-      className="section-link"
-    >
-      {section}
-    </Link>
-  ))}
-</div>
-
-        </aside>
+          ))
+        )}
       </div>
-
-     
     </>
   );
 }

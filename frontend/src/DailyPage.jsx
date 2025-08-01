@@ -10,11 +10,11 @@ import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import DailyRipples from './DailyRipples';
 
-
 function DailyPage() {
   const { date } = useParams();
   const { token } = useContext(AuthContext);
   const [importantEvents, setImportantEvents] = useState([]);
+  const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // NEW: Schedule open/closed state
@@ -29,9 +29,7 @@ function DailyPage() {
     }
   }, []);
 
-  const toggleSchedule = () => {
-    setIsScheduleOpen((prev) => !prev);
-  };
+  const toggleSchedule = () => setIsScheduleOpen((prev) => !prev);
 
   // Fetch important events
   useEffect(() => {
@@ -48,6 +46,19 @@ function DailyPage() {
       .catch(() => setImportantEvents([]));
   }, [date, token]);
 
+  // Fetch appointments for the day
+  useEffect(() => {
+    if (!date || !token) return;
+    setLoading(true);
+    axios
+      .get(`/api/appointments/${date}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then((res) => setAppointments(res.data || []))
+      .catch(() => setAppointments([]))
+      .finally(() => setLoading(false));
+  }, [date, token]);
+
   const [yyyy, mm, dd] = date.split('-');
   const formattedDate = new Date(Number(yyyy), Number(mm) - 1, Number(dd)).toLocaleDateString(
     'en-US',
@@ -58,19 +69,6 @@ function DailyPage() {
       day: 'numeric',
     }
   );
-
-  const [appointments, setAppointments] = useState([]);
-
-  // Fetch appointments for the day
-  useEffect(() => {
-    if (!date || !token) return;
-    axios
-      .get(`/api/appointments/${date}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      .then((res) => setAppointments(res.data || []))
-      .catch(() => setAppointments([]));
-  }, [date, token]);
 
   return (
     <div className="daily-page">
@@ -94,26 +92,32 @@ function DailyPage() {
         {/* Appointments list for the day */}
         <section className="appointments-section">
           <h2>Appointments</h2>
-          <ul>
-            {appointments.map((appt) => (
-              <li key={appt._id}>
-                {appt.time} - {appt.details}
-              </li>
-            ))}
-          </ul>
+          {loading ? (
+            <div>Loading...</div>
+          ) : appointments.length === 0 ? (
+            <div>No appointments for today.</div>
+          ) : (
+            <ul>
+              {appointments.map((appt) => (
+                <li key={appt._id}>
+                  {appt.time ? <strong>{appt.time}</strong> : null}
+                  {appt.time ? " — " : ""}
+                  {appt.details}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
-<section className="ripples-section">
-  <h2>🌊 Ripples from Today's Entry</h2>
-  <DailyRipples date={date} />
-</section>
-
+        {/* Ripples section — show ONCE! */}
+        <section className="ripples-section">
+          <h2>🌊 Ripples from Today's Entry</h2>
+          <DailyRipples date={date} />
+        </section>
 
         <section className="todo-section">
-  <DailyRipples date={date} />
-
- <TaskList selectedDate={selectedDate} />
-</section>
+          <TaskList selectedDate={date} />
+        </section>
 
         <section className="priorities-section">
           <h2>Top Priorities</h2>

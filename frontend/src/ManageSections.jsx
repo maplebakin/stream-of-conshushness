@@ -2,7 +2,6 @@ import { useState, useEffect, useContext } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import Header from './Header.jsx';
-import Sidebar from './Sidebar.jsx';
 import './Main.css';
 
 export default function ManageSections() {
@@ -19,7 +18,7 @@ export default function ManageSections() {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then((res) => {
-        setSections(Array.isArray(res.data) ? res.data : []);
+        setSections(Array.isArray(res.data) ? res.data.sort() : []);
       })
       .catch((err) => {
         console.error('⚠️ Failed to load sections:', err);
@@ -30,6 +29,7 @@ export default function ManageSections() {
 
   useEffect(() => {
     fetchSections();
+    // eslint-disable-next-line
   }, [token]);
 
   const handleRename = (oldName) => {
@@ -37,14 +37,13 @@ export default function ManageSections() {
     axios
       .put(
         '/api/sections/rename',
-        { oldName, newName },
+        { oldName, newName: newName.trim() },
         { headers: { Authorization: `Bearer ${token}` } }
       )
       .then(() => {
         fetchSections();
         setEditingSection(null);
         setNewName('');
-        window.location.reload();
       })
       .catch((err) => {
         console.error('⚠️ Failed to rename section:', err);
@@ -52,7 +51,7 @@ export default function ManageSections() {
   };
 
   const handleDelete = (name) => {
-    if (!confirm(`Are you sure you want to delete all entries in "${name}"?`))
+    if (!window.confirm(`Are you sure you want to delete all entries in "${name}"?`))
       return;
 
     axios
@@ -61,7 +60,6 @@ export default function ManageSections() {
       })
       .then(() => {
         fetchSections();
-        window.location.reload();
       })
       .catch((err) => {
         console.error('⚠️ Failed to delete section:', err);
@@ -89,15 +87,18 @@ export default function ManageSections() {
                         onChange={(e) => setNewName(e.target.value)}
                         placeholder="New name"
                         className="section-input"
+                        aria-label={`Rename section ${section}`}
                       />
                       <button
                         className="small-button"
+                        aria-label="Save new name"
                         onClick={() => handleRename(section)}
                       >
                         Save
                       </button>
                       <button
                         className="small-button cancel"
+                        aria-label="Cancel rename"
                         onClick={() => {
                           setEditingSection(null);
                           setNewName('');
@@ -111,6 +112,7 @@ export default function ManageSections() {
                       <span className="section-name">{section}</span>
                       <button
                         className="small-button"
+                        aria-label={`Rename section ${section}`}
                         onClick={() => {
                           setEditingSection(section);
                           setNewName(section);
@@ -120,6 +122,7 @@ export default function ManageSections() {
                       </button>
                       <button
                         className="small-button danger"
+                        aria-label={`Delete section ${section}`}
                         onClick={() => handleDelete(section)}
                       >
                         Delete
@@ -131,8 +134,6 @@ export default function ManageSections() {
             </ul>
           )}
         </div>
-
-        <Sidebar />
       </div>
     </>
   );

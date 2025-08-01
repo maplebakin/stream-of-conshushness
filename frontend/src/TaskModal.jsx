@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
-import './EntryModal.css'; // reusing base styles for modal
+import './EntryModal.css';
 
 export default function TaskModal({ onClose, onTaskCreated, entryId = null, cluster = null, goalId = null }) {
   const { token } = useContext(AuthContext);
@@ -23,7 +23,7 @@ export default function TaskModal({ onClose, onTaskCreated, entryId = null, clus
         goalId,
       };
 
-      const res = await axios.post('/tasks', newTask, {
+      const res = await axios.post('/api/tasks', newTask, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -35,34 +35,40 @@ export default function TaskModal({ onClose, onTaskCreated, entryId = null, clus
   };
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal">
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
         <h2>New Task</h2>
         <form onSubmit={handleSubmit}>
-          <label>Task Description</label>
+          <label htmlFor="task-content">Task Description</label>
           <input
+            id="task-content"
             type="text"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="What do you want to do?"
+            autoFocus
           />
 
-          <label>Due Date (optional)</label>
+          <label htmlFor="task-due-date">Due Date (optional)</label>
           <input
+            id="task-due-date"
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
           />
 
-          <label>Repeat (e.g. daily, every Monday)</label>
+          <label htmlFor="task-repeat">Repeat (e.g. daily, every Monday)</label>
           <input
+            id="task-repeat"
             type="text"
             value={repeat}
             onChange={(e) => setRepeat(e.target.value)}
           />
 
-          <button type="submit">Create Task</button>
-          <button type="button" onClick={onClose}>Cancel</button>
+          <div className="modal-buttons">
+            <button type="button" onClick={onClose}>Cancel</button>
+            <button type="submit" disabled={!content.trim()}>Create Task</button>
+          </div>
         </form>
       </div>
     </div>

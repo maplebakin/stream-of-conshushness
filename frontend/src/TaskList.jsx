@@ -2,18 +2,21 @@ import React, { useState, useEffect, useContext } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import TaskModal from './TaskModal.jsx';
-import './dailypage.css'; // or your soft card styles
+import './dailypage.css';
 
 function TaskList({ selectedDate }) {
   const { token } = useContext(AuthContext);
   const [tasks, setTasks] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [markingId, setMarkingId] = useState(null);
 
   useEffect(() => {
     if (!token) return;
+    setLoading(true);
 
     axios
-      .get('/tasks', {
+      .get('/api/tasks', {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then((res) => {
@@ -28,33 +31,52 @@ function TaskList({ selectedDate }) {
       })
       .catch((err) => {
         console.error('Error loading tasks:', err);
-      });
+        setTasks([]);
+      })
+      .finally(() => setLoading(false));
   }, [token, selectedDate]);
 
   const markComplete = async (id) => {
+    setMarkingId(id);
     try {
-      await axios.patch(`/tasks/${id}`, { completed: true }, {
+      await axios.patch(`/api/tasks/${id}`, { completed: true }, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setTasks((prev) => prev.filter((task) => task._id !== id));
     } catch (err) {
       console.error('Failed to mark complete:', err);
+    } finally {
+      setMarkingId(null);
     }
   };
+
+  if (loading) return <p>Loading tasks…</p>;
 
   return (
     <div className="task-panel">
       <h3>Today’s Tasks</h3>
-      <ul className="scroll-list">
-        {tasks.map((task) => (
-          <li key={task._id} className="task-item">
-            <input type="checkbox" onChange={() => markComplete(task._id)} />
-            <span>{task.content}</span>
-            {task.dueDate && <small>due {new Date(task.dueDate).toLocaleDateString()}</small>}
-          </li>
-        ))}
-      </ul>
-      <button onClick={() => setShowModal(true)}>+ Add Task</button>
+      {tasks.length === 0 ? (
+        <p>No tasks for today 🎉</p>
+      ) : (
+        <ul className="scroll-list">
+          {tasks.map((task) => (
+            <li key={task._id} className="task-item">
+              <input
+                type="checkbox"
+                onChange={() => markComplete(task._id)}
+                aria-label={`Mark task "${task.content}" complete`}
+                disabled={markingId === task._id}
+                checked={false}
+              />
+              <span>{task.content}</span>
+              {task.dueDate && <small>due {new Date(task.dueDate).toLocaleDateString()}</small>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <button onClick={() => setShowModal(true)} aria-label="Add new task">
+        + Add Task
+      </button>
 
       {showModal && (
         <TaskModal
