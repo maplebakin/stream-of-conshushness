@@ -342,7 +342,13 @@ function analyzeWithDiversity(content, patterns, analysisType = 'general') {
     Object.entries(data).forEach(([level, keywords]) => {
       if (Array.isArray(keywords)) {
         keywords.forEach(keyword => {
-          if (typeof keyword === 'string' && lowerContent.includes(keyword.toLowerCase())) {
+          if (
+  keyword &&
+  typeof keyword === 'string' &&
+  typeof keyword.toLowerCase === 'function' &&
+  lowerContent.includes(keyword.toLowerCase())
+) {
+
             const weight = levels[level] || 1;
             score += weight;
             matches.push({ 
