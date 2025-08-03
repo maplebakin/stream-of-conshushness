@@ -108,7 +108,46 @@ const RippleReviewUI = () => {
           <div className="text-sm text-gray-600 italic mb-2">"{r.originalContext}"</div>
 
           {r.status === 'pending' && (
-            <div className="flex gap-2 items-center">
+            <div className="flex flex-wrap gap-2 items-center">
               <select
                 value={selectedClusters[r._id] || ''}
-                onChange={(e)
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setSelectedClusters(prev => ({ ...prev, [r._id]: value }));
+                }}
+                className="border rounded px-2 py-1"
+              >
+                <option value="">Select Cluster</option>
+                {clusters.map(c => (
+                  <option key={c.id} value={c.name}>{c.name}</option>
+                ))}
+              </select>
+
+              <button
+                onClick={() => handleApprove(r._id, selectedClusters[r._id])}
+                className="px-3 py-1 rounded bg-green-100 hover:bg-green-200 text-green-900 text-sm font-medium"
+              >
+                Approve
+              </button>
+              <button
+                onClick={() => handleDismiss(r._id)}
+                className="px-3 py-1 rounded bg-red-100 hover:bg-red-200 text-red-900 text-sm font-medium"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {r.status !== 'pending' && (
+            <div className="text-sm mt-2 text-gray-500">
+              Status: <span className="font-semibold">{r.status}</span>
+              {r.assignedCluster && <> — Cluster: <span className="font-semibold">{r.assignedCluster}</span></>}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export default RippleReviewUI;

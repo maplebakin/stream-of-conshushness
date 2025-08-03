@@ -1,5 +1,5 @@
 import { extractRipples } from './rippleExtractor.js';
-import { suggestMetadata } from './suggestMetadata.js';
+import { suggestMetadata } from '../frontend/src/utils/suggestMetadata.js';
 
 export function analyzeEntry(entryText, opts = {}) {
   // Run ripple extraction on the entry

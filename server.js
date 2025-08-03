@@ -36,10 +36,10 @@ import pageRoutes from './routes/pages.js';
 import sectionPagesRouter from './routes/sectionPages.js';
 import appointmentRoutes from './routes/appointments.js';
 import noteRoutes from './routes/notes.js';
-import todoRoutes from './routes/todos.js';
+
 import importantEventRoutes from './routes/importantEvents.js';
 import calendarRoutes from './routes/calendar.js';
-
+import rippleRoutes from './routes/ripples.js';
 // ─── GraphQL ─────────────────────────────
 import { createHandler } from 'graphql-http/lib/use/express';
 import schema from './graphql/schema.js';
@@ -64,9 +64,10 @@ app.use('/api/entries', auth, entryRoutes); // protect it with token
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/schedule', scheduleRoutes);
 app.use('/api/note', noteRoutes);
-app.use('/api/todos', todoRoutes);
+
 app.use('/api/important-events', importantEventRoutes);
 app.use('/api/calendar-data', calendarRoutes);
+app.use('/api/ripples', rippleRoutes);
 
 // ─── MongoDB Connection ─────────────────────────────
 (async () => {

@@ -2,9 +2,11 @@ import express from 'express';
 import Entry from '../models/Entry.js';
 import Ripple from '../models/Ripple.js';
 import { extractRipples } from '../utils/rippleExtractor.js';
+import auth from '../middleware/auth.js';
+
 
 const router = express.Router();
-
+router.use(auth);
 // Get all entries (optionally by section)
 router.get('/', async (req, res) => {
   const { section } = req.query;
@@ -63,4 +65,27 @@ router.post('/', async (req, res) => {
     res.status(500).json({ error: 'Server error saving entry or ripples' });
   }
 });
+
+// Delete an entry by ID
+router.delete('/:id', async (req, res) => {
+  try {
+    const deleted = await Entry.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.user.userId,
+    });
+
+    if (!deleted) {
+      return res.status(404).json({ error: 'Entry not found or already deleted' });
+    }
+
+    // Also delete any ripples that were linked to it
+    await Ripple.deleteMany({ sourceEntryId: req.params.id });
+
+    res.json({ message: 'Entry and associated ripples deleted' });
+  } catch (err) {
+    console.error('❌ Error deleting entry:', err);
+    res.status(500).json({ error: 'Server error deleting entry' });
+  }
+});
+
 export default router;

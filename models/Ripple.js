@@ -14,11 +14,11 @@ const rippleSchema = new mongoose.Schema({
     enum: ['suggestedTask', 'recurringTask', 'appointment', 'importantEvent', 'yearlyEvent'],
     required: true 
   },
-  confidence: { 
-    type: String, 
-    enum: ['high', 'medium', 'low'], 
-    required: true 
-  },
+confidence: {
+  type: Number,
+  min: 0,
+  max: 1,
+},
   
   // Status tracking
   status: { 

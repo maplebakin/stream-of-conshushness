@@ -4,6 +4,7 @@ import { AuthContext } from './AuthContext';
 import TaskList from './TaskList';
 import EntryModal from './EntryModal';
 import AppointmentModal from './AppointmentModal';
+import DailyRipples from './DailyRipples.jsx';
 import {
   Calendar, ChevronLeft, ChevronDown, ChevronRight, Clock, Star,
   CheckSquare, FileText, PenTool, Waves, Plus, MapPin, AlertCircle,
@@ -14,7 +15,7 @@ const HourlySchedule = ({ date }) => <div>Hourly schedule here</div>;
 const TopPriorities = ({ date }) => <div>Top priorities here</div>;
 const NotesSection = ({ date }) => <div>Notes here</div>;
 const EntriesSection = ({ date }) => <div>Entries here</div>;
-const DailyRipples = ({ date }) => <div>Ripples here</div>;
+
 
 export default function DailyPage() {
   const date = new Date().toISOString().split('T')[0];
@@ -223,7 +224,10 @@ export default function DailyPage() {
           availableGoals={[]} // link when Goal system is added
           availableClusters={[]} // link when Clusters are ready
         />
+
       )}
+      <DailyRipples date={selectedDate} />
     </>
+    
   );
 }

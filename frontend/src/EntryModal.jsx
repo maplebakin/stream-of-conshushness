@@ -3,7 +3,7 @@ import './EntryModal.css';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { AuthContext } from './AuthContext.jsx';
-import { analyzeEntry } from './utils/analyzeEntry';
+import { analyzeEntry } from '../../utils/analyzeEntry.js';
 
 export default function EntryModal({
   isOpen,

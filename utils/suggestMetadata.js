@@ -1,5 +1,81 @@
-// Enhanced suggestMetadata.js with neurodivergent-friendly and metaphysical themes
-// Designed for diverse cognitive processing styles and spiritual perspectives
+// Mood indicators (base layer for affective analysis)
+const moodIndicators = [
+  'happy', 'sad', 'angry', 'anxious', 'excited', 'tired', 'calm', 'overwhelmed',
+  'hyperfocused', 'dysregulated', 'validated', 'aligned', 'awakening'
+];
+
+// Contextual themes for filtering and organizing entries
+const contextTags = [
+  'reflection', 'dream', 'spiritual', 'neurodivergent', 'work', 'parenting',
+  'routine', 'relationship', 'identity', 'energy', 'ritual', 'manifestation'
+];
+
+// Priority indicators for task urgency/emotion
+const priorityIndicators = [
+  'urgent', 'asap', 'critical', 'important', 'time sensitive',
+  'low priority', 'someday', 'can wait', 'procrastinating'
+];
+
+// Time-related phrasing patterns
+const timeIndicators = [
+  'today', 'tomorrow', 'this week', 'next month', 'before', 'after',
+  'soon', 'later', 'eventually', 'deadline', 'recurring', 'every'
+];
+// Analyze mood from text
+function analyzeMood(text) {
+  const moods = analyzeWithDiversity(text, enhancedMoodPatterns, 'moods');
+  return {
+    moods: moods.map(m => m.category),
+    details: moods
+  };
+}
+
+// Analyze priority from text
+function analyzePriority(text) {
+  const lower = text.toLowerCase();
+  if (/\b(urgent|critical|asap|important)\b/.test(lower)) return 'high';
+  if (/\b(should|need to|must|priority)\b/.test(lower)) return 'medium';
+  return 'low';
+}
+
+// Analyze context from text
+function analyzeContext(text) {
+  return analyzeEnhancedContext(text);
+}
+
+// Analyze time sensitivity
+function analyzeTimeSensitivity(text) {
+  const lower = text.toLowerCase();
+  if (/\b(today|now|immediately|asap|urgent)\b/.test(lower)) return 'immediate';
+  if (/\b(tomorrow|soon|this week)\b/.test(lower)) return 'short_term';
+  if (/\b(next week|next month|eventually|someday)\b/.test(lower)) return 'long_term';
+  return 'unspecified';
+}
+
+// Dummy tag extractor for now (optional)
+function extractTags(text) {
+  const tags = [];
+  if (text.includes('#')) {
+    const matches = text.match(/#(\w+)/g);
+    if (matches) {
+      tags.push(...matches.map(t => t.slice(1)));
+    }
+  }
+  return tags;
+}
+
+// Re-declare if using in both files
+function calculateConfidence(match, type, text) {
+  let base = 0.5;
+  if (match[0].includes('need to') || match[0].includes('must')) base += 0.3;
+  if (match[0].includes('urgent') || match[0].includes('important')) base += 0.2;
+  if (match[0].includes('maybe') || match[0].includes('might')) base -= 0.2;
+  const extractedLength = (match[1] || '').trim().length;
+  if (extractedLength > 20) base += 0.1;
+  if (extractedLength < 5) base -= 0.2;
+  return Math.max(0.1, Math.min(1.0, base));
+}
+
 
 // Neurodivergent-friendly processing patterns
 const neurodivergentPatterns = {
@@ -266,7 +342,7 @@ function analyzeWithDiversity(content, patterns, analysisType = 'general') {
     Object.entries(data).forEach(([level, keywords]) => {
       if (Array.isArray(keywords)) {
         keywords.forEach(keyword => {
-          if (lowerContent.includes(keyword.toLowerCase())) {
+          if (typeof keyword === 'string' && lowerContent.includes(keyword.toLowerCase())) {
             const weight = levels[level] || 1;
             score += weight;
             matches.push({ 
@@ -497,5 +573,19 @@ export function suggestMetadata(content) {
         accommodationSuggestions: accommodations.size
       }
     }
-  };
+    };
 }
+
+export {
+  moodIndicators,
+  contextTags,
+  priorityIndicators,
+  timeIndicators,
+  analyzeMood,
+  analyzePriority,
+  analyzeContext,
+  analyzeTimeSensitivity,
+  extractTags,
+  calculateConfidence
+};
+

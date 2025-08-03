@@ -20,11 +20,16 @@ function NotesSection({ date }) {
           Authorization: `Bearer ${token}`,
         },
       })
-      .then((res) => setNote(res.data || ''))
+      .then((res) => setNote(res.data?.content || ''))
       .catch((err) => {
-        console.error('Error fetching note:', err);
-        setNote('');
-      })
+  if (err.response && err.response.status === 404) {
+    setNote(''); // no note yet, totally fine!
+  } else {
+    console.error('Error fetching note:', err);
+    toast.error('Error fetching note');
+  }
+})
+
       .finally(() => {
         setHasLoaded(true);
         setLoading(false);
