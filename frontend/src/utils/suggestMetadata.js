@@ -179,9 +179,9 @@ function analyzePatterns(content, patterns) {
     const levels = { primary: 3, secondary: 2, contextual: 1.5, mild: 1, moderate: 2, intense: 3 };
     
     Object.entries(data).forEach(([level, keywords]) => {
-      if (Array.isArray(keywords)) {
+      if (Array.isArray(keywords) && level !== 'phrases') {
         keywords.forEach(keyword => {
-          if (lowerContent.includes(keyword.toLowerCase())) {
+          if (typeof keyword === 'string' && lowerContent.includes(keyword.toLowerCase())) {
             score += levels[level] || 1;
             matches.push({ keyword, level, weight: levels[level] || 1 });
             if (level === 'intense') intensity = 'intense';
