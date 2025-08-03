@@ -4,10 +4,12 @@ import Ripple from '../models/Ripple.js';
 import { extractRipples } from '../utils/rippleExtractor.js';
 import auth from '../middleware/auth.js';
 
-
 const router = express.Router();
 router.use(auth);
-// Get all entries (optionally by section)
+
+// ─────────────────────────────────────────────
+// GET all entries (optionally filtered by section)
+// ─────────────────────────────────────────────
 router.get('/', async (req, res) => {
   const { section } = req.query;
   const query = { userId: req.user.userId };
@@ -22,7 +24,9 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get entries by date
+// ─────────────────────────────────────────────
+// GET entries by date (YYYY-MM-DD)
+// ─────────────────────────────────────────────
 router.get('/:date', async (req, res) => {
   try {
     const entries = await Entry.find({
@@ -35,12 +39,15 @@ router.get('/:date', async (req, res) => {
   }
 });
 
-// Add new entry + extract ripples
+// ─────────────────────────────────────────────
+// POST new entry + auto-extract ripples
+// ─────────────────────────────────────────────
 router.post('/', async (req, res) => {
   const { date, section, tags, content } = req.body;
   if (!date || !section || !content) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
+
   try {
     const newEntry = new Entry({
       userId: req.user.userId,
@@ -50,8 +57,10 @@ router.post('/', async (req, res) => {
       content,
     });
     await newEntry.save();
+
     const extracted = extractRipples([newEntry]);
     const savedRipples = [];
+
     for (const r of extracted) {
       const ripple = new Ripple({
         userId: req.user.userId,
@@ -60,13 +69,41 @@ router.post('/', async (req, res) => {
       });
       savedRipples.push(await ripple.save());
     }
+
     res.json({ entry: newEntry, ripples: savedRipples });
   } catch (err) {
     res.status(500).json({ error: 'Server error saving entry or ripples' });
   }
 });
 
-// Delete an entry by ID
+// ─────────────────────────────────────────────
+// PUT update an entry by ID
+// ─────────────────────────────────────────────
+router.put('/:id', async (req, res) => {
+  const { id } = req.params;
+  const update = req.body;
+
+  try {
+    const updated = await Entry.findOneAndUpdate(
+      { _id: id, userId: req.user.userId },
+      update,
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Entry not found' });
+    }
+
+    res.json(updated);
+  } catch (err) {
+    console.error('❌ Error updating entry:', err);
+    res.status(500).json({ error: 'Server error updating entry' });
+  }
+});
+
+// ─────────────────────────────────────────────
+// DELETE an entry and its ripples
+// ─────────────────────────────────────────────
 router.delete('/:id', async (req, res) => {
   try {
     const deleted = await Entry.findOneAndDelete({
@@ -78,7 +115,6 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Entry not found or already deleted' });
     }
 
-    // Also delete any ripples that were linked to it
     await Ripple.deleteMany({ sourceEntryId: req.params.id });
 
     res.json({ message: 'Entry and associated ripples deleted' });

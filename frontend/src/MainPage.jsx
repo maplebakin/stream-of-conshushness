@@ -1,228 +1,201 @@
-import EntryModal from './EntryModal.jsx';
-import axios from './api/axiosInstance';
+// MainPage.jsx  ─────────────────────────────────────────────
 import { useEffect, useState, useContext } from 'react';
-import './Main.css';
 import { Link } from 'react-router-dom';
-import { AuthContext } from './AuthContext.jsx';
 import toast from 'react-hot-toast';
-import { useSearch } from "./SearchContext.jsx";
 
-function getTodayISO() {
-  const today = new Date();
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
-    today.getDate()
-  ).padStart(2, '0')}`;
-}
+import EntryModal            from './EntryModal.jsx';
+import axios                 from './api/axiosInstance';
+import { AuthContext }       from './AuthContext.jsx';
+import { useSearch }         from './SearchContext.jsx';
 
-function sortEntriesByDateDesc(list) {
-  return [...list].sort((a, b) => new Date(b.date) - new Date(a.date));
-}
+import './Main.css';
+
+/* ---------- helpers ---------- */
+
+const todayIso = () =>
+  new Date().toISOString().slice(0, 10);               // “2025-08-03”
+
+/** Sort list so the newest thing (by date → createdAt → _id) is first */
+const sortEntries = (list) =>
+  [...list].sort((a, b) => {
+    // primary: entry.date
+    const dA = new Date(a.date);
+    const dB = new Date(b.date);
+    if (dA > dB) return -1;
+    if (dA < dB) return 1;
+
+    // secondary: createdAt (more precise than date alone)
+    const cA = new Date(a.createdAt);
+    const cB = new Date(b.createdAt);
+    if (cA > cB) return -1;
+    if (cA < cB) return 1;
+
+    // fallback: ObjectId timestamp
+    return b._id.localeCompare(a._id);
+  });
+
+/* ---------- component ---------- */
 
 export default function MainPage() {
   const { token, logout } = useContext(AuthContext);
-  const [entries, setEntries] = useState([]);
-  const [selectedSection, setSelectedSection] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [editEntry, setEditEntry] = useState(null);
-  const { search } = useSearch();
+  const { search }        = useSearch();
 
+  const [entries,         setEntries]         = useState([]);
+  const [selectedSection, setSelectedSection] = useState('');
+  const [showModal,       setShowModal]       = useState(false);
+  const [editEntry,       setEditEntry]       = useState(null);
+
+  /* fetch once we have a token */
   useEffect(() => {
     if (!token) return;
     axios
-      .get('/api/entries', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      .then((res) => {
-        const sorted = res.data.sort((a, b) => {
-          const dateA = new Date(a.date);
-          const dateB = new Date(b.date);
-          if (dateA > dateB) return -1;
-          if (dateA < dateB) return 1;
-          // If same day, use MongoDB _id timestamp
-          return b._id.localeCompare(a._id); // Newest entry first
-        });
-        setEntries(sorted);
-      })
-      .catch((err) => console.error('Error fetching entries:', err));
+      .get('/api/entries', { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => setEntries(sortEntries(res.data)))
+      .catch(err => console.error('Error fetching entries:', err));
   }, [token]);
 
-  const openNewEntry = () => {
-    setEditEntry(null);
-    setShowModal(true);
-  };
+  /* ---------- modal helpers ---------- */
+  const openNewEntry  = ()      => { setEditEntry(null);  setShowModal(true); };
+  const openEditEntry = (e)     => { setEditEntry(e);     setShowModal(true); };
+  const closeModal    = ()      => setShowModal(false);
 
-  const openEditEntry = (entry) => {
-    setEditEntry(entry);
-    setShowModal(true);
-  };
-
+  /* ---------- create | update ---------- */
   const handleSaveEntry = async (entryData) => {
-    const config = { headers: { Authorization: `Bearer ${token}` } };
+    const cfg = { headers: { Authorization: `Bearer ${token}` } };
 
     if (entryData._id) {
-      await toast
-        .promise(
-          axios.put(`/api/entries/${entryData._id}`, entryData, config),
-          {
-            loading: 'Updating entry…',
-            success: 'Entry updated!',
-            error: 'Error updating entry',
-          }
-        )
-        .then((res) => {
-          setEntries((prev) =>
-            sortEntriesByDateDesc(
-              prev.map((e) => (e._id === entryData._id ? res.data : e))
-            )
-          );
-        })
-        .catch(() => {});
+      /* update */
+      const { _id, date, ...rest } = entryData;          // don’t clobber date
+      await toast.promise(
+        axios.put(`/api/entries/${_id}`, rest, cfg),
+        { loading:'Updating…', success:'Updated!', error:'Error updating' }
+      )
+      .then(res =>
+        setEntries(prev => sortEntries(
+          prev.map(e => (e._id === _id ? res.data : e))
+        ))
+      )
+      .catch(() => {/* toast already handled */});
     } else {
-      const payload = { ...entryData, date: getTodayISO() };
-      await toast
-        .promise(
-          axios.post('/api/entries', payload, config),
-          {
-            loading: 'Saving entry…',
-            success: 'Entry added!',
-            error: 'Error adding entry',
-          }
-        )
-        .then((res) => {
-          setEntries((prev) => sortEntriesByDateDesc([res.data, ...prev]));
-        })
-        .catch(() => {});
+      /* create */
+      const payload = { ...entryData, date: todayIso() };
+      await toast.promise(
+        axios.post('/api/entries', payload, cfg),
+        { loading:'Saving…', success:'Added!',  error:'Error adding' }
+      )
+      .then(res => setEntries(prev => sortEntries([res.data, ...prev])))
+      .catch(() => {});
     }
 
-    setShowModal(false);
+    closeModal();
   };
 
+  /* ---------- delete ---------- */
   const handleDelete = (id) => {
     if (!window.confirm('Delete this entry?')) return;
-    toast
-      .promise(
-        axios.delete(`/api/entries/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        {
-          loading: 'Deleting entry…',
-          success: 'Entry deleted!',
-          error: 'Error deleting entry',
-        }
-      )
-      .then(() => setEntries((prev) => prev.filter((e) => e._id !== id)))
-      .catch(() => {});
+    toast.promise(
+      axios.delete(`/api/entries/${id}`, { headers: { Authorization: `Bearer ${token}` } }),
+      { loading:'Deleting…', success:'Deleted!', error:'Error deleting' }
+    )
+    .then(() => setEntries(prev => prev.filter(e => e._id !== id)))
+    .catch(() => {});
   };
 
-  const allTags = Array.from(
-    new Set(
-      entries
-        .flatMap((e) => (Array.isArray(e.tags) ? e.tags : (e.tags || '').split(',')))
-        .map((t) => t.trim())
-        .filter((t) => t.length > 0)
-    )
-  ).sort();
+  /* ---------- derived data ---------- */
+  const allSections = Array.from(new Set(entries.map(e => e.section).filter(Boolean))).sort();
 
-  const allSections = Array.from(
-    new Set(entries.map((entry) => entry.section).filter(Boolean))
-  ).sort();
-
-  const filteredEntries = entries.filter((entry) => {
-    const matchesSection = !selectedSection || entry.section === selectedSection;
-    const normalizedSearch = (search || "").replace(/^#/, '').toLowerCase();
-    const matchesSearch =
-      !normalizedSearch ||
-      (entry.content && entry.content.toLowerCase().includes(normalizedSearch)) ||
-      (entry.date && entry.date.toLowerCase().includes(normalizedSearch)) ||
-      (entry.section && entry.section.toLowerCase().includes(normalizedSearch)) ||
-      (Array.isArray(entry.tags) && entry.tags.join(', ').toLowerCase().includes(normalizedSearch));
-    return matchesSection && matchesSearch;
+  const query = (search || '').replace(/^#/, '').toLowerCase();
+  const filtered = entries.filter(e => {
+    const inSection = !selectedSection || e.section === selectedSection;
+    if (!query) return inSection;
+    const tagString = Array.isArray(e.tags) ? e.tags.join(', ') : (e.tags || '');
+    return inSection && (
+      e.content?.toLowerCase().includes(query)   ||
+      e.date?.toLowerCase().includes(query)      ||
+      e.section?.toLowerCase().includes(query)   ||
+      tagString.toLowerCase().includes(query)
+    );
   });
 
+  /* ---------- render ---------- */
   return (
     <>
+      {/* ——— Site nav ---------------------------------------------------- */}
       <header>
-        <h1>Stream of Conshushness</h1>
+        <h1>Stream&nbsp;of&nbsp;Conshushness</h1>
         <nav>
           <Link to="/">The Stream</Link>
           <Link to="/calendar">📅 Calendar</Link>
-          <button onClick={logout}>Log Out</button>
+          <button onClick={logout}>Log&nbsp;Out</button>
         </nav>
       </header>
 
-      <button id="toggle-entry-form" className="toggle-entry-btn" onClick={openNewEntry}>
+      {/* ——— New-entry button ------------------------------------------- */}
+      <button className="toggle-entry-btn" onClick={openNewEntry}>
         New Entry
       </button>
 
+      {/* ——— Entry modal ------------------------------------------------- */}
       <EntryModal
         isOpen={showModal}
-        onClose={() => setShowModal(false)}
+        onClose={closeModal}
         entry={editEntry}
         onSave={handleSaveEntry}
         existingSections={allSections}
       />
 
+      {/* ——— Feed -------------------------------------------------------- */}
       <div className="main-feed">
+        {/* section pills */}
         <div className="entry-filters">
           <div className="section-pills">
             <button
-              className={!selectedSection ? "pill active" : "pill"}
-              onClick={() => setSelectedSection("")}
+              className={!selectedSection ? 'pill active' : 'pill'}
+              onClick={() => setSelectedSection('')}
             >
               All
             </button>
-            {allSections.map((section) => (
+            {allSections.map(sec => (
               <button
-                key={section}
-                className={selectedSection === section ? "pill active" : "pill"}
-                onClick={() => setSelectedSection(section)}
+                key={sec}
+                className={selectedSection === sec ? 'pill active' : 'pill'}
+                onClick={() => setSelectedSection(sec)}
               >
-                {section}
+                {sec}
               </button>
             ))}
           </div>
         </div>
-        {filteredEntries.length === 0 ? (
+
+        {/* entries */}
+        {filtered.length === 0 ? (
           <div className="empty-state">No entries found.</div>
         ) : (
-          filteredEntries.map((entry) => (
-            <div className="main-entry" key={entry._id}>
-              <h3>{entry.date}</h3>
-              <h4>{entry.section}</h4>
+          filtered.map(e => (
+            <div key={e._id} className="main-entry">
+              <h3>{e.date}</h3>
+              <h4>{e.section}</h4>
+
               <div
                 className="entry-content"
-                dangerouslySetInnerHTML={{ __html: entry.content }}
+                dangerouslySetInnerHTML={{ __html: e.content }}
               />
-              {entry.image && (
-                <div className="entry-image">
-                  <img
-                    src={entry.image}
-                    alt="Attached"
-                    style={{
-                      maxWidth: '100%',
-                      borderRadius: '12px',
-                      marginTop: '0.5rem',
-                      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)',
-                    }}
-                  />
-                </div>
-              )}
-              {entry.tags && entry.tags.toString().trim().length > 0 && (
+
+              {e.tags?.length > 0 && (
                 <div className="tags">
                   {[...new Set(
-                    (Array.isArray(entry.tags) ? entry.tags : entry.tags.split(','))
-                      .map((tag) => tag.trim())
+                    (Array.isArray(e.tags) ? e.tags : e.tags.split(','))
+                      .map(t => t.trim())
                       .filter(Boolean)
-                  )].map((tag, i) => (
-                    <span key={`${entry._id}-tag-${i}`} className="tag-pill">
-                      #{tag}
-                    </span>
+                  )].map((tag,i) => (
+                    <span key={`${e._id}-tag-${i}`} className="tag-pill">#{tag}</span>
                   ))}
                 </div>
               )}
+
               <div className="main-entry-controls">
-                <button onClick={() => openEditEntry(entry)} aria-label="Edit Entry">Edit</button>
-                <button onClick={() => handleDelete(entry._id)} aria-label="Delete Entry">Delete</button>
+                <button onClick={() => openEditEntry(e)}>Edit</button>
+                <button onClick={() => handleDelete(e._id)}>Delete</button>
               </div>
             </div>
           ))
