@@ -11,4 +11,4 @@ const taskSchema = new mongoose.Schema({
   cluster: { type: String },
 }, { timestamps: true });
 
-export default mongoose.model('Task', taskSchema);
+export default mongoose.models.Task || mongoose.model('Task', taskSchema);

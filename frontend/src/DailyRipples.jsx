@@ -4,11 +4,11 @@ import { AuthContext } from './AuthContext';
 
 export default function DailyRipples({ date }) {
   const [ripples, setRipples] = useState([]);
-  const [selectedCluster, setSelectedCluster] = useState('');
+  const [clusterSelections, setClusterSelections] = useState({});
   const { token } = useContext(AuthContext);
 
   useEffect(() => {
-    if (!date) return;
+    if (!date || !token) return;
     axios.get(`/api/ripples/pending`, {
       headers: { Authorization: `Bearer ${token}` }
     })
@@ -19,9 +19,16 @@ export default function DailyRipples({ date }) {
     .catch(err => console.error('Error fetching ripples:', err));
   }, [token, date]);
 
-  const handleApprove = async (id, cluster) => {
+  const handleClusterChange = (rippleId, value) => {
+    setClusterSelections(prev => ({ ...prev, [rippleId]: value }));
+  };
+
+  const handleApprove = async (id) => {
+    const selectedCluster = clusterSelections[id] || '';
     try {
-      await axios.put(`/api/ripples/${id}/approve`, { assignedCluster: cluster }, {
+      await axios.put(`/api/ripples/${id}/approve`, {
+        assignedCluster: selectedCluster
+      }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setRipples(prev => prev.filter(r => r._id !== id));
@@ -50,10 +57,10 @@ export default function DailyRipples({ date }) {
         <div key={r._id} className="mb-3 p-3 border rounded bg-blue-50">
           <div className="font-medium text-blue-900 mb-1">{r.extractedText}</div>
           <div className="text-sm text-gray-600 italic mb-2">"{r.originalContext}"</div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <select
-              value={selectedCluster}
-              onChange={e => setSelectedCluster(e.target.value)}
+              value={clusterSelections[r._id] || ''}
+              onChange={e => handleClusterChange(r._id, e.target.value)}
               className="border px-2 py-1 rounded text-sm"
             >
               <option value="">Cluster?</option>
@@ -63,7 +70,7 @@ export default function DailyRipples({ date }) {
               <option value="health">Health</option>
             </select>
             <button
-              onClick={() => handleApprove(r._id, selectedCluster)}
+              onClick={() => handleApprove(r._id)}
               className="bg-green-600 text-white text-sm px-3 py-1 rounded"
             >
               ✓ Approve

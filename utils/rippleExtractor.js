@@ -55,33 +55,43 @@ export function analyzeMood(text) {
 }
 
 export function analyzePriority(text) {
-  let priority = 'low';
-  Object.entries(priorityIndicators).forEach(([level, pattern]) => {
-    if (pattern.test(text)) priority = level;
-  });
-  return priority;
+  for (const [level, pattern] of Object.entries(priorityIndicators)) {
+    // reset lastIndex in case regex has global flag and was used before
+    pattern.lastIndex = 0;
+    if (pattern.test(text)) {
+      return level; // return on first (highest) match to avoid lower priorities overwriting
+    }
+  }
+  return 'low';
 }
 
 export function analyzeContext(text) {
   const contexts = [];
-  Object.entries(contextTags).forEach(([context, pattern]) => {
+  for (const [context, pattern] of Object.entries(contextTags)) {
+    // ensure no stale lastIndex affects future tests
+    pattern.lastIndex = 0;
     if (pattern.test(text)) contexts.push(context);
-  });
+  }
   return contexts;
 }
 
 export function analyzeTimeSensitivity(text) {
-  let timeSensitivity = 'flexible';
-  Object.entries(timeIndicators).forEach(([timing, pattern]) => {
-    if (pattern.test(text)) timeSensitivity = timing;
-  });
-  return timeSensitivity;
+  for (const [timing, pattern] of Object.entries(timeIndicators)) {
+    pattern.lastIndex = 0;
+    if (pattern.test(text)) {
+      return timing;
+    }
+  }
+  return 'flexible';
 }
 
 export function extractTags(text) {
   const hashtags = (text.match(/#(\w+)/g) || []).map(t => t.slice(1).toLowerCase());
   const contextMatches = Object.entries(contextTags)
-    .filter(([_, pattern]) => pattern.test(text))
+    .filter(([_, pattern]) => {
+      pattern.lastIndex = 0;
+      return pattern.test(text);
+    })
     .map(([key]) => key);
   return Array.from(new Set([...hashtags, ...contextMatches]));
 }

@@ -3,7 +3,14 @@ import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import './EntryModal.css';
 
-export default function TaskModal({ onClose, onTaskCreated, entryId = null, cluster = null, goalId = null }) {
+export default function TaskModal({
+  onClose,
+  onTaskCreated,
+  entryId = null,
+  clusters = [],
+  goalId = null,
+  date = null, // Pass today's date from DailyPage
+}) {
   const { token } = useContext(AuthContext);
   const [content, setContent] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -19,24 +26,25 @@ export default function TaskModal({ onClose, onTaskCreated, entryId = null, clus
         dueDate,
         repeat,
         entryId,
-        cluster,
         goalId,
+        clusters,
+        addedToToday: date ? [date] : [],
       };
 
       const res = await axios.post('/api/tasks', newTask, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      onTaskCreated?.(res.data);
+      if (onTaskCreated) onTaskCreated(res.data);
       onClose();
     } catch (err) {
-      console.error('Failed to create task:', err);
+      console.error('❌ Failed to create task:', err);
     }
   };
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>New Task</h2>
         <form onSubmit={handleSubmit}>
           <label htmlFor="task-content">Task Description</label>

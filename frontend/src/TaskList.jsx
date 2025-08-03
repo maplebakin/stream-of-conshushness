@@ -1,91 +1,63 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState } from 'react';
+import { CheckSquare, Square, Plus } from 'lucide-react';
 import axios from './api/axiosInstance';
-import { AuthContext } from './AuthContext.jsx';
-import TaskModal from './TaskModal.jsx';
-import './dailypage.css';
+import TaskModal from './TaskModal';
 
-function TaskList({ selectedDate }) {
-  const { token } = useContext(AuthContext);
-  const [tasks, setTasks] = useState([]);
+export default function TaskList({ tasks: initialTasks = [], selectedDate }) {
   const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [markingId, setMarkingId] = useState(null);
+  const [tasks, setTasks] = useState(initialTasks);
 
-  useEffect(() => {
-    if (!token) return;
-    setLoading(true);
-
-    axios
-      .get('/api/tasks', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      .then((res) => {
-        const today = new Date(selectedDate || new Date());
-        const filtered = res.data.filter((task) => {
-          if (task.completed) return false;
-          if (!task.dueDate) return true;
-          const due = new Date(task.dueDate);
-          return due <= today;
-        });
-        setTasks(filtered);
-      })
-      .catch((err) => {
-        console.error('Error loading tasks:', err);
-        setTasks([]);
-      })
-      .finally(() => setLoading(false));
-  }, [token, selectedDate]);
-
-  const markComplete = async (id) => {
-    setMarkingId(id);
+  const toggleComplete = async (task) => {
     try {
-      await axios.patch(`/api/tasks/${id}`, { completed: true }, {
-        headers: { Authorization: `Bearer ${token}` },
+      const updated = await axios.put(`/api/tasks/${task._id}`, {
+        ...task,
+        completed: !task.completed,
       });
-      setTasks((prev) => prev.filter((task) => task._id !== id));
+      setTasks((prev) =>
+        prev.map((t) => (t._id === task._id ? updated.data : t))
+      );
     } catch (err) {
-      console.error('Failed to mark complete:', err);
-    } finally {
-      setMarkingId(null);
+      console.error('❌ Failed to update task:', err);
     }
   };
 
-  if (loading) return <p>Loading tasks…</p>;
-
   return (
-    <div className="task-panel">
-      <h3>Today’s Tasks</h3>
-      {tasks.length === 0 ? (
-        <p>No tasks for today 🎉</p>
-      ) : (
-        <ul className="scroll-list">
-          {tasks.map((task) => (
-            <li key={task._id} className="task-item">
-              <input
-                type="checkbox"
-                onChange={() => markComplete(task._id)}
-                aria-label={`Mark task "${task.content}" complete`}
-                disabled={markingId === task._id}
-                checked={false}
-              />
-              <span>{task.content}</span>
-              {task.dueDate && <small>due {new Date(task.dueDate).toLocaleDateString()}</small>}
-            </li>
-          ))}
-        </ul>
-      )}
-      <button onClick={() => setShowModal(true)} aria-label="Add new task">
-        + Add Task
+    <div className="space-y-3">
+      {tasks.map((task) => (
+        <div
+          key={task._id}
+          className={`flex items-center gap-3 p-3 rounded-lg border hover:shadow-sm transition-shadow cursor-pointer ${
+            task.completed ? 'bg-green-50 text-green-800 line-through' : 'bg-white text-gray-700'
+          }`}
+          onClick={() => toggleComplete(task)}
+        >
+          {task.completed ? (
+            <CheckSquare className="h-4 w-4 text-green-600" />
+          ) : (
+            <Square className="h-4 w-4 text-gray-400" />
+          )}
+          <span>{task.content}</span>
+        </div>
+      ))}
+
+      <button
+        onClick={() => setShowModal(true)}
+        className="w-full p-3 border-2 border-dashed border-gray-200 rounded-lg text-gray-500 hover:border-gray-300 hover:text-gray-600 transition-colors flex items-center justify-center gap-2"
+      >
+        <Plus className="h-4 w-4" />
+        Add new task
       </button>
 
       {showModal && (
         <TaskModal
+          date={selectedDate}
           onClose={() => setShowModal(false)}
-          onTaskCreated={(newTask) => setTasks((prev) => [...prev, newTask])}
+          onTaskCreated={(newTask) => {
+            setTasks((prev) => [...prev, newTask]);
+            setShowModal(false);
+          }}
         />
       )}
     </div>
   );
 }
-
-export default TaskList;

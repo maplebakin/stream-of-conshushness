@@ -3,12 +3,11 @@
   "version": "1.0.0",
   "type": "module",
   "main": "server.js",
- "scripts": {
-  "dev": "concurrently \"nodemon server.js\" \"npm run dev --prefix frontend\"",
-  "start": "NODE_ENV=production node server.js",
-  "build": "cd frontend && npm install --include=dev && npm run build"
-}
-,
+  "scripts": {
+    "dev": "concurrently \"nodemon server.js\" \"npm run dev --prefix frontend\"",
+    "start": "NODE_ENV=production node server.js",
+    "build": "cd frontend && npm install --include=dev && npm run build"
+  },
   "dependencies": {
     "bcrypt": "^6.0.0",
     "dotenv": "^17.2.0",
@@ -16,6 +15,7 @@
     "graphql": "^16.11.0",
     "graphql-http": "^1.22.4",
     "jsonwebtoken": "^9.0.2",
+    "jwt-decode": "^4.0.0",
     "mongodb": "^6.17.0",
     "mongoose": "^8.16.3",
     "react-datepicker": "^8.4.0",

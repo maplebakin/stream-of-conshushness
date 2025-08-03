@@ -1,0 +1,41 @@
+.cluster-page {
+  padding: 1rem;
+}
+
+.cluster-header {
+  color: white;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.cluster-columns {
+  display: flex;
+  gap: 1rem;
+}
+
+.cluster-column {
+  flex: 1;
+  background: #f9f9f9;
+  padding: 1rem;
+  border-radius: 8px;
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+}
+
+.entry-card,
+.task-card {
+  background: white;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  border-radius: 6px;
+  box-shadow: 0 0 2px rgba(0,0,0,0.1);
+}
+
+.add-to-today {
+  font-size: 0.8rem;
+  background: none;
+  border: none;
+  color: #3c6;
+  cursor: pointer;
+}
