@@ -25,6 +25,7 @@ import Ripple from './models/Ripple.js';
 import DailySchedule from './models/DailySchedule.js';
 import SectionPage from './models/SectionPage.js';
 import entryRoutes from './routes/entries.js';
+import scheduleRoutes from './routes/schedule.js';
 
 // ─── Routes ─────────────────────────────
 import habitRoutes from './routes/habits.js';
@@ -34,6 +35,10 @@ import gameRoutes from './routes/games.js';
 import pageRoutes from './routes/pages.js';
 import sectionPagesRouter from './routes/sectionPages.js';
 import appointmentRoutes from './routes/appointments.js';
+import noteRoutes from './routes/notes.js';
+import todoRoutes from './routes/todos.js';
+import importantEventRoutes from './routes/importantEvents.js';
+import calendarRoutes from './routes/calendar.js';
 
 // ─── GraphQL ─────────────────────────────
 import { createHandler } from 'graphql-http/lib/use/express';
@@ -57,6 +62,11 @@ app.use('/api/habits', habitRoutes);
 app.use('/api', authRoutes);
 app.use('/api/entries', auth, entryRoutes); // protect it with token
 app.use('/api/appointments', appointmentRoutes);
+app.use('/api/schedule', scheduleRoutes);
+app.use('/api/note', noteRoutes);
+app.use('/api/todos', todoRoutes);
+app.use('/api/important-events', importantEventRoutes);
+app.use('/api/calendar-data', calendarRoutes);
 
 // ─── MongoDB Connection ─────────────────────────────
 (async () => {
