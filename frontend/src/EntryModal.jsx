@@ -13,7 +13,7 @@ export default function EntryModal({
   existingSections = [],
   availableGoals = [],
   availableClusters = [],
-  onSave, // callback to refresh parent data
+  onSave,
 }) {
   const initialSection = entry?.section || 'Floating in the Stream';
   const initialTags = Array.isArray(entry?.tags) ? entry.tags.join(', ') : entry?.tags || '';
@@ -51,7 +51,6 @@ export default function EntryModal({
     },
   });
 
-  // Reset modal state on open/close
   useEffect(() => {
     if (!isOpen) return;
     const startingSection = entry?.section || 'Floating in the Stream';
@@ -70,20 +69,21 @@ export default function EntryModal({
     if (editor && initialContent) {
       editor.commands.setContent(initialContent);
     }
-    // eslint-disable-next-line
   }, [isOpen, entry, editor, existingSections]);
 
   useEffect(() => {
     if (formData.content.length < 10) return;
     const { tags, moods, clusters } = analyzeEntry(formData.content);
+
     setFormData(prev => ({
       ...prev,
-      tags: Array.isArray(prev.tags) && prev.tags.join(', ') !== tags.join(', ')
+      tags: Array.isArray(prev.tags) && prev.tags.join(', ') !== tags.map(t => t.name).join(', ')
         ? prev.tags
-        : tags.join(', '),
+        : tags.map(t => t.name).join(', '),
     }));
-    setMood(prev => prev || (moods[0] || ''));
-    setCluster(prev => prev || (clusters[0] || ''));
+
+    setMood(prev => prev || moods[0]?.name || '');
+    setCluster(prev => prev || clusters[0]?.name || '');
   }, [formData.content]);
 
   const handleSectionChange = (e) => {
@@ -116,6 +116,7 @@ export default function EntryModal({
       setSaving(false);
       return;
     }
+
     if (!formData.content.trim() || formData.content === '<p></p>') {
       setError('Content cannot be empty.');
       setSaving(false);
@@ -136,7 +137,6 @@ export default function EntryModal({
       ...(cluster ? { cluster } : {}),
     };
 
-    // Use "update" if editing, "create" if new
     const isEditing = !!entry?._id;
     const payload = {
       query: isEditing

@@ -1,172 +1,246 @@
-// Enhanced suggestMetadata.js with contextual analysis and confidence scoring
+// Enhanced suggestMetadata.js with neurodivergent-friendly and metaphysical themes
+// Designed for diverse cognitive processing styles and spiritual perspectives
 
-// Weighted keyword patterns with importance scores
-const tagPatterns = {
-  reflection: {
-    primary: ['journaling', 'realized', 'reflecting', 'introspective', 'processing'],
-    secondary: ['thinking', 'pondering', 'considering', 'contemplating'],
-    contextual: ['insight', 'epiphany', 'understanding', 'clarity', 'perspective'],
-    phrases: [/i've been thinking about/gi, /it occurred to me/gi, /i realized that/gi]
+// Neurodivergent-friendly processing patterns
+const neurodivergentPatterns = {
+  hyperfocus: {
+    primary: ['hyperfocus', 'deep dive', 'obsessing', 'fixated', 'completely absorbed'],
+    secondary: ['tunnel vision', 'lost track of time', 'hours flew by', 'in the zone'],
+    contextual: ['special interest', 'research rabbit hole', 'intense concentration'],
+    phrases: [/lost in/gi, /couldn't stop/gi, /hours without realizing/gi, /totally absorbed/gi]
   },
-  work: {
-    primary: ['deadline', 'meeting', 'project', 'client', 'boss'],
-    secondary: ['email', 'task', 'office', 'colleague', 'presentation'],
-    contextual: ['professional', 'career', 'business', 'workplace', 'conference'],
-    phrases: [/work meeting/gi, /at the office/gi, /project deadline/gi, /work related/gi]
+  sensory: {
+    primary: ['overstimulated', 'sensory overload', 'overwhelmed by noise', 'texture issues'],
+    secondary: ['too bright', 'too loud', 'crowded', 'overwhelming environment'],
+    contextual: ['need quiet space', 'sensory break', 'stimming', 'noise cancelling'],
+    phrases: [/too much stimulation/gi, /need to decompress/gi, /sensory issues/gi]
   },
-  colton: {
-    primary: ['colton', 'son', 'kiddo'],
-    secondary: ['school dropoff', 'bedtime', 'kindergarten', 'pajamas'],
-    contextual: ['parenting', 'daddy time', 'kid activities', 'family time'],
-    phrases: [/colton's school/gi, /with colton/gi, /colton said/gi, /my son/gi]
+  executive_function: {
+    primary: ['executive dysfunction', 'procrastination', 'task switching', 'planning difficulty'],
+    secondary: ['overwhelmed by choices', 'decision fatigue', 'mental fog', 'scattered'],
+    contextual: ['time blindness', 'working memory', 'attention regulation'],
+    phrases: [/can't get started/gi, /brain fog/gi, /executive function/gi, /task paralysis/gi]
   },
-  dream: {
-    primary: ['dream', 'nightmare', 'lucid dreaming'],
-    secondary: ['asleep', 'sleeping', 'subconscious'],
-    contextual: ['rem sleep', 'vivid', 'symbolic', 'unconscious'],
-    phrases: [/had a dream/gi, /dreamed about/gi, /in my dream/gi, /while sleeping/gi]
+  masking: {
+    primary: ['masking', 'camouflaging', 'people pleasing', 'exhausted from pretending'],
+    secondary: ['performing normalcy', 'social exhaustion', 'hiding true self'],
+    contextual: ['authenticity struggle', 'burnout from masking', 'social scripts'],
+    phrases: [/pretending to be normal/gi, /wearing a mask/gi, /social exhaustion/gi]
   },
-  gratitude: {
-    primary: ['grateful', 'thankful', 'blessed', 'appreciative'],
-    secondary: ['appreciate', 'counting blessings', 'fortunate'],
-    contextual: ['mindfulness', 'positive mindset', 'abundance'],
-    phrases: [/grateful for/gi, /thankful that/gi, /feel blessed/gi, /appreciate having/gi]
-  },
-  health: {
-    primary: ['therapy', 'mental health', 'wellness', 'exercise'],
-    secondary: ['doctor', 'meditation', 'self-care', 'healing'],
-    contextual: ['mindfulness', 'recovery', 'growth', 'balance'],
-    phrases: [/therapy session/gi, /mental health/gi, /taking care of myself/gi]
-  },
-  finance: {
-    primary: ['budget', 'money', 'expenses', 'financial'],
-    secondary: ['bills', 'savings', 'spending', 'income'],
-    contextual: ['investment', 'debt', 'financial planning'],
-    phrases: [/tight budget/gi, /money worries/gi, /financial stress/gi]
-  },
-  creativity: {
-    primary: ['creative', 'art', 'writing', 'music'],
-    secondary: ['inspiration', 'artistic', 'crafting', 'design'],
-    contextual: ['expression', 'imagination', 'innovative'],
-    phrases: [/creative project/gi, /artistic expression/gi, /inspired to create/gi]
-  },
-  social: {
-    primary: ['friends', 'social', 'party', 'gathering'],
-    secondary: ['conversation', 'community', 'connection', 'relationship'],
-    contextual: ['networking', 'socializing', 'bonding'],
-    phrases: [/hanging out/gi, /social event/gi, /catching up with/gi]
+  pattern_recognition: {
+    primary: ['pattern', 'connection', 'systematic', 'analytical thinking'],
+    secondary: ['categorizing', 'organizing thoughts', 'seeing relationships'],
+    contextual: ['detail-oriented', 'systematic approach', 'logical frameworks'],
+    phrases: [/noticed a pattern/gi, /everything connects/gi, /systematic thinking/gi]
   }
 };
 
-// Enhanced mood detection with intensity and context
-const moodPatterns = {
+// Metaphysical and spiritual patterns
+const metaphysicalPatterns = {
+  energy: {
+    primary: ['energy', 'vibration', 'frequency', 'aura', 'chakra'],
+    secondary: ['feeling drained', 'energized', 'heavy energy', 'light energy'],
+    contextual: ['energy healing', 'vibrational alignment', 'energetic boundaries'],
+    phrases: [/energy feels/gi, /vibrational shift/gi, /energy vampire/gi, /raising vibration/gi]
+  },
+  intuition: {
+    primary: ['intuition', 'gut feeling', 'inner knowing', 'psychic', 'clairvoyant'],
+    secondary: ['premonition', 'synchronicity', 'signs', 'messages from universe'],
+    contextual: ['third eye', 'inner wisdom', 'divine guidance', 'spiritual downloads'],
+    phrases: [/something tells me/gi, /inner voice/gi, /gut instinct/gi, /divine guidance/gi]
+  },
+  manifestation: {
+    primary: ['manifestation', 'law of attraction', 'co-creating', 'intention setting'],
+    secondary: ['visualizing', 'affirming', 'calling in', 'aligning with desires'],
+    contextual: ['abundance mindset', 'magnetic energy', 'vibrational match'],
+    phrases: [/manifesting/gi, /calling in/gi, /law of attraction/gi, /co-creating with universe/gi]
+  },
+  shadow_work: {
+    primary: ['shadow work', 'inner child', 'healing trauma', 'integration'],
+    secondary: ['triggered', 'projection', 'unconscious patterns', 'repressed emotions'],
+    contextual: ['carl jung', 'depth psychology', 'psychological healing'],
+    phrases: [/shadow work/gi, /inner child healing/gi, /working through trauma/gi]
+  },
+  ascension: {
+    primary: ['ascension', 'awakening', 'consciousness shift', 'spiritual evolution'],
+    secondary: ['higher self', 'dimensional shift', 'consciousness expansion'],
+    contextual: ['lightworker', 'starseed', 'spiritual mission', 'soul purpose'],
+    phrases: [/spiritual awakening/gi, /consciousness rising/gi, /soul mission/gi]
+  },
+  moon_cycles: {
+    primary: ['new moon', 'full moon', 'lunar cycle', 'moon energy'],
+    secondary: ['waxing moon', 'waning moon', 'moon ritual', 'lunar influence'],
+    contextual: ['moon magic', 'celestial events', 'cosmic energy'],
+    phrases: [/moon phase/gi, /lunar energy/gi, /moon ritual/gi, /cosmic alignment/gi]
+  },
+  synchronicity: {
+    primary: ['synchronicity', 'meaningful coincidence', 'divine timing', 'universe speaking'],
+    secondary: ['signs', 'angel numbers', 'repeated patterns', 'cosmic winks'],
+    contextual: ['meaningful connections', 'spiritual breadcrumbs', 'guided path'],
+    phrases: [/not a coincidence/gi, /universe is showing me/gi, /divine timing/gi, /angel numbers/gi]
+  }
+};
+
+// Enhanced emotional processing for neurodivergent experiences
+const neurodivergentMoods = {
+  overwhelmed: {
+    intense: ['completely overwhelmed', 'shutdown mode', 'system overload', 'paralyzed'],
+    moderate: ['overwhelmed', 'too much input', 'overstimulated', 'frazzled'],
+    mild: ['slightly overwhelmed', 'reaching capacity', 'need space'],
+    contextual: ['sensory overload', 'information overload', 'choice paralysis'],
+    phrases: [/can't handle/gi, /too much at once/gi, /need to shut down/gi, /system overload/gi]
+  },
+  hyperfocused: {
+    intense: ['completely absorbed', 'lost in flow', 'time doesn\'t exist', 'transcendent focus'],
+    moderate: ['hyperfocused', 'in the zone', 'deep concentration', 'tunnel vision'],
+    mild: ['focused', 'engaged', 'concentrated'],
+    contextual: ['flow state', 'special interest activated', 'optimal engagement'],
+    phrases: [/hours flew by/gi, /completely absorbed/gi, /lost track of time/gi, /in flow state/gi]
+  },
+  dysregulated: {
+    intense: ['completely dysregulated', 'emotional chaos', 'meltdown approaching'],
+    moderate: ['dysregulated', 'emotionally unstable', 'all over the place'],
+    mild: ['slightly off', 'emotionally wobbly', 'need regulation'],
+    contextual: ['emotional overwhelm', 'nervous system activation', 'need coping tools'],
+    phrases: [/emotionally dysregulated/gi, /nervous system activated/gi, /need grounding/gi]
+  },
+  validated: {
+    intense: ['deeply validated', 'finally understood', 'completely seen'],
+    moderate: ['validated', 'understood', 'accepted', 'recognized'],
+    mild: ['acknowledged', 'heard', 'seen'],
+    contextual: ['neurodivergent pride', 'self-acceptance', 'identity affirmation'],
+    phrases: [/finally understood/gi, /feel seen/gi, /not alone/gi, /valid experience/gi]
+  }
+};
+
+// Processing style patterns for different cognitive approaches
+const processingStyles = {
+  visual: {
+    primary: ['visual', 'image', 'picture', 'diagram', 'chart'],
+    secondary: ['mind map', 'flowchart', 'visualization', 'sketch'],
+    contextual: ['visual thinking', 'spatial processing', 'graphic organizer'],
+    phrases: [/picture this/gi, /visual representation/gi, /see it clearly/gi]
+  },
+  kinesthetic: {
+    primary: ['hands-on', 'movement', 'tactile', 'physical', 'embodied'],
+    secondary: ['fidgeting', 'pacing', 'restless', 'need to move'],
+    contextual: ['body wisdom', 'somatic experience', 'kinesthetic learning'],
+    phrases: [/need to move/gi, /hands-on learning/gi, /feel it in my body/gi]
+  },
+  auditory: {
+    primary: ['sound', 'music', 'voice', 'listening', 'auditory'],
+    secondary: ['podcast', 'audio', 'verbal', 'spoken'],
+    contextual: ['sound sensitivity', 'musical processing', 'verbal reasoning'],
+    phrases: [/sounds like/gi, /heard this/gi, /listening to/gi, /resonates/gi]
+  },
+  systematic: {
+    primary: ['system', 'structure', 'framework', 'methodology', 'process'],
+    secondary: ['step by step', 'logical', 'sequential', 'organized'],
+    contextual: ['analytical thinking', 'systematic approach', 'detailed planning'],
+    phrases: [/systematic approach/gi, /step by step/gi, /logical framework/gi]
+  }
+};
+
+// Expanded original patterns with enhanced sensitivity
+const enhancedTagPatterns = {
+  ...{
+    reflection: {
+      primary: ['journaling', 'realized', 'reflecting', 'introspective', 'processing'],
+      secondary: ['thinking', 'pondering', 'considering', 'contemplating', 'ruminating'],
+      contextual: ['insight', 'epiphany', 'understanding', 'clarity', 'perspective', 'self-awareness'],
+      phrases: [/i've been thinking about/gi, /it occurred to me/gi, /i realized that/gi, /processing this/gi],
+      neurodivergent_friendly: ['special interest deep dive', 'pattern recognition', 'systematic analysis']
+    },
+    work: {
+      primary: ['deadline', 'meeting', 'project', 'client', 'boss'],
+      secondary: ['email', 'task', 'office', 'colleague', 'presentation'],
+      contextual: ['professional', 'career', 'business', 'workplace', 'conference'],
+      phrases: [/work meeting/gi, /at the office/gi, /project deadline/gi, /work related/gi],
+      accommodations: ['remote work', 'flexible schedule', 'quiet workspace', 'task breakdown']
+    },
+    colton: {
+      primary: ['colton', 'son', 'kiddo'],
+      secondary: ['school dropoff', 'bedtime', 'kindergarten', 'pajamas'],
+      contextual: ['parenting', 'daddy time', 'kid activities', 'family time', 'neurodivergent parenting'],
+      phrases: [/colton's school/gi, /with colton/gi, /colton said/gi, /my son/gi],
+      considerations: ['sensory needs', 'routine importance', 'communication styles']
+    }
+  },
+  // Add neurodivergent and metaphysical patterns
+  ...neurodivergentPatterns,
+  ...metaphysicalPatterns
+};
+
+// Enhanced mood patterns combining original with new categories
+const enhancedMoodPatterns = {
   happy: {
-    intense: ['ecstatic', 'thrilled', 'overjoyed', 'elated', 'euphoric'],
-    moderate: ['happy', 'joyful', 'cheerful', 'content', 'pleased'],
-    mild: ['good', 'okay', 'fine', 'calm', 'peaceful'],
-    contextual: ['grateful', 'excited', 'cozy', 'satisfied', 'optimistic'],
-    phrases: [/feeling great/gi, /so happy/gi, /in a good mood/gi, /feeling blessed/gi]
+    intense: ['ecstatic', 'thrilled', 'overjoyed', 'elated', 'euphoric', 'blissful'],
+    moderate: ['happy', 'joyful', 'cheerful', 'content', 'pleased', 'uplifted'],
+    mild: ['good', 'okay', 'fine', 'calm', 'peaceful', 'stable'],
+    contextual: ['grateful', 'excited', 'cozy', 'satisfied', 'optimistic', 'aligned'],
+    phrases: [/feeling great/gi, /so happy/gi, /in a good mood/gi, /feeling blessed/gi, /heart full/gi]
   },
   sad: {
-    intense: ['devastated', 'heartbroken', 'depressed', 'miserable', 'despairing'],
-    moderate: ['sad', 'down', 'melancholy', 'blue', 'gloomy'],
-    mild: ['tired', 'drained', 'low energy', 'meh', 'blah'],
-    contextual: ['lonely', 'overwhelmed', 'disconnected', 'empty'],
-    phrases: [/feeling down/gi, /really sad/gi, /heavy heart/gi, /emotionally drained/gi]
+    intense: ['devastated', 'heartbroken', 'depressed', 'miserable', 'despairing', 'grief-stricken'],
+    moderate: ['sad', 'down', 'melancholy', 'blue', 'gloomy', 'sorrowful'],
+    mild: ['tired', 'drained', 'low energy', 'meh', 'blah', 'subdued'],
+    contextual: ['lonely', 'overwhelmed', 'disconnected', 'empty', 'processing loss'],
+    phrases: [/feeling down/gi, /really sad/gi, /heavy heart/gi, /emotionally drained/gi, /soul tired/gi]
   },
-  angry: {
-    intense: ['furious', 'enraged', 'livid', 'seething', 'irate'],
-    moderate: ['angry', 'mad', 'pissed', 'irritated', 'annoyed'],
-    mild: ['bothered', 'mildly frustrated', 'slightly annoyed'],
-    contextual: ['frustrated', 'resentful', 'bitter', 'hostile'],
-    phrases: [/so angry/gi, /really frustrated/gi, /pissed off/gi, /had enough/gi]
+  // Add neurodivergent-specific moods
+  ...neurodivergentMoods,
+  // Add metaphysical emotional states
+  aligned: {
+    intense: ['perfectly aligned', 'in complete flow', 'divinely guided', 'cosmic harmony'],
+    moderate: ['aligned', 'in flow', 'on path', 'spiritually connected'],
+    mild: ['somewhat aligned', 'finding balance', 'seeking alignment'],
+    contextual: ['soul purpose', 'divine timing', 'spiritual flow', 'energetic harmony'],
+    phrases: [/in alignment/gi, /on the right path/gi, /divinely guided/gi, /soul calling/gi]
   },
-  anxious: {
-    intense: ['panicked', 'terrified', 'overwhelmed with anxiety', 'paralyzed'],
-    moderate: ['anxious', 'worried', 'stressed', 'nervous', 'uneasy'],
-    mild: ['slightly worried', 'a bit nervous', 'concerned'],
-    contextual: ['restless', 'on edge', 'tense', 'apprehensive'],
-    phrases: [/really anxious/gi, /stressed out/gi, /worry about/gi, /anxiety attack/gi]
-  },
-  excited: {
-    intense: ['thrilled', 'ecstatic', 'pumped', 'stoked', 'exhilarated'],
-    moderate: ['excited', 'enthusiastic', 'eager', 'energized'],
-    mild: ['looking forward', 'interested', 'curious'],
-    contextual: ['motivated', 'inspired', 'anticipating'],
-    phrases: [/so excited/gi, /can't wait/gi, /really looking forward/gi]
-  },
-  confused: {
-    intense: ['completely lost', 'utterly confused', 'bewildered'],
-    moderate: ['confused', 'puzzled', 'uncertain', 'unclear'],
-    mild: ['not sure', 'questioning', 'wondering'],
-    contextual: ['ambivalent', 'conflicted', 'indecisive'],
-    phrases: [/don't understand/gi, /confused about/gi, /not sure what/gi]
-  },
-  peaceful: {
-    intense: ['blissful', 'serene', 'transcendent', 'deeply peaceful'],
-    moderate: ['peaceful', 'calm', 'centered', 'balanced'],
-    mild: ['relaxed', 'at ease', 'comfortable'],
-    contextual: ['mindful', 'present', 'grounded', 'harmonious'],
-    phrases: [/feeling peaceful/gi, /so calm/gi, /inner peace/gi, /centered and grounded/gi]
+  awakening: {
+    intense: ['profound awakening', 'consciousness explosion', 'spiritual breakthrough'],
+    moderate: ['awakening', 'expanding consciousness', 'spiritual growth'],
+    mild: ['awakening glimpses', 'opening awareness', 'spiritual curiosity'],
+    contextual: ['consciousness shift', 'spiritual evolution', 'soul remembering'],
+    phrases: [/spiritual awakening/gi, /consciousness expanding/gi, /soul remembering/gi]
   }
 };
 
-// Enhanced cluster detection with relationship mapping
-const clusterPatterns = {
+// Enhanced cluster patterns with additional considerations
+const enhancedClusterPatterns = {
   Home: {
     primary: ['home', 'house', 'cleaning', 'chores', 'domestic'],
     secondary: ['dishes', 'laundry', 'cooking', 'groceries', 'maintenance'],
-    contextual: ['household', 'family life', 'domestic duties', 'home improvement'],
-    phrases: [/around the house/gi, /home life/gi, /household tasks/gi],
-    relationships: ['family', 'daily_routine', 'self_care']
+    contextual: ['household', 'family life', 'domestic duties', 'home improvement', 'nesting'],
+    phrases: [/around the house/gi, /home life/gi, /household tasks/gi, /sacred space/gi],
+    relationships: ['family', 'daily_routine', 'self_care', 'sanctuary'],
+    accommodations: ['sensory-friendly spaces', 'organization systems', 'routine structures']
   },
-  Colton: {
-    primary: ['colton', 'son', 'parenting', 'fatherhood'],
-    secondary: ['kindergarten', 'school', 'bedtime', 'playtime'],
-    contextual: ['child development', 'family bonding', 'daddy duties'],
-    phrases: [/time with colton/gi, /colton's development/gi, /being a dad/gi],
-    relationships: ['family', 'personal_growth', 'daily_routine']
+  Neurodivergent_Identity: {
+    primary: ['autism', 'adhd', 'neurodivergent', 'neurodiversity', 'different brain'],
+    secondary: ['stimming', 'special interests', 'executive function', 'sensory processing'],
+    contextual: ['neurodivergent community', 'self-advocacy', 'accommodations', 'masking'],
+    phrases: [/neurodivergent experience/gi, /different brain/gi, /neurotypical world/gi],
+    relationships: ['identity', 'community', 'self_acceptance', 'advocacy']
   },
-  Stream: {
-    primary: ['stream', 'coding', 'development', 'programming'],
-    secondary: ['entrymodal', 'cluster', 'project', 'software'],
-    contextual: ['technology', 'innovation', 'problem solving', 'creativity'],
-    phrases: [/working on stream/gi, /coding project/gi, /development work/gi],
-    relationships: ['work', 'creativity', 'problem_solving']
+  Spiritual_Practice: {
+    primary: ['meditation', 'prayer', 'ritual', 'ceremony', 'spiritual practice'],
+    secondary: ['altar', 'crystal', 'sage', 'tarot', 'oracle cards'],
+    contextual: ['sacred space', 'divine connection', 'spiritual tools', 'energy work'],
+    phrases: [/spiritual practice/gi, /sacred ritual/gi, /divine connection/gi, /energy work/gi],
+    relationships: ['growth', 'healing', 'consciousness', 'alignment']
   },
-  Self: {
-    primary: ['therapy', 'self-care', 'personal growth', 'introspection'],
-    secondary: ['journaling', 'meditation', 'reflection', 'insight'],
-    contextual: ['mindfulness', 'healing', 'self-discovery', 'mental health'],
-    phrases: [/working on myself/gi, /personal development/gi, /self reflection/gi],
-    relationships: ['health', 'growth', 'spirituality']
-  },
-  Work: {
-    primary: ['work', 'career', 'professional', 'job'],
-    secondary: ['meeting', 'project', 'deadline', 'colleague'],
-    contextual: ['productivity', 'leadership', 'business', 'goals'],
-    phrases: [/at work/gi, /work project/gi, /professional development/gi],
-    relationships: ['goals', 'stress', 'achievement']
-  },
-  Relationships: {
-    primary: ['relationship', 'friendship', 'connection', 'social'],
-    secondary: ['friend', 'partner', 'family', 'communication'],
-    contextual: ['intimacy', 'trust', 'support', 'love'],
-    phrases: [/relationship with/gi, /connecting with/gi, /social interaction/gi],
-    relationships: ['emotional', 'support', 'growth']
+  Energy_Management: {
+    primary: ['energy management', 'spoon theory', 'battery levels', 'capacity'],
+    secondary: ['recharging', 'depleted', 'conserving energy', 'pacing'],
+    contextual: ['sustainable living', 'boundary setting', 'energy hygiene'],
+    phrases: [/running on empty/gi, /need to recharge/gi, /energy levels/gi, /spoon theory/gi],
+    relationships: ['self_care', 'boundaries', 'sustainability', 'wellness']
   }
 };
 
-// Activity and time-based patterns
-const activityPatterns = {
-  morning: [/morning/gi, /woke up/gi, /coffee/gi, /breakfast/gi, /start of day/gi],
-  evening: [/evening/gi, /dinner/gi, /winding down/gi, /end of day/gi, /nighttime/gi],
-  routine: [/daily routine/gi, /habit/gi, /regularly/gi, /every day/gi, /consistent/gi],
-  transition: [/changing/gi, /transition/gi, /moving from/gi, /shift/gi, /adjustment/gi]
-};
-
-// Enhanced analysis functions
-function analyzePatterns(content, patterns) {
+// Multi-dimensional analysis function
+function analyzeWithDiversity(content, patterns, analysisType = 'general') {
   const results = [];
   const lowerContent = content.toLowerCase();
   
@@ -174,26 +248,58 @@ function analyzePatterns(content, patterns) {
     let score = 0;
     let matches = [];
     let intensity = 'mild';
+    let culturalContext = [];
     
-    // Check different levels of keywords
-    const levels = { primary: 3, secondary: 2, contextual: 1.5, mild: 1, moderate: 2, intense: 3 };
+    // Enhanced weight system for different perspectives
+    const levels = { 
+      primary: 3, 
+      secondary: 2, 
+      contextual: 1.5, 
+      mild: 1, 
+      moderate: 2, 
+      intense: 3,
+      neurodivergent_friendly: 2.5,
+      accommodations: 2,
+      considerations: 1.5
+    };
     
     Object.entries(data).forEach(([level, keywords]) => {
       if (Array.isArray(keywords)) {
         keywords.forEach(keyword => {
           if (lowerContent.includes(keyword.toLowerCase())) {
-            score += levels[level] || 1;
-            matches.push({ keyword, level, weight: levels[level] || 1 });
+            const weight = levels[level] || 1;
+            score += weight;
+            matches.push({ 
+              keyword, 
+              level, 
+              weight,
+              culturalContext: level.includes('neurodivergent') || level.includes('metaphysical') ? [level] : []
+            });
+            
+            // Enhanced intensity detection
             if (level === 'intense') intensity = 'intense';
             else if (level === 'moderate' && intensity !== 'intense') intensity = 'moderate';
+            
+            // Track cultural contexts
+            if (level.includes('neurodivergent') || level.includes('accommodations')) {
+              culturalContext.push('neurodivergent');
+            }
+            if (level.includes('metaphysical') || level.includes('spiritual')) {
+              culturalContext.push('metaphysical');
+            }
           }
         });
       } else if (level === 'phrases' && Array.isArray(keywords)) {
         keywords.forEach(phrase => {
           const phraseMatches = content.match(phrase);
           if (phraseMatches) {
-            score += 2.5; // Phrases get higher weight
-            matches.push({ phrase: phrase.source, level: 'phrase', weight: 2.5 });
+            score += 2.5;
+            matches.push({ 
+              phrase: phrase.source, 
+              level: 'phrase', 
+              weight: 2.5,
+              culturalContext: []
+            });
           }
         });
       }
@@ -205,8 +311,11 @@ function analyzePatterns(content, patterns) {
         score,
         intensity,
         matches,
-        confidence: Math.min(score / 5, 1), // Normalized confidence score
-        relationships: data.relationships || []
+        confidence: Math.min(score / 5, 1),
+        relationships: data.relationships || [],
+        culturalContext: [...new Set(culturalContext)],
+        accommodations: data.accommodations || [],
+        considerations: data.considerations || []
       });
     }
   });
@@ -214,69 +323,120 @@ function analyzePatterns(content, patterns) {
   return results.sort((a, b) => b.score - a.score);
 }
 
-function analyzeContext(content) {
+// Enhanced context analysis with processing styles
+function analyzeEnhancedContext(content) {
   const context = {
     timeOfDay: null,
     activityType: null,
     emotionalIntensity: 'low',
-    themes: []
+    themes: [],
+    processingStyle: [],
+    neurodivergentMarkers: [],
+    metaphysicalElements: [],
+    energyLevel: 'neutral',
+    communicationStyle: 'direct'
   };
   
-  // Time context
-  Object.entries(activityPatterns).forEach(([time, patterns]) => {
-    patterns.forEach(pattern => {
-      if (pattern.test(content)) {
-        context.timeOfDay = time;
-      }
-    });
+  // Processing style detection
+  const styleResults = analyzeWithDiversity(content, processingStyles, 'processing');
+  context.processingStyle = styleResults.map(s => s.category);
+  
+  // Neurodivergent marker detection
+  const ndMarkers = [
+    /executive function/gi, /sensory/gi, /hyperfocus/gi, /stimming/gi,
+    /masking/gi, /meltdown/gi, /shutdown/gi, /special interest/gi
+  ];
+  context.neurodivergentMarkers = ndMarkers.filter(marker => marker.test(content));
+  
+  // Metaphysical element detection
+  const metaphysicalMarkers = [
+    /energy/gi, /vibration/gi, /intuition/gi, /synchronicity/gi,
+    /manifestation/gi, /chakra/gi, /moon/gi, /crystal/gi, /spiritual/gi
+  ];
+  context.metaphysicalElements = metaphysicalMarkers.filter(marker => marker.test(content));
+  
+  // Energy level assessment
+  const energyWords = {
+    high: ['energized', 'vibrant', 'excited', 'motivated', 'inspired'],
+    low: ['drained', 'tired', 'depleted', 'exhausted', 'overwhelmed'],
+    balanced: ['centered', 'grounded', 'stable', 'calm', 'peaceful']
+  };
+  
+  Object.entries(energyWords).forEach(([level, words]) => {
+    if (words.some(word => content.toLowerCase().includes(word))) {
+      context.energyLevel = level;
+    }
   });
   
-  // Emotional intensity based on language
-  const intensityWords = content.match(/\b(very|extremely|incredibly|absolutely|completely|totally|really|so|deeply)\b/gi);
-  if (intensityWords && intensityWords.length > 2) context.emotionalIntensity = 'high';
-  else if (intensityWords && intensityWords.length > 0) context.emotionalIntensity = 'medium';
+  // Communication style assessment
+  if (content.includes('...') || content.includes('maybe') || content.includes('perhaps')) {
+    context.communicationStyle = 'indirect';
+  } else if (content.includes('!') || content.match(/\b(definitely|absolutely|clearly)\b/gi)) {
+    context.communicationStyle = 'emphatic';
+  }
   
   return context;
 }
 
-function calculateConfidence(results, content) {
+// Accessibility-focused confidence calculation
+function calculateInclusiveConfidence(results, content) {
   const wordCount = content.split(/\s+/).length;
-  const baseConfidence = Math.min(wordCount / 50, 1); // More words = higher base confidence
+  const baseConfidence = Math.min(wordCount / 30, 1); // Lower threshold for confidence
   
-  return results.map(result => ({
-    ...result,
-    adjustedConfidence: Math.min((result.confidence + baseConfidence) / 2, 1)
-  }));
+  return results.map(result => {
+    // Boost confidence for marginalized perspectives
+    let diversityBoost = 0;
+    if (result.culturalContext.includes('neurodivergent')) diversityBoost += 0.1;
+    if (result.culturalContext.includes('metaphysical')) diversityBoost += 0.1;
+    
+    return {
+      ...result,
+      adjustedConfidence: Math.min((result.confidence + baseConfidence + diversityBoost) / 2, 1),
+      accessibilityScore: result.accommodations ? result.accommodations.length * 0.1 : 0
+    };
+  });
 }
 
+// Main enhanced function
 export function suggestMetadata(content) {
   if (!content || typeof content !== 'string') {
-    return { tags: [], moods: [], clusters: [], confidence: 0, context: null };
+    return { 
+      tags: [], 
+      moods: [], 
+      clusters: [], 
+      confidence: 0, 
+      context: null,
+      accessibility: { processingStyles: [], accommodations: [] },
+      diversity: { perspectives: [], culturalContexts: [] }
+    };
   }
   
-  // Analyze all pattern types
-  const tagResults = analyzePatterns(content, tagPatterns);
-  const moodResults = analyzePatterns(content, moodPatterns);
-  const clusterResults = analyzePatterns(content, clusterPatterns);
-  const context = analyzeContext(content);
+  // Analyze all enhanced pattern types
+  const tagResults = analyzeWithDiversity(content, enhancedTagPatterns, 'tags');
+  const moodResults = analyzeWithDiversity(content, enhancedMoodPatterns, 'moods');
+  const clusterResults = analyzeWithDiversity(content, enhancedClusterPatterns, 'clusters');
+  const context = analyzeEnhancedContext(content);
   
-  // Apply confidence adjustments
-  const adjustedTags = calculateConfidence(tagResults, content);
-  const adjustedMoods = calculateConfidence(moodResults, content);
-  const adjustedClusters = calculateConfidence(clusterResults, content);
+  // Apply inclusive confidence adjustments
+  const adjustedTags = calculateInclusiveConfidence(tagResults, content);
+  const adjustedMoods = calculateInclusiveConfidence(moodResults, content);
+  const adjustedClusters = calculateInclusiveConfidence(clusterResults, content);
   
-  // Filter by confidence threshold
-  const confidenceThreshold = 0.3;
+  // Lower confidence threshold for inclusivity
+  const confidenceThreshold = 0.2;
   const highConfidenceTags = adjustedTags.filter(t => t.adjustedConfidence >= confidenceThreshold);
   const highConfidenceMoods = adjustedMoods.filter(m => m.adjustedConfidence >= confidenceThreshold);
   const highConfidenceClusters = adjustedClusters.filter(c => c.adjustedConfidence >= confidenceThreshold);
   
-  // Extract relationship suggestions
+  // Enhanced relationship and accommodation suggestions
   const relationships = new Set();
+  const accommodations = new Set();
+  const culturalContexts = new Set();
+  
   [...highConfidenceTags, ...highConfidenceClusters].forEach(item => {
-    if (item.relationships) {
-      item.relationships.forEach(rel => relationships.add(rel));
-    }
+    if (item.relationships) item.relationships.forEach(rel => relationships.add(rel));
+    if (item.accommodations) item.accommodations.forEach(acc => accommodations.add(acc));
+    if (item.culturalContext) item.culturalContext.forEach(ctx => culturalContexts.add(ctx));
   });
   
   return {
@@ -284,22 +444,40 @@ export function suggestMetadata(content) {
       name: t.category,
       confidence: t.adjustedConfidence,
       intensity: t.intensity,
-      matches: t.matches.length
+      matches: t.matches.length,
+      culturalContext: t.culturalContext,
+      accommodations: t.accommodations
     })),
     moods: highConfidenceMoods.map(m => ({
       name: m.category,
       confidence: m.adjustedConfidence,
       intensity: m.intensity,
-      matches: m.matches.length
+      matches: m.matches.length,
+      culturalContext: m.culturalContext
     })),
     clusters: highConfidenceClusters.map(c => ({
       name: c.category,
       confidence: c.adjustedConfidence,
       relationships: c.relationships,
-      matches: c.matches.length
+      matches: c.matches.length,
+      accommodations: c.accommodations,
+      considerations: c.considerations
     })),
-    context,
+    context: {
+      ...context,
+      accessibility: {
+        processingStyles: context.processingStyle,
+        communicationStyle: context.communicationStyle,
+        energyLevel: context.energyLevel
+      },
+      diversity: {
+        neurodivergentMarkers: context.neurodivergentMarkers.length,
+        metaphysicalElements: context.metaphysicalElements.length,
+        culturalContexts: Array.from(culturalContexts)
+      }
+    },
     suggestedRelationships: Array.from(relationships),
+    suggestedAccommodations: Array.from(accommodations),
     metadata: {
       analyzedAt: new Date().toISOString(),
       contentLength: content.length,
@@ -309,7 +487,15 @@ export function suggestMetadata(content) {
         ...highConfidenceMoods.map(m => m.adjustedConfidence),
         ...highConfidenceClusters.map(c => c.adjustedConfidence),
         0
-      )
+      ),
+      diversityScore: culturalContexts.size * 0.2,
+      accessibilityScore: accommodations.size * 0.1,
+      inclusivityMetrics: {
+        neurodivergentFriendly: context.neurodivergentMarkers.length > 0,
+        metaphysicalAware: context.metaphysicalElements.length > 0,
+        multipleProcessingStyles: context.processingStyle.length > 1,
+        accommodationSuggestions: accommodations.size
+      }
     }
   };
 }
