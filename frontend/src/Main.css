@@ -582,3 +582,78 @@ footer {
 .main-feed {
   flex: 1;
 }
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--color-background, #fcf9f4);
+  color: var(--color-text, #2c2c2c);
+}
+
+.main-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 240px;
+  padding: 1.5rem;
+  background: var(--color-sidebar, #f6f0e8);
+  border-right: 1px solid #ddd;
+}
+
+.main-feed {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
+.centered-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 1rem;
+  background: var(--color-header, #fdf5ed);
+  border-bottom: 1px solid #ddd;
+  text-align: center;
+}
+
+.site-title {
+  font-size: 1.8rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.nav-link {
+  text-decoration: none;
+  color: var(--color-text, #444);
+  font-weight: 500;
+  padding: 0.4rem 0.8rem;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.nav-link:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.nav-link.active {
+  color: var(--color-accent, #af84d6);
+  font-weight: 700;
+}
+
+.logout-button {
+  background: transparent;
+  border: 1px solid #ccc;
+  padding: 0.4rem 0.8rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
