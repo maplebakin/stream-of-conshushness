@@ -1,0 +1,115 @@
+/*────────────────────────────────────────────
+  RippleReviewUI.css
+  Styles the global “Ripple Review” inbox
+────────────────────────────────────────────*/
+
+/* Container */
+.ripple-review {
+  padding: 1.5rem;           /* p-6 */
+  max-width: 64rem;          /* max-w-5xl */
+  margin: 0 auto;
+}
+
+/* Heading */
+.ripple-review h1 {
+  font-size: 1.5rem;         /* text-2xl */
+  font-weight: 700;          /* font-bold */
+  margin-bottom: 1rem;
+}
+
+/* Filter chip bar */
+.filter-chip {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;  /* px-3 py-1 */
+  font-size: 0.875rem;       /* text-sm */
+  font-weight: 500;          /* font-medium */
+  border-radius: 9999px;     /* rounded-full */
+  background: #f3f4f6;       /* gray-100 */
+  color: #374151;            /* gray-700 */
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+  margin: 0 0.25rem 0.5rem 0;/* gap-2 wrap */
+}
+
+.filter-chip.active {
+  background: #bfdbfe;       /* blue-200 */
+  color: #1e40af;            /* blue-900 */
+}
+
+/* Ripple card */
+.ripple-card {
+  padding: 1rem;             /* p-4 */
+  border: 2px solid #e5e7eb; /* gray-200 */
+  border-radius: 0.5rem;     /* rounded-lg */
+  margin-bottom: 1rem;       /* mb-4 */
+  background: #fafafa;
+}
+
+/* Confidence colour helpers  */
+.bg-green   { background:#ecfdf5; border-color:#d1fae5; }
+.bg-yellow  { background:#fffbeb; border-color:#fef3c7; }
+.bg-gray    { background:#f9fafb; border-color:#e5e7eb; }
+
+/* Extracted text */
+.ripple-text {
+  color: #1f2937;            /* gray-800 */
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+/* Original context quote */
+.context-quote {
+  font-size: 0.875rem;       /* text-sm */
+  color: #6b7280;            /* gray-600 */
+  font-style: italic;
+  margin-bottom: 0.5rem;
+}
+
+/* Select + buttons row */
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* Cluster select */
+.action-row select {
+  padding: 0.25rem 0.5rem;   /* px-2 py-1 */
+  border: 1px solid #d1d5db; /* gray-300 */
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+}
+
+/* Approve / Dismiss buttons */
+.action-btn {
+  padding: 0.25rem 0.75rem;  /* px-3 py-1 */
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 0.25rem;
+  transition: background-color .15s ease;
+  cursor: pointer;
+  border: none;
+}
+
+.approve-btn {
+  background:#d1fae5;        /* green-100 */
+  color:#065f46;             /* green-900 */
+}
+.approve-btn:hover { background:#a7f3d0; }
+
+.dismiss-btn {
+  background:#fee2e2;        /* red-100 */
+  color:#991b1b;             /* red-900 */
+}
+.dismiss-btn:hover { background:#fecaca; }
+
+/* Status line */
+.status-line {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: #6b7280;            /* gray-500 */
+}
+.status-line .label {
+  font-weight: 600;
+}

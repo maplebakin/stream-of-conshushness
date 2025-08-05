@@ -25,7 +25,7 @@ const rippleSchema = new mongoose.Schema(
     },
     priority       : { type: String, enum: ['high','medium','low'] },
     timeSensitivity: { type: String },        // immediate / scheduled / long-term
-    contexts       : [{ type: String }],
+    contexts       : { type: mongoose.Schema.Types.Mixed },
 
     /*  New scheduling helpers  */
     dueDate   : { type: Date },               // parsed by chrono-node

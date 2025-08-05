@@ -1,6 +1,5 @@
 // utils/analyzeEntry.js
-import { suggestMetadata } from './suggestMetadata.js';
-
+import suggestMetadata from './suggestMetadata.js';
 /**
  * Lightweight wrapper – pulls tag, mood, and cluster arrays from suggestMetadata
  * and guarantees they’re always arrays (never undefined).

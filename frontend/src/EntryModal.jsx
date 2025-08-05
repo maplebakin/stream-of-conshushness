@@ -153,12 +153,12 @@ export default function EntryModal({
     const mutation  = isEditing
       ? `mutation UpdateEntry($id: ID!, $input: EntryInput!) {
            updateEntry(id: $id, input: $input) {
-             _id date createdAt section tags content mood linkedGoal cluster
+             _id date section tags content mood linkedGoal cluster
            }
          }`
       : `mutation CreateEntry($input: EntryInput!) {
            createEntry(input: $input) {
-             _id date createdAt section tags content mood linkedGoal cluster
+             _id date section tags content mood linkedGoal cluster
            }
          }`;
 

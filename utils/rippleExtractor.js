@@ -1,5 +1,5 @@
 // utils/rippleExtractor.js
-import chrono from 'chrono-node';
+import * as chrono from 'chrono-node';
 import {
   analyzeMood,
   analyzePriority,

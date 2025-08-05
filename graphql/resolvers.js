@@ -1,7 +1,7 @@
-// graphql/resolvers.js
-import Entry   from '../models/Entry.js';
-import Ripple  from '../models/Ripple.js';
-import Task    from '../models/Task.js';               // NEW ✔
+import Entry          from '../models/Entry.js';
+import Ripple         from '../models/Ripple.js';
+import Task           from '../models/Task.js';
+import SuggestedTask  from '../models/SuggestedTask.js';
 import { extractRipples } from '../utils/rippleExtractor.js';
 
 const root = {
@@ -9,78 +9,82 @@ const root = {
   entries: async ({ section, date }, context) => {
     if (!context.user) throw new Error('Unauthorized');
 
-    const filter = { userId: context.user.userId || context.user._id };
+    const filter = { userId: context.user.userId };
     if (section) filter.section = section;
     if (date)    filter.date    = date;
 
-    const entries = await Entry
-      .find(filter)
-      .sort({ date: -1, createdAt: -1 });
-
-    return entries;
+    return Entry.find(filter).sort({ date: -1, createdAt: -1 });
   },
 
-  /* ─────────── Mutation: createEntry ─────────── */
+  /* ─────────── Mutation: createEntry (returns Entry) ─────────── */
   createEntry: async ({ input }, context) => {
     if (!context.user) throw new Error('Unauthorized');
 
-    const entry = await new Entry({
-      ...input,
-      userId: context.user.userId
-    }).save();
+    const entry = await new Entry({ ...input, userId: context.user.userId }).save();
 
-    /* ----- extract ripples ----- */
+    /* run extractor → auto-tasks → ripples → suggested-tasks   */
     const extracted = extractRipples([entry.toObject()]);
-
     const autoRipples   = extracted.filter(r => r.priority === 'high' && r.confidence >= 0.8);
     const manualRipples = extracted.filter(r => !autoRipples.includes(r));
 
-    /* auto-create Tasks for qualifying ripples */
+    /* auto-create Tasks */
     for (const r of autoRipples) {
       const t = await new Task({
         userId  : context.user.userId,
         title   : r.extractedText,
-        cluster : r.assignedCluster ?? null,
         priority: r.priority,
-        dueDate : r.dueDate    ?? undefined,
-        repeat  : r.recurrence ?? undefined
+        cluster : r.assignedCluster ?? null,
+        dueDate : r.dueDate   ?? undefined,
+        repeat  : r.recurrence?? undefined
       }).save();
-
       r.status        = 'approved';
       r.createdTaskId = t._id;
     }
 
-    /* save ALL ripple docs */
-    const rippleDocs = [...autoRipples, ...manualRipples].map(r => ({
-      ...r,
-      userId       : context.user.userId,
-      sourceEntryId: entry._id,
-      entryDate    : entry.date
-    }));
-
-    if (rippleDocs.length) {
-      await Ripple.insertMany(rippleDocs, { ordered: false });
-      console.log(`🌊 ${rippleDocs.length} ripple(s) saved from entry ${entry._id}`);
+    /* save all ripples */
+    const rippleDocs = [];
+    for (const r of [...autoRipples, ...manualRipples]) {
+      rippleDocs.push(await new Ripple({
+        userId       : context.user.userId,
+        sourceEntryId: entry._id,
+        entryDate    : entry.date,
+        ...r
+      }).save());
     }
 
-    /* match schema: return both entry & ripples */
-    return { entry, ripples: rippleDocs };
+    /* suggested tasks for remaining task-type ripples */
+    for (const rip of rippleDocs) {
+      if (rip.status === 'pending' && rip.type.endsWith('Task')) {
+        await SuggestedTask.create({
+          userId        : rip.userId,
+          sourceRippleId: rip._id,
+          title         : rip.extractedText,
+          priority      : rip.priority,
+          dueDate       : rip.dueDate   ?? undefined,
+          repeat        : rip.recurrence?? undefined,
+          cluster       : rip.assignedCluster ?? null
+        });
+      }
+    }
+
+    /* ONLY return the entry for the UI */
+    return entry;
   },
 
-  /* ─────────── Mutation: updateEntry ─────────── */
+  /* ─────────── Mutation: updateEntry (returns Entry) ─────────── */
   updateEntry: async ({ id, input }, context) => {
     if (!context.user) throw new Error('Unauthorized');
 
     const entry = await Entry.findOne({ _id: id, userId: context.user.userId });
-    if (!entry) throw new Error('Entry not found or unauthorized');
+    if (!entry) throw new Error('Entry not found');
 
     Object.assign(entry, input);
     const updated = await entry.save();
 
-    /* clear old ripples */
+    /* refresh ripples & suggested tasks */
     await Ripple.deleteMany({ sourceEntryId: id, userId: context.user.userId });
+    await SuggestedTask.deleteMany({ sourceRippleId: { $in: [] } }); // optional clean-up
 
-    /* re-extract */
     const extracted = extractRipples([updated.toObject()]);
     const autoRipples   = extracted.filter(r => r.priority === 'high' && r.confidence >= 0.8);
     const manualRipples = extracted.filter(r => !autoRipples.includes(r));
@@ -89,29 +93,40 @@ const root = {
       const t = await new Task({
         userId  : context.user.userId,
         title   : r.extractedText,
-        cluster : r.assignedCluster ?? null,
         priority: r.priority,
-        dueDate : r.dueDate    ?? undefined,
-        repeat  : r.recurrence ?? undefined
+        cluster : r.assignedCluster ?? null,
+        dueDate : r.dueDate   ?? undefined,
+        repeat  : r.recurrence?? undefined
       }).save();
-
       r.status        = 'approved';
       r.createdTaskId = t._id;
     }
 
-    const rippleDocs = [...autoRipples, ...manualRipples].map(r => ({
-      ...r,
-      userId       : context.user.userId,
-      sourceEntryId: updated._id,
-      entryDate    : updated.date
-    }));
-
-    if (rippleDocs.length) {
-      await Ripple.insertMany(rippleDocs, { ordered: false });
-      console.log(`🌊 ${rippleDocs.length} ripple(s) refreshed for entry ${id}`);
+    const rippleDocs = [];
+    for (const r of [...autoRipples, ...manualRipples]) {
+      rippleDocs.push(await new Ripple({
+        userId       : context.user.userId,
+        sourceEntryId: updated._id,
+        entryDate    : updated.date,
+        ...r
+      }).save());
     }
 
-    return { entry: updated, ripples: rippleDocs };
+    for (const rip of rippleDocs) {
+      if (rip.status === 'pending' && rip.type.endsWith('Task')) {
+        await SuggestedTask.create({
+          userId        : rip.userId,
+          sourceRippleId: rip._id,
+          title         : rip.extractedText,
+          priority      : rip.priority,
+          dueDate       : rip.dueDate   ?? undefined,
+          repeat        : rip.recurrence?? undefined,
+          cluster       : rip.assignedCluster ?? null
+        });
+      }
+    }
+
+    return updated;
   }
 };
 
