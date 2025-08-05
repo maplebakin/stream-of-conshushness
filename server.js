@@ -2,95 +2,97 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-// ─── Core ─────────────────────────────
-import express from 'express';
-import path, { dirname } from 'path';
-import { fileURLToPath } from 'url';
-import mongoose from 'mongoose';
-import jwt from 'jsonwebtoken';
+/* ───────────── Core ───────────── */
+import express            from 'express';
+import path, { dirname }  from 'path';
+import { fileURLToPath }  from 'url';
+import mongoose           from 'mongoose';
+import jwt                from 'jsonwebtoken';
 
-// ─── Middleware & Utils ─────────────────────────────
-import auth from './middleware/auth.js';
+/* ───────────── Utils & Middleware ───────────── */
+import cors     from 'cors';
+import helmet   from 'helmet';
+import auth     from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
 
-// ─── Route Handlers ─────────────────────────────
-import habitRoutes        from './routes/habits.js';
-import taskRoutes         from './routes/tasks.js';
-import goalRoutes         from './routes/goals.js';
-import gameRoutes         from './routes/games.js';
-import pageRoutes         from './routes/pages.js';
-import sectionPagesRouter from './routes/sectionPages.js';
-import sectionRoutes      from './routes/sections.js';     // ⭐ NEW
-import entryRoutes        from './routes/entries.js';
-import appointmentRoutes  from './routes/appointments.js';
-import noteRoutes         from './routes/notes.js';
+/* ───────────── Route Handlers ───────────── */
+import habitRoutes         from './routes/habits.js';
+import taskRoutes          from './routes/tasks.js';
+import goalRoutes          from './routes/goals.js';
+import gameRoutes          from './routes/games.js';
+import pageRoutes          from './routes/pages.js';
+import sectionPagesRouter  from './routes/sectionPages.js';
+import sectionRoutes       from './routes/sections.js';
+import entryRoutes         from './routes/entries.js';
+import appointmentRoutes   from './routes/appointments.js';
+import noteRoutes          from './routes/notes.js';
 import importantEventRoutes from './routes/importantEvents.js';
-import scheduleRoutes     from './routes/schedule.js';
-import calendarRoutes     from './routes/calendar.js';
-import rippleRoutes       from './routes/ripples.js';
+import scheduleRoutes      from './routes/schedule.js';
+import calendarRoutes      from './routes/calendar.js';
+import rippleRoutes        from './routes/ripples.js';
 
-// ─── GraphQL ─────────────────────────────
+/* ───────────── GraphQL ───────────── */
 import { createHandler } from 'graphql-http/lib/use/express';
 import schema from './graphql/schema.js';
 import root   from './graphql/resolvers.js';
 
-// ─── App Setup ─────────────────────────────
+/* ───────────── App Setup ───────────── */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-// ─── Global Middleware ─────────────────────────────
+/* ───────────── Global Middleware ───────────── */
+app.use(cors());
+app.use(helmet());
 app.use(express.json());
 
-// ─── REST Routes ─────────────────────────────
-app.use('/api',              authRoutes);              // auth/login/register
-app.use('/api/habits',       habitRoutes);
-app.use('/api/tasks',        taskRoutes);
-app.use('/api/goals',        goalRoutes);
-app.use('/api/games',        gameRoutes);
-app.use('/api/pages',        pageRoutes);
-app.use('/api/section-pages', sectionPagesRouter);
-app.use('/api/sections',     auth, sectionRoutes);     // ⭐ NEW (protected)
-app.use('/api/entries',      auth, entryRoutes);       // protect with token
-app.use('/api/appointments', appointmentRoutes);
-app.use('/api/note',         noteRoutes);
-app.use('/api/important-events', importantEventRoutes);
-app.use('/api/schedule',     scheduleRoutes);
-app.use('/api/calendar-data', calendarRoutes);
-app.use('/api/ripples',      rippleRoutes);
+/* ───────────── REST Routes ───────────── */
+app.use('/api',                 authRoutes);                 // login / register
 
-// ─── GraphQL Endpoint ─────────────────────────────
+app.use('/api/habits',          auth, habitRoutes);
+app.use('/api/tasks',           auth, taskRoutes);
+app.use('/api/goals',           auth, goalRoutes);
+app.use('/api/games',           auth, gameRoutes);
+app.use('/api/pages',           auth, pageRoutes);
+app.use('/api/section-pages',   auth, sectionPagesRouter);
+app.use('/api/sections',        auth, sectionRoutes);
+app.use('/api/entries',         auth, entryRoutes);
+app.use('/api/appointments',    auth, appointmentRoutes);
+app.use('/api/notes',           auth, noteRoutes);           // plural ✔
+app.use('/api/important-events',auth, importantEventRoutes);
+app.use('/api/schedule',        auth, scheduleRoutes);
+app.use('/api/calendar-data',   auth, calendarRoutes);
+app.use('/api/ripples',         auth, rippleRoutes);
+
+/* ───────────── GraphQL Endpoint ───────────── */
 app.use('/graphql', createHandler({
   schema,
   rootValue: root,
   context: (req) => {
-    const authHeader = req.headers['authorization'];
-    if (!authHeader) return { user: null };
-
-    const token = authHeader.split(' ')[1];
+    const authHeader = req.headers['authorization'] || '';
+    const token      = authHeader.split(' ')[1];
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       return { user: decoded };
-    } catch (err) {
-      console.warn('Invalid/expired token in GraphQL:', err.message);
+    } catch {
       return { user: null };
     }
   }
 }));
 
-// ─── Health Check ─────────────────────────────
-app.get('/health', (req, res) => res.send('OK'));
+/* ───────────── Health Check ───────────── */
+app.get('/health', (_, res) => res.send('OK'));
 
-// ─── Serve Front-End ─────────────────────────────
+/* ───────────── Serve Front-End ───────────── */
 const CLIENT_BUILD_PATH = path.join(__dirname, 'frontend', 'dist');
 app.use(express.static(CLIENT_BUILD_PATH));
 app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api')) return next(); // let the API handle it
+  if (req.path.startsWith('/api') || req.path.startsWith('/graphql')) return next();
   res.sendFile(path.join(CLIENT_BUILD_PATH, 'index.html'));
 });
 
-// ─── MongoDB Connection ─────────────────────────────
+/* ───────────── MongoDB Connection ───────────── */
 (async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
@@ -100,7 +102,7 @@ app.get('*', (req, res, next) => {
   }
 })();
 
-// ─── Start Server ─────────────────────────────
+/* ───────────── Start Server ───────────── */
 app.listen(PORT, () => {
   console.log(`🌿 Listening on http://localhost:${PORT}`);
 });

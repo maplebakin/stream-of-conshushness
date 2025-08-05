@@ -1,70 +1,32 @@
 /*──────────────────────────────────────────────────────
-  Stream of Conshushness — Calendar.css
+  Stream of Conshushness — Calendar.css (Page-Specific)
 ──────────────────────────────────────────────────────*/
 
 @import url('./variables.css');
 
 /*──────────────────────────────────────────────────────
-  Base Page
+  Calendar Page Wrapper
 ──────────────────────────────────────────────────────*/
 .calendar-page {
-  background-color: var(--color-background);
-  color: var(--color-text);
-  font-family: var(--font-serif);
-  padding: 2rem 2rem;
-  width: 100%;
+  background: var(--color-background);
+  min-height: 100vh;
+  padding: 1rem;
   box-sizing: border-box;
 }
-/*──────────────────────────────────────────────────────
-  Header
-──────────────────────────────────────────────────────*/
-.calendar-page > header {
-  background-color: var(--color-header);
-  color: var(--color-surface);
-  padding: 16px 20px;
-  border-radius: var(--radius-card);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
-  font-family: var(--font-decorative);
-  margin-bottom: 2rem;
-}
-
-.calendar-page > header h1 {
-  margin: 0;
-  font-size: 2.2rem;
-}
-
-.calendar-page > header nav a {
-  text-decoration: none;
-  font-family: var(--font-handwritten);
-  background-color: var(--color-accent);
-  color: var(--color-surface);
-  padding: 6px 12px;
-  border-radius: var(--radius-button);
-  transition: background-color 0.3s ease;
-}
-
-.calendar-page > header nav a:hover {
-  background-color: var(--color-hover);
-}
 
 /*──────────────────────────────────────────────────────
-  Layout Grid
+  Layout: Left = Important Events, Center = Calendar, Right = Sidebar
 ──────────────────────────────────────────────────────*/
 .calendar-layout {
   display: grid;
-  grid-template-columns: 250px 1fr 180px;
+  grid-template-columns: 240px 1fr 240px; /* ⬅️ Left = events, middle = calendar, right = sidebar */
   gap: 1.5rem;
+  align-items: flex-start;
   width: 100%;
-  box-sizing: border-box;
 }
 
-/*──────────────────────────────────────────────────────
-  Important Events Sidebar
-──────────────────────────────────────────────────────*/
-.important-events {
+
+.calendar-page__sidebar {
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
@@ -72,70 +34,16 @@
   box-shadow: 0 2px 6px rgba(0,0,0,0.05);
 }
 
-.important-events h3 {
-  font-family: var(--font-serif);
-  font-size: 1.3rem;
-  margin-top: 0;
-  border-bottom: 1px solid var(--color-border);
-  padding-bottom: 0.25rem;
-  margin-bottom: 0.75rem;
-}
-
-.important-event-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.important-event-form input {
-  padding: 0.5rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-input);
-  background-color: var(--color-surface);
-  color: var(--color-text);
-}
-
-.important-event-form button {
-  background-color: var(--color-accent);
-  color: var(--color-surface);
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: var(--radius-button);
-  font-family: var(--font-handwritten);
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-}
-
-.important-event-form button:hover {
-  background-color: var(--color-hover);
-}
-
-.important-event-list {
-  list-style: none;
-  padding: 0;
-  margin-top: 1rem;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.important-event-list li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.95rem;
-  border-bottom: 1px dashed var(--color-border);
-  padding: 0.25rem 0;
-}
-
-/*──────────────────────────────────────────────────────
-  Calendar Content
-──────────────────────────────────────────────────────*/
-.calendar-content {
+.calendar-page__content {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-width: 0;
 }
 
+/*──────────────────────────────────────────────────────
+  Header with Controls (Month + Actions)
+──────────────────────────────────────────────────────*/
 .calendar-header {
   display: flex;
   justify-content: space-between;
@@ -143,101 +51,46 @@
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  padding: 0.75rem 1rem;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-}
-
-.calendar-header h2 {
-  margin: 0;
-  font-size: 1.4rem;
-  font-family: var(--font-serif);
-}
-
-.calendar-header button {
-  background-color: var(--color-accent);
-  color: var(--color-surface);
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: var(--radius-button);
-  font-family: var(--font-handwritten);
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-}
-
-.calendar-header button:hover {
-  background-color: var(--color-hover);
-}
-.calendar-nav {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.today-btn,
-.nav-btn {
-  background-color: var(--color-accent);
-  color: var(--color-surface);
-  border: none;
-  padding: 6px 12px;
-  font-family: var(--font-handwritten);
-  border-radius: var(--radius-button);
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-}
-
-.today-btn:hover,
-.nav-btn:hover {
-  background-color: var(--color-hover);
-}
-
-.month-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-}
-
-
-/*──────────────────────────────────────────────────────
-  Add Appointment
-──────────────────────────────────────────────────────*/
-.add-appointment {
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
   padding: 1rem;
   box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-}
-
-.add-appointment-buttons {
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 1rem;
+  gap: 1rem;
 }
 
 .calendar-controls {
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 1rem;
 }
 
-.add-appointment form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-.add-appointment input {
-  padding: 0.5rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-input);
-  background-color: var(--color-surface);
-  color: var(--color-text);
+.calendar-header h2 {
+  font-size: 1.5rem;
   font-family: var(--font-serif);
+  margin: 0;
+}
+
+.calendar-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.calendar-actions .btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  background-color: var(--color-accent);
+  color: var(--color-surface);
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: var(--radius-button);
+  font-family: var(--font-handwritten);
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.calendar-actions .btn:hover {
+  background-color: var(--color-hover);
 }
 
 /*──────────────────────────────────────────────────────
@@ -246,13 +99,16 @@
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 0.75rem;
+  gap: 1rem;
+  min-width: 100%;
 }
 
 .day-of-week {
-  font-weight: bold;
   text-align: center;
+  font-weight: bold;
   font-family: var(--font-serif);
+  font-size: 0.95rem;
+  color: var(--color-text);
 }
 
 .calendar-day {
@@ -269,27 +125,9 @@
   transition: background-color 0.2s ease;
 }
 
-.calendar-day.has-note {
-  border-color: var(--color-accent-alt);
-}
-
-.calendar-day.has-important {
-  border-color: var(--color-accent);
-}
-
 .calendar-day.today {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 2px var(--color-accent);
-}
-
-.calendar-day.past-day {
-  opacity: 0.6;
-  filter: grayscale(0.4);
-}
-
-.calendar-day:hover {
-  background-color: var(--color-input-bg);
-  border-color: var(--color-accent);
+  border: 2px solid var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
 }
 
 .date-label {
@@ -298,394 +136,74 @@
   margin-bottom: 0.5rem;
 }
 
-.day-appointment {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.9rem;
-}
-
-.day-appointment button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  margin-left: 0.5rem;
-}
-
-.star {
-  display: inline-block;
-  margin-left: 6px;
-  font-size: 1.4rem;
-  color: var(--color-accent);
-  font-family: var(--font-serif);
-  font-weight: bold;
-  vertical-align: middle;
-  filter: drop-shadow(0 0 2px var(--color-accent));
-  transition: transform 0.2s ease, filter 0.2s ease;
-}
-
-.star:hover {
-  transform: scale(1.2);
-  filter: drop-shadow(0 0 4px var(--color-accent));
-  cursor: default;
-}
-
-.delete-button {
-  background-color: var(--color-surface);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  padding: 0.3rem 0.6rem;
-  border-radius: var(--radius-button);
-  font-family: var(--font-handwritten);
-  cursor: pointer;
-  transition: background-color 0.3s ease, border-color 0.3s ease;
-  font-size: 0.9rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
-
-.delete-button:hover {
-  background-color: var(--color-hover);
-  border-color: var(--color-accent);
-}
-
-
-.add-appointment-buttons {
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-
 /*──────────────────────────────────────────────────────
-  Month Tabs (Sidebar)
+  Important Events Sidebar (Left)
 ──────────────────────────────────────────────────────*/
-.calendar-sidebar {
-  position: sticky;
-  top: 120px;
-  align-self: start;
+.important-events h3 {
+  font-family: var(--font-serif);
+  font-size: 1.3rem;
+  margin-top: 0;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.25rem;
+  margin-bottom: 0.75rem;
 }
 
-.month-tabs {
+.important-event-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
+  gap: 0.5rem;
 }
 
-.month-tab {
-  width: 40px;
-  height: 48px;
-  overflow: hidden;
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-button) 0 0 var(--radius-button);
-  cursor: pointer;
-  transition: width 0.25s ease, background-color 0.25s ease;
-  font-family: var(--font-handwritten);
-  box-shadow: 1px 1px 4px rgba(0,0,0,0.08);
+.important-event-list li {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 4px;
-  box-sizing: border-box;
-}
-
-.month-tab:hover,
-.month-tab.active {
-  width: 140px;
-  background-color: var(--color-accent);
-  color: var(--color-surface);
-}
-
-.month-tab .collapsed-label {
-  flex-shrink: 0;
-  font-size: 1.2em;
-  color: var(--color-text);
-  text-align: right;
-  opacity: 0.8;
-  transition: opacity 0.25s ease;
-  padding-right: 2px;
-}
-
-.month-tab:hover .collapsed-label,
-.month-tab.active .collapsed-label {
-  opacity: 0;
-}
-
-.month-tab .expanded-label {
-  margin-left: 8px;
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  font-size: 1.1em;
-  color: var(--color-text);
-}
-
-.month-tab:hover .expanded-label,
-.month-tab.active .expanded-label {
-  opacity: 1;
-  color: var(--color-surface);
+  justify-content: space-between;
+  font-size: 0.95rem;
+  border-bottom: 1px dashed var(--color-border);
+  padding: 0.25rem 0;
 }
 
 /*──────────────────────────────────────────────────────
   Responsive
 ──────────────────────────────────────────────────────*/
-@media (max-width: 768px) {
-  /* General Page Layout */
-  .calendar-page {
-    padding: 1rem;
-  }
-
+@media (max-width: 1024px) {
   .calendar-layout {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-    padding: 0;
+    grid-template-columns: 1fr;
   }
 
-  .calendar-content {
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-    order: 1;
-  }
-
-  /* Header */
-  .calendar-page > header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .calendar-page > header h1 {
-    font-size: 1.6rem;
-    line-height: 1.2;
-  }
-
-  .calendar-page > header nav a {
-    width: 100%;
-    text-align: center;
-    padding: 0.5rem;
-    font-size: 1rem;
-  }
-
-  /* Calendar Header */
   .calendar-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.5rem;
   }
 
-  .calendar-header h2 {
-    font-size: 1.3rem;
-  }
-
-  .calendar-header button {
-    width: 100%;
-    text-align: center;
-  }
-
-  /* Important Events */
-  .important-events {
-    width: 100%;
-    margin: 0 auto;
-    padding: 1rem;
-    border-radius: var(--radius-card);
-    background-color: var(--color-surface);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-    order: 2;
-  }
-
-  .important-events h3 {
-    font-size: 1.1rem;
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-  }
-
-  .important-event-form input,
-  .important-event-form button {
-    font-size: 1rem;
-  }
-
-  .important-event-list li {
-    padding: 0.6rem 0.75rem;
-    margin-bottom: 0.5rem;
-    background-color: var(--color-input-bg);
-    border-radius: var(--radius-input);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.9rem;
-  }
-
-  /* Add Appointment */
-  .add-appointment {
-    padding: 1rem;
-    border-radius: var(--radius-card);
-  }
-
-  .add-appointment-buttons {
+  .calendar-actions {
     flex-direction: column;
-    gap: 0.5rem;
+    width: 100%;
   }
 
-  .add-appointment form {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    margin-top: 0.75rem;
-  }
-
-  .add-appointment form label {
-    display: block;
-    margin-bottom: 0.5rem;
-  }
-
-  /* Calendar Grid */
   .calendar-grid {
     gap: 0.5rem;
   }
 
   .calendar-day {
-    padding: 0.5rem;
     min-height: 80px;
-    margin-bottom: 0.5rem;
+    padding: 0.5rem;
   }
 
-  .calendar-day.today {
-    background-color: rgba(122, 96, 145, 0.08);
-    border: 2px dashed var(--color-accent);
-  }
-
-  .date-label {
-    font-size: 1rem;
-  }
-
-  .day-appointment {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-    font-size: 0.85rem;
-  }
-
-  .delete-button {
-    padding: 0.3rem 0.6rem;
-    font-size: 0.85rem;
-  }
-
-  /* Month Tabs */
-  .calendar-sidebar {
-    display: none;
-  }
-
-  .month-tabs {
-    flex-direction: row;
-    overflow-x: auto;
-    gap: 0.5rem;
-    padding: 0.5rem 0;
-    margin-bottom: 1rem;
-  }
-
-  .month-tab {
-    flex: 0 0 auto;
-    padding: 0.5rem 0.75rem;
-    border-radius: var(--radius-button);
-    font-size: 0.95rem;
-    border: 1px solid var(--color-border);
-  }
-
-  .month-tab.active {
-    background-color: var(--color-accent);
-    color: var(--color-surface);
-  }
-
-  .month-tab:hover {
-    background-color: var(--color-hover);
-    color: var(--color-surface);
+  .calendar-page__sidebar {
+    margin-top: 2rem;
   }
 }
-.month-nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-}
+
 /*──────────────────────────────────────────────────────
-  Desktop View Restore (min-width: 769px)
+  Layout Container Fix for Calendar Pages
 ──────────────────────────────────────────────────────*/
-@media (min-width: 769px) {
-  .calendar-layout {
-    display: grid;
-    grid-template-columns: 250px 1fr 180px;
-    gap: 1.5rem;
-  }
-
-  .calendar-content {
-    padding: 0;
-    flex-direction: column;
-  }
-
-  .calendar-header {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .calendar-header button {
-    width: auto;
-    text-align: center;
-  }
-
-  .calendar-page > header {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .calendar-page > header nav a {
-    width: auto;
-    font-size: 1rem;
-  }
-
-  .important-events {
-    width: 100%;
-  }
-
-  .month-tabs {
-    flex-direction: column;
-    align-items: flex-end;
-  }
-
-  .month-tab {
-    width: 40px;
-    height: 48px;
-    border-radius: var(--radius-button) 0 0 var(--radius-button);
-    justify-content: flex-end;
-  }
-
-  .month-tab .collapsed-label {
-    opacity: 0.8;
-  }
-
-  .month-tab:hover,
-  .month-tab.active {
-    width: 140px;
-    background-color: var(--color-accent);
-    color: var(--color-surface);
-  }
-
-  .month-tab:hover .collapsed-label,
-  .month-tab.active .collapsed-label {
-    opacity: 0;
-  }
-
-  .month-tab:hover .expanded-label,
-  .month-tab.active .expanded-label {
-    opacity: 1;
-    color: var(--color-surface);
-  }
+.main-container.calendar-layout-full {
+  display: flex;
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  gap: 1.5rem;
 }

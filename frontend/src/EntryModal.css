@@ -1,40 +1,52 @@
-/*──────────────────────────────────────────────────────
-  Entry Modal Styles — Stream of Conshushness
-──────────────────────────────────────────────────────*/
+/*─────────────────────────────────────────────
+  Entry Modal — Stream of Conshushness
+─────────────────────────────────────────────*/
 
-/* Full-screen dark overlay */
+/* ---------- Theme tokens (override in :root elsewhere) ---------- */
+:root {
+  --color-background : #f7f5ed;
+  --color-surface    : #ffffff;
+  --color-text       : #2c2c2c;
+  --color-border     : #c6c6c6;
+  --color-accent     : #8a6c88;
+  --color-accent-dark: #724a71;
+
+  --radius-card   : 12px;
+  --radius-input  : 6px;
+  --radius-button : 6px;
+
+  --font-serif       : 'Cormorant Garamond', serif;
+  --font-handwritten : 'Libre Baskerville', serif;
+}
+
+/* ---------- Backdrop + modal ---------- */
 .modal-backdrop {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.4);
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
   padding: 20px;
-  box-sizing: border-box;
+  background: rgba(0,0,0,.4);
+  z-index: 1000;
 }
 
-/* Floating card container */
 .modal {
-  max-height: 90vh;                /* Keeps it from taking over the whole screen */
-  overflow-y: auto;
-  background: var(--color-background, #f7f5ed);
-  color: var(--color-text, #2c2c2c);
-  width: 100%;
   max-width: 650px;
-  border-radius: var(--radius-card, 12px);
+  max-height: 90vh;
+  width: 100%;
+  overflow-y: auto;
+  background: var(--color-background);
+  color: var(--color-text);
+  border-radius: var(--radius-card);
   padding: 1.5rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  font-family: var(--font-serif, 'Cormorant Garamond', serif);
+  box-shadow: 0 4px 20px rgba(0,0,0,.15);
+  font-family: var(--font-serif);
   position: relative;
   z-index: 1100;
 }
 
-/* Form labels and fields */
+/* ---------- Form fields ---------- */
 .modal label {
   display: block;
   margin-bottom: 1rem;
@@ -44,32 +56,58 @@
 .modal select,
 .modal input[type="text"] {
   width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-.field-group.horizontal label > select,
-.field-group.horizontal label > input[type="text"] {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.modal input[list] {
-  width: 100%;
-  padding: 0.6rem;
-  margin-top: 0.3rem;
-  border: 1px solid var(--color-border, #ccc);
-  border-radius: var(--radius-input, 6px);
+  padding: .6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  background: var(--color-surface);
   font-family: var(--font-serif);
   font-size: 1rem;
-  background-color: var(--color-surface, #fff);
-  color: var(--color-text);
-  appearance: none; /* Helps remove weird browser quirks */
+  box-sizing: border-box;
+  transition: border-color .2s ease;
 }
 
-.modal input[list]:focus {
-  border-color: var(--color-accent, #8a6c88);
+.modal select:focus,
+.modal input[type="text"]:focus {
+  border-color: var(--color-accent);
   outline: none;
+}
+
+/* ---------- Horizontal field groups ---------- */
+.field-group.horizontal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.field-group.horizontal label {
+  flex: 1 1 45%;
+}
+
+/* ---------- TipTap editor & toolbar ---------- */
+.tiptap-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.tiptap-toolbar button {
+  font-family: var(--font-handwritten);
+  font-size: .9rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-button);
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background .2s ease, color .2s ease;
+}
+
+.tiptap-toolbar button:hover,
+.tiptap-toolbar button.active {
+  background: var(--color-accent);
+  color: var(--color-surface);
+  font-weight: 600;
 }
 
 .tiptap-editor {
@@ -77,219 +115,75 @@
   max-height: 400px;
   overflow-y: auto;
   padding: .6rem;
-  border: 1px solid var(--color-border, #aaa); /* <- punchier */
-  border-radius: var(--radius-input, 6px);
-  background-color: var(--color-surface, #fff); /* <- lighter for contrast */
+  margin-top: .5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  background: var(--color-surface);
   font-family: var(--font-serif);
   font-size: 1rem;
   line-height: 1.6;
-  margin-top: 0.5rem;
-  cursor: text;
   white-space: pre-wrap;
-  transition: border-color 0.3s ease, background-color 0.3s ease;
+  transition: border-color .3s ease, background-color .3s ease;
 }
-
-.tiptap-editor p {
-  margin: 0;
-  padding: 0.6rem 0;
-  font-weight: normal !important;  /* 👈 force regular weight */
-  font-style: normal !important;
-  font-family: inherit;
-  font-size: 1rem;
-  line-height: 1.6;
-  color: inherit;
-}
-
 
 .tiptap-editor:focus-within {
-  border-color: var(--color-accent, #8a6c88); /* subtle glow on focus */
-  background-color: #fffdfb;
-}
-/* TipTap formatting output styles */
-.tiptap-editor strong {
-  font-weight: 600;
-}
-.tiptap-editor strong:empty::before {
-  content: '';
-  display: inline;
+  border-color: var(--color-accent);
+  background: #fffdfb;
 }
 
-.tiptap-editor em {
-  font-style: italic;
-}
-
-.tiptap-editor ul {
-  list-style-type: disc;
-  padding-left: 1.5rem;
-  margin-top: 0.75em;
-  margin-bottom: 0.75em;
-}
-
-.tiptap-editor ol {
-  list-style-type: decimal;
-  padding-left: 1.5rem;
-  margin-top: 0.75em;
-  margin-bottom: 0.75em;
-}
-
-.tiptap-editor li {
-  margin-bottom: 0.25em;
-}
-.tiptap-editor {
-  user-select: text;
-}
-
-/* Empty state placeholder */
+/* editor placeholder */
 .tiptap-editor:empty::before {
   content: 'Write your entry here...';
-  color: var(--color-border, #aaa);
+  color: var(--color-border);
   font-style: italic;
   pointer-events: none;
-  display: block;
 }
 
+/* rich-text output basics */
+.tiptap-editor strong  { font-weight: 600; }
+.tiptap-editor em      { font-style: italic; }
+.tiptap-editor ul,
+.tiptap-editor ol      { padding-left: 1.5rem; margin: .75em 0; }
+.tiptap-editor li      { margin-bottom: .25em; }
 
-
-/* TipTap toolbar buttons */
-/* Remove button outlines globally in TipTap toolbar */
-.tiptap-toolbar button:focus,
-.tiptap-toolbar button:focus-visible,
-.tiptap-toolbar button:focus-within {
-  outline: none !important;
-  box-shadow: none !important;
-  border: 1px solid var(--color-border, #ccc) !important; /* maintain shape */
-}
-.tiptap-editor:focus {
-  outline: none !important;
-}
-
-.tiptap-toolbar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-}
-
-.tiptap-toolbar button {
-  font-family: var(--font-handwritten, 'Libre Baskerville');
-  font-size: 0.9rem;
-  background-color: var(--color-surface, #fff);
-  color: var(--color-text, #2c2c2c);
-  border: 1px solid var(--color-border, #ccc);
-  border-radius: var(--radius-button, 6px);
-  padding: 5px 10px;
-  cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease;
-}
-
-.tiptap-toolbar button:hover {
-  background-color: var(--color-accent, #8a6c88);
-  color: var(--color-surface, #fff);
-}
-
-.tiptap-toolbar button.active {
-  background-color: var(--color-accent, #8a6c88);
-  color: var(--color-surface, #fff);
-  font-weight: bold;
-}
-
-/* Modal action buttons */
+/* ---------- Modal buttons ---------- */
 .modal-buttons {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: .75rem;
   margin-top: 1.5rem;
 }
 
 .modal-buttons button {
-  padding: 0.5rem 1.25rem;
-  border-radius: var(--radius-button, 6px);
+  padding: .5rem 1.25rem;
+  border-radius: var(--radius-button);
   font-size: 1rem;
+  font-family: var(--font-handwritten);
   cursor: pointer;
-  font-family: var(--font-handwritten, 'Libre Baskerville');
-  border: none;
-  transition: background-color 0.2s ease;
+  transition: background .2s ease;
+  border: 1px solid transparent;
 }
 
-.modal-buttons button:nth-child(1) {
-  background-color: transparent;
-  border: 1px solid var(--color-border, #888);
-  color: var(--color-text, #444);
+.modal-buttons button:first-child {
+  background: transparent;
+  color: var(--color-text);
+  border-color: var(--color-border);
 }
 
-.modal-buttons button:nth-child(2) {
-  background-color: var(--color-accent, #8a6c88);
-  color: var(--color-surface, #fff);
+.modal-buttons button:first-child:hover {
+  background: #f1f1f1;
 }
 
-.modal-buttons button:nth-child(1):hover {
-  background-color: #f1f1f1;
+.modal-buttons button:last-child {
+  background: var(--color-accent);
+  color: var(--color-surface);
 }
 
-.modal-buttons button:nth-child(2):hover {
-  background-color: var(--color-accent-dark, #724a71);
+.modal-buttons button:last-child:hover {
+  background: var(--color-accent-dark);
 }
 
-
-/* Remove any remaining box shadows or browser default outlines */
-.tiptap-editor p:focus {
-  outline: none;
-  box-shadow: none;
-}
-
-/* Add soft spacing between paragraphs */
-.tiptap-editor p + p {
-  margin-top: 0.75em;
-}
-/* BANISH THE BLACK OUTLINE COMPLETELY */
-.tiptap-editor *:focus,
-.tiptap-editor *:focus-visible,
-.tiptap-editor *:focus-within {
-  outline: none !important;
-  box-shadow: none !important;
-  border: none !important;
-}
-
-/* Just in case some browsers try extra shit */
-.tiptap-editor [data-node-view-wrapper],
-.tiptap-editor [contenteditable="true"] {
-  outline: none !important;
-  box-shadow: none !important;
-  border: none !important;
-}
-/* Fix ghost bold glitch */
-.tiptap-editor strong {
-  font-weight: 600; /* not too heavy */
-}
-
-.tiptap-editor strong:empty::before {
-  content: '';
-  display: inline;
-}
-
-/* Final nuke to black outlines */
-.tiptap-editor:focus {
-  outline: none !important;
-}
-input[list] {
-  appearance: none; /* Some browsers need this to show the dropdown */
-  -webkit-appearance: none;
-  background-color: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #ccc);
-  border-radius: var(--radius-input, 6px);
-}
-
-datalist {
-  display: block; /* Force visibility for some browsers */
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-datalist option {
-  font-family: var(--font-serif);
-  font-size: 1rem;
-  padding: 5px;
-}
+/* ---------- Custom dropdown (for future datalist replacement) ---------- */
 .custom-dropdown {
   position: relative;
 }
@@ -297,7 +191,6 @@ datalist option {
 .dropdown-input-wrapper {
   display: flex;
   align-items: center;
-  position: relative;
 }
 
 .dropdown-input-wrapper input {
@@ -307,53 +200,26 @@ datalist option {
 
 .dropdown-toggle-btn {
   position: absolute;
-  right: 0.5rem;
+  right: .5rem;
   background: none;
   border: none;
   font-size: 1rem;
   cursor: pointer;
-  padding: 0;
-  color: #555;
-}
-.custom-dropdown {
-  position: relative;
-}
-
-.dropdown-input-wrapper {
-  display: flex;
-  align-items: center;
-  position: relative;
-}
-
-.dropdown-input-wrapper input {
-  flex: 1;
-  padding-right: 2rem;
-}
-
-.dropdown-toggle-btn {
-  position: absolute;
-  right: 0.5rem;
-  background: none;
-  border: none;
-  font-size: 1rem;
-  cursor: pointer;
-  padding: 0;
   color: #555;
 }
 
 .dropdown-list {
   position: absolute;
+  inset-inline: 0;
   top: 100%;
-  left: 0;
-  right: 0;
   max-height: 200px;
   overflow-y: auto;
-  background-color: var(--color-surface);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  z-index: 1000;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   margin-top: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,.1);
+  z-index: 1000;
 }
 
 .dropdown-list li {
@@ -363,16 +229,6 @@ datalist option {
 }
 
 .dropdown-list li:hover {
-  background-color: var(--color-accent);
+  background: var(--color-accent);
   color: var(--color-surface);
-}
-.field-group.horizontal {
-  display: flex;
-  gap: 1rem;
-  justify-content: space-between;
-  flex-wrap: wrap;
-}
-
-.field-group.horizontal label {
-  flex: 1 1 45%;
 }

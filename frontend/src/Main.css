@@ -16,7 +16,6 @@ body {
   line-height: 1.6;
 }
 
-/* Global layout wrapper */
 .app-layout {
   display: flex;
   flex-direction: column;
@@ -25,7 +24,9 @@ body {
   color: var(--color-text);
 }
 
-/* Global header */
+/*──────────────────────────────────────────────────────
+  Header
+──────────────────────────────────────────────────────*/
 header {
   background-color: var(--color-header);
   text-align: center;
@@ -55,7 +56,9 @@ header nav a:hover {
   text-decoration: underline;
 }
 
-/* Main container (Stream + Sections) */
+/*──────────────────────────────────────────────────────
+  Layout
+──────────────────────────────────────────────────────*/
 .main-container {
   display: flex;
   gap: 2rem;
@@ -66,6 +69,10 @@ header nav a:hover {
   max-width: 1400px;
   margin: 0 auto;
   box-sizing: border-box;
+}
+
+.main-container.right-sidebar {
+  flex-direction: row-reverse;
 }
 
 /* Sidebar */
@@ -87,7 +94,7 @@ header nav a:hover {
   margin-top: 0;
 }
 
-/* Feed Area */
+/* Main Feed */
 .main-feed {
   flex: 1;
   padding: 2rem;
@@ -178,4 +185,7 @@ textarea {
     display: inline-block;
     margin: 0.5rem;
   }
+}
+.main-container.right-sidebar {
+  display: block; /* instead of flex */
 }
