@@ -15,6 +15,7 @@ import SectionPageView from './SectionPageView.jsx';
 import RippleReviewUI from './RippleReviewUI'; 
 import Layout from './Layout.jsx';
 import { SearchProvider } from "./SearchContext.jsx";
+import SuggestedTasksInbox from './SuggestedTasksInbox.jsx';
 
 
 
@@ -42,6 +43,7 @@ function AppRoutes() {
             <Route path="/section/:sectionName/:pageSlug" element={<SectionPageView />} />
             <Route path="/ripples" element={<RippleReviewUI />} />
             <Route path="*" element={<div style={{ padding: 32 }}>Not found.</div>} />
+            <Route path="/inbox/tasks" element={<SuggestedTasksInbox />} />
           </Route>
           {/* (Optional) Add a catch-all 404 page for logged-in users here */}
         </>
