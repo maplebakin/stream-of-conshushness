@@ -31,6 +31,7 @@ import scheduleRoutes      from './routes/schedule.js';
 import calendarRoutes      from './routes/calendar.js';
 import rippleRoutes        from './routes/ripples.js';
 import suggestedTaskRoutes from './routes/suggestedTasks.js';
+import clusterRoutes from './routes/clusters.js';
 
 /* ───────────── GraphQL ───────────── */
 import { createHandler } from 'graphql-http/lib/use/express';
@@ -66,6 +67,7 @@ app.use('/api/schedule',        auth, scheduleRoutes);
 app.use('/api/calendar-data',   auth, calendarRoutes);
 app.use('/api/ripples',         auth, rippleRoutes);
 app.use('/api/suggested-tasks', suggestedTaskRoutes);
+app.use('/api/clusters', auth, clusterRoutes);
 
 /* ───────────── GraphQL Endpoint ───────────── */
 app.use('/graphql', createHandler({

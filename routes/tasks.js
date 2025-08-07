@@ -1,10 +1,11 @@
 import express from 'express';
 import Task from '../models/Task.js';
+import auth from '../middleware/auth.js';
 
 const router = express.Router();
 
 // GET /api/tasks?date=YYYY-MM-DD
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   const { date } = req.query;
   const query = { userId: req.user.userId };
 
@@ -24,7 +25,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/tasks
-router.post('/', async (req, res) => {
+router.post('/', auth, async (req, res) => {
   const {
     content,
     dueDate,
@@ -46,40 +47,25 @@ router.post('/', async (req, res) => {
       goalId: goalId || null,
       entryId: entryId || null,
       clusters: clusters || [],
-      addedToToday: addedToToday || [],
-      completed: false
+      addedToToday: addedToToday || []
     });
-    await newTask.save();
-    res.json(newTask);
+
+    const savedTask = await newTask.save();
+    res.status(201).json(savedTask);
   } catch {
     res.status(500).json({ error: 'Failed to create task' });
   }
 });
 
 // PUT /api/tasks/:id
-router.put('/:id', async (req, res) => {
-  const {
-    content,
-    completed,
-    dueDate,
-    clusters,
-    repeat,
-    addedToToday
-  } = req.body;
-
+router.put('/:id', auth, async (req, res) => {
   try {
     const updated = await Task.findOneAndUpdate(
       { _id: req.params.id, userId: req.user.userId },
-      {
-        content,
-        completed,
-        dueDate,
-        clusters: clusters || [],
-        repeat,
-        addedToToday: addedToToday || [],
-      },
+      req.body,
       { new: true }
     );
+    if (!updated) return res.status(404).json({ error: 'Task not found' });
     res.json(updated);
   } catch {
     res.status(500).json({ error: 'Failed to update task' });
@@ -87,14 +73,14 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/tasks/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', auth, async (req, res) => {
   try {
     const deleted = await Task.findOneAndDelete({
       _id: req.params.id,
       userId: req.user.userId
     });
     if (!deleted) return res.status(404).json({ error: 'Task not found' });
-    res.json({ success: true });
+    res.json({ message: 'Task deleted' });
   } catch {
     res.status(500).json({ error: 'Failed to delete task' });
   }
