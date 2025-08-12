@@ -1,112 +1,107 @@
-// frontend/src/Calendar.jsx
-
-import { useState, useEffect, useContext } from 'react';
-import { AuthContext } from './AuthContext.jsx';
-import axios from './api/axiosInstance';
+// src/Calendar.jsx
+import React, { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './Calendar.css';
 
-export default function Calendar() {
-  const { token } = useContext(AuthContext);
-  const [appointments, setAppointments] = useState([]);
-  const [importantEvents, setImportantEvents] = useState([]);
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+// Toronto "today" in YYYY-MM-DD (safe, no UTC flip)
+function todayISOInTZ(timeZone = 'America/Toronto') {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   });
+  const [{ value: y }, , { value: m }, , { value: d }] = fmt.formatToParts(new Date());
+  return `${y}-${m}-${d}`;
+}
 
-  const today = new Date().toISOString().split('T')[0];
+function toISO(y, mIdx, d) {
+  const mm = String(mIdx + 1).padStart(2, '0');
+  const dd = String(d).padStart(2, '0');
+  return `${y}-${mm}-${dd}`;
+}
 
-  useEffect(() => {
-    if (!token) return;
-    axios
-      .get('/api/appointments', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      .then((res) => setAppointments(res.data || []))
-      .catch((err) => console.error('Error loading appointments:', err));
+function daysInMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
 
-    axios
-      .get('/api/events', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      .then((res) => setImportantEvents(res.data || []))
-      .catch((err) => console.error('Error loading important events:', err));
-  }, [token]);
+export default function Calendar() {
+  const navigate = useNavigate();
+  const tzToday = todayISOInTZ('America/Toronto');
 
-  const handleToday = () => {
-    const now = new Date();
-    setSelectedMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
-  };
+  // Build current month grid
+  const now = new Date();
+  const y = now.getFullYear();
+  const mIdx = now.getMonth();
+  const firstWeekday = new Date(y, mIdx, 1).getDay(); // 0..6 Sun..Sat
+  const totalDays = daysInMonth(y, mIdx);
 
-  const changeMonth = (direction) => {
-    const [year, month] = selectedMonth.split('-').map(Number);
-    const newDate = new Date(year, month - 1 + direction, 1);
-    setSelectedMonth(`${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, '0')}`);
-  };
+  const cells = useMemo(() => {
+    const arr = [];
+    for (let i = 0; i < firstWeekday; i++) arr.push(null);
+    for (let d = 1; d <= totalDays; d++) arr.push(d);
+    while (arr.length % 7 !== 0) arr.push(null);
+    return arr;
+  }, [firstWeekday, totalDays]);
 
-  const renderCalendarGrid = () => {
-    const [year, month] = selectedMonth.split('-').map(Number);
-    const firstDay = new Date(year, month - 1, 1);
-    const lastDay = new Date(year, month, 0);
-    const daysInMonth = lastDay.getDate();
-    const startWeekday = firstDay.getDay(); // 0 (Sun) to 6 (Sat)
-
-    const days = [];
-
-    for (let i = 0; i < startWeekday; i++) {
-      days.push(<div key={`empty-${i}`} className="calendar-day empty"></div>);
-    }
-
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const isToday = dateStr === today;
-
-      days.push(
-        <div key={dateStr} className={`calendar-day ${isToday ? 'today' : ''}`}>
-          <div className="date-label">{day}</div>
-        </div>
-      );
-    }
-
-    return days;
-  };
+  const weekLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   return (
-    <div className="calendar-page">
-      <div className="calendar-layout">
-        <aside className="calendar-page__sidebar">
-          <h3>Important Events</h3>
-          <ul className="important-event-list">
-            {importantEvents.map((event) => (
-              <li key={event._id}>
-                <span>{event.title}</span>
-                <span>{Math.ceil((new Date(event.date) - new Date()) / (1000 * 60 * 60 * 24))} Days</span>
-              </li>
-            ))}
-          </ul>
-        </aside>
-
-        <div className="calendar-page__content">
-          <div className="calendar-header">
-            <div className="calendar-controls">
-              <button onClick={() => changeMonth(-1)}>‹</button>
-              <h2>{new Date(selectedMonth + '-01').toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}</h2>
-              <button onClick={() => changeMonth(1)}>›</button>
-            </div>
-            <div className="calendar-actions">
-              <button className="btn" onClick={handleToday}>Today</button>
-              <button className="btn">+ Add Appointment</button>
-            </div>
-          </div>
-
-          <div className="calendar-grid">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-              <div key={day} className="day-of-week">{day}</div>
-            ))}
-            {renderCalendarGrid()}
-          </div>
+    <main className="calendar-page">
+      <header className="calendar-header">
+        <div className="title">
+          <h2>{now.toLocaleString(undefined, { month: 'long' })} {y}</h2>
+          <span className="subtitle">{tzToday}</span>
         </div>
+        <div>
+          <button className="button" onClick={() => navigate('/today')}>Today</button>
+        </div>
+      </header>
+
+      <div className="calendar-grid">
+        {weekLabels.map((w) => (
+          <div key={w} className="calendar-weekday">{w}</div>
+        ))}
+
+        {cells.map((d, i) => {
+          const iso = d ? toISO(y, mIdx, d) : '';
+          const isTodayCell = d && iso === tzToday;
+
+          return (
+            <button
+              key={i}
+              className={`calendar-cell ${d ? '' : 'empty'} ${isTodayCell ? 'today' : ''}`}
+              disabled={!d}
+              onClick={() => d && navigate(`/day/${iso}`)}
+              aria-label={d ? `Open ${iso}` : 'Empty'}
+              title={d ? iso : ''}
+            >
+              {/* Day number (styled by .calendar-daynum) */}
+              {d ? <span className="calendar-daynum">{d}</span> : null}
+
+              {/* Content stack (mini pills or previews later) */}
+              <div className="calendar-content">
+                {/* Example placeholder; real items come later */}
+                {/* <span className="calendar-item event">Dentist 3pm</span> */}
+              </div>
+
+              {/* Tiny dot counters row (optional) */}
+              {d ? (
+                <div className="calendar-dots">
+                  {/* <span className="calendar-dot event" /> */}
+                  {/* <span className="calendar-dot task" /> */}
+                </div>
+              ) : null}
+            </button>
+          );
+        })}
       </div>
-    </div>
+
+      <div className="calendar-legend">
+        <span className="legend-item"><span className="legend-swatch event" />Events</span>
+        <span className="legend-item"><span className="legend-swatch task" />Tasks</span>
+        <span className="legend-item"><span className="legend-swatch entry" />Entries</span>
+      </div>
+    </main>
   );
 }

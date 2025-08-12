@@ -1,0 +1,100 @@
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: #0006;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--color-surface);
+  color: var(--color-text);
+  max-width: 600px;
+  width: 100%;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+  padding: var(--space-4);
+  z-index: 1010;
+  position: relative;
+  overflow-y: auto;
+  max-height: 90vh;
+  font-family: var(--font-serif);
+}
+
+.modal h2 {
+  margin-top: 0;
+  font-size: 1.3rem;
+  font-family: var(--font-thread);
+  color: var(--color-vein);
+}
+
+.entry-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.entry-form label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--color-text);
+  margin-bottom: 0.2rem;
+  font-family: var(--font-thread);
+}
+
+.entry-form input,
+.entry-form textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-glow);
+}
+
+.entry-form textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.two-col {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.two-col > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.modal-buttons button {
+  padding: 0.5rem 1rem;
+  font-family: var(--font-thread);
+  font-weight: 500;
+  border-radius: var(--radius-button);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.modal-buttons button:hover {
+  background: var(--color-bg);
+}
+
+.modal-buttons button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

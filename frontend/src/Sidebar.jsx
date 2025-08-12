@@ -1,6 +1,7 @@
+// src/Sidebar.jsx
 import { useEffect, useState, useContext } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import './Main.css';
+import './Sidebar.css';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import { useSearch } from "./SearchContext.jsx";
@@ -40,49 +41,49 @@ export default function Sidebar() {
     decodeURIComponent(location.pathname).toLowerCase() === path.toLowerCase();
 
   return (
-    <aside className="main-sidebar">
-      <nav className="main-nav">
+    <aside className="sidebar">
+      <nav className="sidebar-nav">
         <Link
           to="/"
-          className={isActive('/') ? 'section-link active' : 'section-link'}
+          className={isActive('/') ? 'nav-link active' : 'nav-link'}
           aria-current={isActive('/') ? 'page' : undefined}
         >
           🌊 Stream
         </Link>
         <Link
           to="/calendar"
-          className={isActive('/calendar') ? 'section-link active' : 'section-link'}
+          className={isActive('/calendar') ? 'nav-link active' : 'nav-link'}
           aria-current={isActive('/calendar') ? 'page' : undefined}
         >
           📆 Calendar
         </Link>
       </nav>
 
-      <input
-        type="text"
-        id="section-search"
-        placeholder="Search sections..."
-        value={sectionSearchTerm}
-        onChange={e => setSectionSearchTerm(e.target.value)}
-        className="section-search"
-        aria-label="Search sections"
-      />
-      <input
-        type="text"
-        id="global-search"
-        placeholder="Search everywhere…"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        className="section-search"
-        aria-label="Search everything"
-      />
+      <div className="search-block">
+        <input
+          type="text"
+          placeholder="Search sections..."
+          value={sectionSearchTerm}
+          onChange={e => setSectionSearchTerm(e.target.value)}
+          className="section-search"
+          aria-label="Search sections"
+        />
+        <input
+          type="text"
+          placeholder="Search everywhere…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="section-search"
+          aria-label="Search everything"
+        />
+      </div>
 
       <div className="sections">
-        <h3>Sections</h3>
+        <h3 className="sections-header">Sections</h3>
         {error ? (
           <div className="sidebar-error">Couldn’t load sections.</div>
         ) : (
-          <ul>
+          <ul className="section-list">
             {sections
               .filter(name => name.toLowerCase().includes(sectionSearchTerm.toLowerCase()))
               .map(name => {
@@ -91,7 +92,7 @@ export default function Sidebar() {
                   <li key={name}>
                     <Link
                       to={path}
-                      className={isActive(path) ? 'section-link active' : 'section-link'}
+                      className={isActive(path) ? 'nav-link active' : 'nav-link'}
                       aria-current={isActive(path) ? 'page' : undefined}
                     >
                       {name}

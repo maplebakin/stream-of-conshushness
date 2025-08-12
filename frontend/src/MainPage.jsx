@@ -1,98 +1,274 @@
+// src/MainPage.jsx
+import { useEffect, useState, useContext, useMemo, useCallback } from 'react';
 import EntryModal from './EntryModal.jsx';
 import axios from './api/axiosInstance';
-import { useEffect, useState, useContext } from 'react';
 import './Main.css';
-import { AuthContext } from './AuthContext.jsx';
+import './streampage.css';
 import toast from 'react-hot-toast';
+import { AuthContext } from './AuthContext.jsx';
+import { getLocalTodayISO, toDisplayDate } from './utils/date.js';
 
-function getTodayISO() {
-  const today = new Date();
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
-    today.getDate()
-  ).padStart(2, '0')}`;
-}
+/* ---------- Robust sort helpers so newest stay on top across reloads ---------- */
+const parseDayMs = (v) => {
+  if (!v) return -Infinity;
+  if (v instanceof Date) {
+    return new Date(v.getFullYear(), v.getMonth(), v.getDate()).getTime();
+  }
+  if (typeof v === 'string') {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3]).getTime();
+    const t = new Date(v).getTime();
+    return Number.isNaN(t) ? -Infinity : t;
+  }
+  const t = new Date(v).getTime();
+  return Number.isNaN(t) ? -Infinity : t;
+};
+
+const createdAtMs = (e) => {
+  if (e?.createdAt) {
+    const t = new Date(e.createdAt).getTime();
+    if (!Number.isNaN(t)) return t;
+  }
+  if (e?._id && typeof e._id === 'string' && e._id.length >= 8) {
+    const secs = parseInt(e._id.slice(0, 8), 16);
+    if (!Number.isNaN(secs)) return secs * 1000;
+  }
+  return -Infinity;
+};
+
+const stableSortEntriesDesc = (arr) =>
+  [...arr].sort((a, b) => {
+    const dayA = parseDayMs(a.date);
+    const dayB = parseDayMs(b.date);
+    if (dayA !== dayB) return dayB - dayA; // newer day first
+    const ca = createdAtMs(a);
+    const cb = createdAtMs(b);
+    if (ca !== cb) return cb - ca; // newer created first
+    if (a._id && b._id && a._id !== b._id) return a._id < b._id ? 1 : -1;
+    return 0;
+  });
+
+/* ---------- Normalize for legacy fields (content/html/text) ---------- */
+const normalizeEntry = (e) => {
+  const html =
+    e.html ??
+    (typeof e.content === 'string' && /<[^>]+>/.test(e.content) ? e.content : '');
+
+  const text =
+    e.text ??
+    (typeof (html || e.content) === 'string'
+      ? String(html || e.content).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      : '');
+
+  return { ...e, html, text };
+};
 
 export default function MainPage() {
-  const { token } = useContext(AuthContext);
+  const { token, isAuthenticated, logout } = useContext(AuthContext);
+
   const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
 
-  useEffect(() => {
-    if (!token) return;
-    axios
-      .get('/api/entries', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      .then((res) => {
-        const sorted = [...res.data].sort((a, b) => {
-          if (a.date !== b.date) {
-            return new Date(b.date) - new Date(a.date); // Newer days first
-          }
-          return new Date(b.createdAt) - new Date(a.createdAt); // Newer entries later in day
-        });
-        setEntries(sorted);
-      })
-      .catch((err) => {
-        console.error('⚠️ Error fetching entries:', err);
-        toast.error('Failed to load entries');
-      });
-  }, [token]);
+  // quick filters
+  const [query, setQuery] = useState('');
+  const [clusterFilter, setClusterFilter] = useState('all');
 
-  const handleDelete = (id) => {
-    axios
-      .delete(`/api/entries/${id}`, {
+  const fetchEntries = useCallback(async () => {
+    if (!token) {
+      setEntries([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await axios.get('/api/entries', {
         headers: { Authorization: `Bearer ${token}` },
-      })
-      .then(() => {
-        setEntries((prev) => prev.filter((e) => e._id !== id));
-        toast.success('Entry deleted');
-      })
-      .catch(() => {
-        toast.error('Could not delete entry');
       });
+      const list = Array.isArray(res.data) ? res.data : [];
+      const normalized = list.map(normalizeEntry);
+      setEntries(stableSortEntriesDesc(normalized));
+    } catch (err) {
+      console.error('⚠️ Error fetching entries:', err);
+      if (err?.response?.status === 401) {
+        // token expired or invalid
+        toast.error('Session expired. Please log in again.');
+        logout?.();
+      } else {
+        toast.error('Failed to load entries');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [token, logout]);
+
+  useEffect(() => {
+    fetchEntries();
+  }, [fetchEntries]);
+
+  const handleDelete = async (id) => {
+    try {
+      await axios.delete(`/api/entries/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setEntries((prev) => prev.filter((e) => e._id !== id));
+      toast.success('Entry deleted');
+    } catch (err) {
+      console.error('delete error:', err);
+      toast.error('Could not delete entry');
+    }
   };
+
+  const handleSaved = (newEntryRaw) => {
+    const newEntry = normalizeEntry(newEntryRaw);
+    setEntries((prev) => stableSortEntriesDesc([newEntry, ...prev]));
+    setShowModal(false);
+  };
+
+  const clusters = useMemo(() => {
+    const setVals = new Set();
+    entries.forEach((e) => e.cluster && setVals.add(e.cluster));
+    // sort A→Z but keep 'all' first
+    const rest = Array.from(setVals).sort((a, b) => a.localeCompare(b));
+    return ['all', ...rest];
+  }, [entries]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return entries.filter((e) => {
+      const passesCluster = clusterFilter === 'all' || e.cluster === clusterFilter;
+      const passesQuery =
+        !q ||
+        (e.text && e.text.toLowerCase().includes(q)) ||
+        (typeof e.content === 'string' && e.content.toLowerCase().includes(q)) ||
+        (Array.isArray(e.tags) && e.tags.some((t) => String(t).toLowerCase().includes(q))) ||
+        (e.mood && String(e.mood).toLowerCase().includes(q));
+      return passesCluster && passesQuery;
+    });
+  }, [entries, query, clusterFilter]);
+
+  const todayISO = getLocalTodayISO?.() || new Date().toISOString().slice(0, 10);
 
   return (
     <main className="stream-page">
+      {/* Header */}
       <section className="stream-header">
-        <button className="add-entry-btn" onClick={() => setShowModal(true)}>
-          + New Entry
-        </button>
-      </section>
+        <div className="stream-title">
+          <h1 className="font-echo text-plum text-3xl">Stream</h1>
+        </div>
 
-      <section className="entry-feed">
-        {entries.map((entry) => (
-          <div className="entry-card" key={entry._id}>
-            <div className="entry-meta">
-              <span>{entry.date}</span>
-              {entry.cluster && <span className="cluster-chip">{entry.cluster}</span>}
-              {entry.suggestedTasks?.length > 0 && (
-                <span className="ripple-indicator" title="Suggested tasks found">💡</span>
-              )}
-            </div>
-            <div
-              className="entry-text"
-              dangerouslySetInnerHTML={{ __html: entry.content }}
-            ></div>
-            <div className="entry-actions">
-              <button onClick={() => handleDelete(entry._id)}>🗑️</button>
-            </div>
+        <div className="stream-controls">
+          <div className="today-chip font-glow text-vein" title="Local date">
+            {toDisplayDate?.(todayISO) || todayISO}
           </div>
-        ))}
+
+          <input
+            type="search"
+            className="search-input font-glow"
+            placeholder="Search text, tags, mood…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+
+          <select
+            className="cluster-select font-thread"
+            value={clusterFilter}
+            onChange={(e) => setClusterFilter(e.target.value)}
+          >
+            {clusters.map((c) => (
+              <option key={c} value={c}>
+                {c === 'all' ? 'All Clusters' : c}
+              </option>
+            ))}
+          </select>
+
+          <button
+            className="add-entry-btn bg-lantern text-ink rounded-button px-4 py-2 font-thread shadow-soft hover:bg-plum hover:text-mist transition-all"
+            onClick={() => setShowModal(true)}
+            disabled={!isAuthenticated}
+            title={isAuthenticated ? 'New Entry' : 'Log in to add entries'}
+          >
+            + New Entry
+          </button>
+        </div>
       </section>
 
-      <EntryModal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        date={getTodayISO()}
-        existingSections={[]} // Add real section list if you want
-        availableGoals={[]}   // Add real goal list if available
-        availableClusters={[]} // Add real cluster list if needed
-        onSave={(newEntry) => {
-          setEntries(prev => [newEntry, ...prev]);
-          setShowModal(false);
-        }}
-      />
+      {/* Body */}
+      <section className="entry-feed">
+        {loading && <div className="loading font-glow text-vein">Loading entries…</div>}
+
+        {!loading && filtered.length === 0 && (
+          <div className="empty-state">
+            <p className="font-glow text-vein">
+              {query || clusterFilter !== 'all'
+                ? 'No entries match your filters.'
+                : 'No entries yet. Wanna start a ripple?'}
+            </p>
+            <button
+              className="add-entry-btn bg-plum text-mist rounded-button px-4 py-2 font-thread shadow-soft hover:bg-lantern hover:text-ink transition-all"
+              onClick={() => setShowModal(true)}
+              disabled={!isAuthenticated}
+            >
+              {query || clusterFilter !== 'all' ? 'Clear filters' : 'Write first entry'}
+            </button>
+          </div>
+        )}
+
+        {!loading &&
+          filtered.map((entry) => (
+            <article className="entry-card" key={entry._id || createdAtMs(entry)}>
+              <div className="entry-meta">
+                <span className="date font-glow text-vein">
+                  {toDisplayDate?.(entry.date) || entry.date}
+                </span>
+                {entry.cluster && <span className="cluster-chip">{entry.cluster}</span>}
+                {Array.isArray(entry.tags) && entry.tags.length > 0 && (
+                  <span className="tags">
+                    {entry.tags.map((t) => (
+                      <span className="tag" key={String(t)}>#{t}</span>
+                    ))}
+                  </span>
+                )}
+                {entry.suggestedTasks?.length > 0 && (
+                  <span className="ripple-indicator" title="Suggested tasks found">💡</span>
+                )}
+              </div>
+
+              <div
+                className="entry-text"
+                // Render priority: html → legacy content (if html-like) → plain text
+                dangerouslySetInnerHTML={{
+                  __html:
+                    (entry.html && entry.html.length)
+                      ? entry.html
+                      : (typeof entry.content === 'string' && /<[^>]+>/.test(entry.content))
+                        ? entry.content
+                        : (entry.text ?? '').replaceAll('\n', '<br/>')
+                }}
+              />
+
+              <div className="entry-actions">
+                <button
+                  className="icon-btn"
+                  onClick={() => handleDelete(entry._id)}
+                  title="Delete"
+                >
+                  🗑️
+                </button>
+              </div>
+            </article>
+          ))}
+      </section>
+
+      {/* Modal */}
+      {showModal && (
+        <EntryModal
+          onClose={() => setShowModal(false)}
+          onSaved={handleSaved}
+          defaultCluster={clusterFilter !== 'all' ? clusterFilter : ''}
+          defaultTags={[]}
+        />
+      )}
     </main>
   );
 }

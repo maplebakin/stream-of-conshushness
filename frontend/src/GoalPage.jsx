@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from 'react';
-import axios from '../api/axiosInstance';
-import { AuthContext } from '../AuthContext';
+import axios from './api/axiosInstance.js';
+import { AuthContext } from './AuthContext.jsx';
 
 export default function GoalPage() {
   const { token } = useContext(AuthContext);

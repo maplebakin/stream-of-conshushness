@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CheckSquare, Square, Plus } from 'lucide-react';
 import axios from './api/axiosInstance';
 import TaskModal from './TaskModal';
+import './TaskList.css';
 
 export default function TaskList({ tasks: initialTasks = [], selectedDate }) {
   const [showModal, setShowModal] = useState(false);
@@ -17,36 +18,46 @@ export default function TaskList({ tasks: initialTasks = [], selectedDate }) {
         prev.map((t) => (t._id === task._id ? updated.data : t))
       );
     } catch (err) {
-      console.error('❌ Failed to update task:', err);
+      console.error('Toggle complete failed:', err);
+    }
+  };
+
+  const carryForwardOne = async (task) => {
+    try {
+      const { data } = await axios.put(`/api/tasks/${task._id}/carry-forward?days=1`);
+      setTasks((prev) => prev.map((t) => (t._id === task._id ? data : t)));
+    } catch (err) {
+      console.error('Carry forward failed:', err);
     }
   };
 
   return (
-    <div className="space-y-3">
-      {tasks.map((task) => (
-        <div
-          key={task._id}
-          className={`flex items-center gap-3 p-3 rounded-lg border hover:shadow-sm transition-shadow cursor-pointer ${
-            task.completed ? 'bg-green-50 text-green-800 line-through' : 'bg-white text-gray-700'
-          }`}
-          onClick={() => toggleComplete(task)}
-        >
-          {task.completed ? (
-            <CheckSquare className="h-4 w-4 text-green-600" />
-          ) : (
-            <Square className="h-4 w-4 text-gray-400" />
-          )}
-          <span>{task.content}</span>
-        </div>
-      ))}
+    <div className="task-list">
+      <div className="task-list-header">
+        <h3>Tasks</h3>
+        <button onClick={() => setShowModal(true)} className="add-task-btn">
+          <Plus size={16} /> Add
+        </button>
+      </div>
 
-      <button
-        onClick={() => setShowModal(true)}
-        className="w-full p-3 border-2 border-dashed border-gray-200 rounded-lg text-gray-500 hover:border-gray-300 hover:text-gray-600 transition-colors flex items-center justify-center gap-2"
-      >
-        <Plus className="h-4 w-4" />
-        Add new task
-      </button>
+      <ul>
+        {tasks.map((task) => {
+          const label = task.title || task.notes || '(untitled task)';
+          return (
+            <li key={task._id} className={`task-item ${task.completed ? 'done' : ''}`}>
+              <button className="checkbox" onClick={() => toggleComplete(task)}>
+                {task.completed ? <CheckSquare size={18} /> : <Square size={18} />}
+              </button>
+              <span className="task-title">{label}</span>
+              <div className="task-actions">
+                <button onClick={() => carryForwardOne(task)} title="Move to tomorrow">
+                  → Tomorrow
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
 
       {showModal && (
         <TaskModal

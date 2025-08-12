@@ -23,7 +23,7 @@ export default function SectionPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch entries for this section
+        // Entries
         const entryRes = await axios.get(`/api/entries?section=${normalizedSection}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -45,7 +45,7 @@ export default function SectionPage() {
 
         setEntries(groupedSorted);
 
-        // If it's the Games section, load games
+        // Games section
         if (isGames) {
           const gameRes = await axios.get('/api/games', {
             headers: { Authorization: `Bearer ${token}` },
@@ -55,7 +55,7 @@ export default function SectionPage() {
           setGames([]);
         }
 
-        // Load custom pages for this section
+        // Section Pages
         const pageRes = await axios.get(`/api/section-pages?section=${normalizedSection}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -87,12 +87,12 @@ export default function SectionPage() {
             <div className="empty-state" style={{ textAlign: 'center', padding: '2em' }}>
               <div style={{ fontSize: 48, opacity: 0.3 }}>🗃️</div>
               <p>No entries found for this section.</p>
-              {/* Optional: Button to add new entry */}
+              {/* Optional: Add new entry button */}
               {/* <button className="add-entry-btn">+ New Entry</button> */}
             </div>
           ) : (
             entries.map(([date, dayEntries]) => (
-              <div key={date} className="entry-day-group">
+              <div key={date} className="entry-day-group" style={{ marginBottom: '2rem' }}>
                 <h3>{date}</h3>
                 {dayEntries.map((entry) => (
                   <div key={entry._id} className="entry-card">
@@ -100,26 +100,18 @@ export default function SectionPage() {
                       className="entry-content"
                       dangerouslySetInnerHTML={{ __html: entry.content }}
                     />
-                    {/* Robust tags: array or string */}
                     {entry.tags && (
                       <div className="tags">
-                        {(
-                          Array.isArray(entry.tags)
-                            ? entry.tags
-                            : entry.tags.split(',')
-                        )
+                        {(Array.isArray(entry.tags) ? entry.tags : entry.tags.split(','))
                           .map((tag) => tag.trim())
                           .filter(Boolean)
                           .map((tag) => (
-                            <span key={tag} className="tag-pill">#{tag}</span>
+                            <span key={tag} className="tag-pill">
+                              #{tag}
+                            </span>
                           ))}
                       </div>
                     )}
-                    {/* Optional: Edit/Delete buttons */}
-                    {/* <div className="entry-controls">
-                      <button>Edit</button>
-                      <button>Delete</button>
-                    </div> */}
                   </div>
                 ))}
               </div>

@@ -1,3 +1,4 @@
+// src/Header.jsx
 import { Link, useLocation } from 'react-router-dom';
 import { useContext } from 'react';
 import { AuthContext } from './AuthContext.jsx';
@@ -10,7 +11,11 @@ export default function Header() {
   const navLink = (to, label) => (
     <Link
       to={to}
-      className={`nav-link ${location.pathname === to ? 'active' : ''}`}
+      className={`px-4 py-2 rounded-button font-thread transition-all ${
+        location.pathname === to
+          ? 'bg-plum text-mist shadow-soft'
+          : 'text-ink hover:bg-thread hover:text-mist'
+      }`}
       aria-current={location.pathname === to ? 'page' : undefined}
     >
       {label}
@@ -18,15 +23,20 @@ export default function Header() {
   );
 
   return (
-    <header className="centered-header">
-      <h1 className="site-title">Stream of Conshushness</h1>
-      <nav className="site-nav">
+    <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 border-b border-border bg-surface shadow-md">
+      <h1 className="font-echo text-vein text-2xl sm:text-3xl tracking-tight">
+        Stream of Conshushness
+      </h1>
+      <nav className="flex gap-2 items-center">
         {navLink("/", "🌊 Stream")}
         {navLink("/today", "📍 Today")}
         {navLink("/calendar", "📆 Calendar")}
-        {navLink("/sections", "🎛️ Manage Sections")}
+        {navLink("/sections", "🎛️ Sections")}
         {isAuthenticated && (
-          <button className="logout-button" onClick={logout}>
+          <button
+            onClick={logout}
+            className="px-3 py-2 font-thread text-ink hover:text-vein border border-transparent hover:border-plum rounded-button transition-all"
+          >
             Log Out
           </button>
         )}

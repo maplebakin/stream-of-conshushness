@@ -1,147 +1,193 @@
-// routes/entries.js
-import express        from 'express';
-import auth           from '../middleware/auth.js';
-
-import Entry          from '../models/Entry.js';
-import Ripple         from '../models/Ripple.js';
-import Task           from '../models/Task.js';
-import SuggestedTask  from '../models/SuggestedTask.js';
-
-import { extractRipples } from '../utils/rippleExtractor.js';
+// backend/routes/entries.js
+import express from 'express';
+import Entry from '../models/Entry.js';
+import auth from '../middleware/auth.js';
 
 const router = express.Router();
 router.use(auth);
 
-/* ───────────── GET /api/entries  (?section=) ───────────── */
-router.get('/', async (req, res) => {
-  const { section } = req.query;
-  const query = { userId: req.user.userId };
-  if (section) query.section = new RegExp(`^${section}$`, 'i');
+/** YYYY-MM-DD (local-agnostic, safe fallback) */
+function toISODateOnly(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
+/** Make a deduped, trimmed string array from various inputs */
+function normalizeTags(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return Array.from(
+      new Set(
+        raw
+          .map((s) => String(s).trim())
+          .filter(Boolean)
+      )
+    );
+  }
+  // handle comma-separated string
+  if (typeof raw === 'string') {
+    return normalizeTags(
+      raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    );
+  }
+  return [];
+}
+
+/** Derive plain text from html/content as a last resort */
+function toPlainText({ text, html, content }) {
+  if (typeof text === 'string' && text.trim().length) return text.trim();
+  const src = typeof html === 'string' && html.trim().length
+    ? html
+    : typeof content === 'string'
+      ? content
+      : '';
+  if (!src) return '';
+  return src.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Parse date string 'YYYY-MM-DD' to comparable ms (local midnight). */
+function dayMs(v) {
+  if (!v || typeof v !== 'string') return -Infinity;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!m) return -Infinity;
+  const dt = new Date(+m[1], +m[2] - 1, +m[3]);
+  return dt.getTime();
+}
+
+/** Sort newest first by date, then createdAt/ObjectId time */
+function createdAtMs(e) {
+  if (e?.createdAt) {
+    const t = new Date(e.createdAt).getTime();
+    if (!Number.isNaN(t)) return t;
+  }
+  if (e?._id && typeof e._id === 'string' && e._id.length >= 8) {
+    const secs = parseInt(e._id.slice(0, 8), 16);
+    if (!Number.isNaN(secs)) return secs * 1000;
+  }
+  return -Infinity;
+}
+
+function sortNewestFirst(a, b) {
+  const da = dayMs(a.date);
+  const db = dayMs(b.date);
+  if (da !== db) return db - da;
+  const ca = createdAtMs(a);
+  const cb = createdAtMs(b);
+  if (ca !== cb) return cb - ca;
+  if (a._id && b._id && a._id !== b._id) return a._id < b._id ? 1 : -1;
+  return 0;
+}
+
+/* ========================= Routes ========================= */
+
+/** GET /api/entries  (optional ?section= or future filters) */
+router.get('/', async (req, res) => {
   try {
-    const entries = await Entry.find(query).sort({ date: -1, createdAt: -1 });
+    const { section } = req.query; // legacy allowance
+    const query = { userId: req.user.userId };
+    if (section) query.section = new RegExp(`^${section}$`, 'i');
+
+    const entries = await Entry.find(query).lean();
+    entries.sort(sortNewestFirst);
     res.json(entries);
-  } catch {
+  } catch (err) {
+    console.error('GET /entries error:', err);
     res.status(500).json({ error: 'Failed to fetch entries' });
   }
 });
 
-/* ───────────── GET /api/entries/:date  (YYYY-MM-DD) ───────────── */
+/** GET /api/entries/:date (YYYY-MM-DD) */
 router.get('/:date', async (req, res) => {
   try {
-    const entries = await Entry
-      .find({ userId: req.user.userId, date: req.params.date })
-      .sort({ createdAt: -1 });
+    const entries = await Entry.find({
+      userId: req.user.userId,
+      date: req.params.date,
+    }).lean();
+    entries.sort(sortNewestFirst);
     res.json(entries);
-  } catch {
-    res.status(500).json({ error: 'Server error fetching entries' });
+  } catch (err) {
+    console.error('GET /entries/:date error:', err);
+    res.status(500).json({ error: 'Failed to fetch entries by date' });
   }
 });
 
-/* ───────────── POST /api/entries  (create + ripples + suggested) ───────────── */
+/** POST /api/entries */
 router.post('/', async (req, res) => {
-  const { date, section, tags, content } = req.body;
-  if (!date || !section || !content) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-
   try {
-    /* 1. Save Entry */
-    const entry = await new Entry({
-      userId : req.user.userId,
+    const {
       date,
-      section,
-      tags   : tags || [],
-      content
-    }).save();
+      text,
+      html = '',
+      content = '',       // legacy
+      mood = '',
+      cluster = '',
+      tags,               // can be undefined, string, or array
+      linkedGoal = null,
 
-    /* 2. Extract ripples */
-    const extracted = extractRipples([entry]);
+      // allow suggested structures if sent (optional)
+      suggestedTasks = [],
+      suggestedAppointments = [],
+      suggestedEvents = [],
+      suggestedTags = [],
+      suggestedClusters = [],
+    } = req.body || {};
 
-    /* 3. Split: auto-approve vs manual */
-    const autoRipples   = extracted.filter(r => r.priority === 'high' && r.confidence >= 0.8);
-    const manualRipples = extracted.filter(r => !autoRipples.includes(r));
-
-    /* 4. Auto-create Tasks */
-    for (const r of autoRipples) {
-      const task = await new Task({
-        userId  : req.user.userId,
-        title   : r.extractedText,
-        cluster : r.assignedCluster ?? null,
-        priority: r.priority,
-        dueDate : r.dueDate   ?? undefined,
-        repeat  : r.recurrence?? undefined
-      }).save();
-      r.status        = 'approved';
-      r.createdTaskId = task._id;
+    const finalText = toPlainText({ text, html, content });
+    if (!finalText) {
+      return res.status(400).json({ error: 'Entry text is required.' });
     }
 
-    /* 5. Save ALL ripples */
-    const savedRipples = [];
-    for (const r of [...autoRipples, ...manualRipples]) {
-      const ripple = await new Ripple({
-        userId       : req.user.userId,
-        sourceEntryId: entry._id,
-        entryDate    : entry.date,
-        ...r
-      }).save();
-      savedRipples.push(ripple);
-    }
+    const doc = {
+      userId: req.user.userId,
+      date: typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
+        ? date
+        : toISODateOnly(new Date()),
+      text: finalText,
+      mood: mood || undefined,
+      cluster: cluster || undefined,
+      linkedGoal: linkedGoal || undefined,
 
-    /* 6. Write SuggestedTask docs for remaining task-type ripples */
-    const suggestedTasks = [];
-    for (const ripple of savedRipples) {
-      if (ripple.status === 'pending' && ripple.type.endsWith('Task')) {
-        suggestedTasks.push(await SuggestedTask.create({
-          userId        : req.user.userId,
-          sourceRippleId: ripple._id,
-          title         : ripple.extractedText,
-          priority      : ripple.priority,
-          dueDate       : ripple.dueDate   ?? undefined,
-          repeat        : ripple.recurrence?? undefined,
-          cluster       : ripple.assignedCluster ?? null
-        }));
-      }
-    }
+      // these all default to [] in the schema, but set explicitly for clarity
+      tags: normalizeTags(tags), // ← allows no tags; becomes []
+      suggestedTasks: Array.isArray(suggestedTasks) ? suggestedTasks : [],
+      suggestedAppointments: Array.isArray(suggestedAppointments) ? suggestedAppointments : [],
+      suggestedEvents: Array.isArray(suggestedEvents) ? suggestedEvents : [],
+      suggestedTags: Array.isArray(suggestedTags) ? suggestedTags : [],
+      suggestedClusters: Array.isArray(suggestedClusters) ? suggestedClusters : [],
+    };
 
-    res.json({ entry, ripples: savedRipples, suggestedTasks });
+    const entry = await Entry.create(doc);
+
+    // return normalized html/content echoes for your frontend renderer
+    res.status(201).json({
+      ...entry.toObject(),
+      html,     // echo back so the client can render immediately
+      content,  // legacy
+    });
   } catch (err) {
-    console.error('❌ Error saving entry / ripples:', err);
-    res.status(500).json({ error: 'Server error saving entry or ripples' });
+    console.error('POST /entries error:', err);
+    res.status(500).json({ error: 'Failed to create entry' });
   }
 });
 
-/* ───────────── PUT /api/entries/:id  (update) ───────────── */
-router.put('/:id', async (req, res) => {
-  try {
-    const updated = await Entry.findOneAndUpdate(
-      { _id: req.params.id, userId: req.user.userId },
-      req.body,
-      { new: true }
-    );
-    if (!updated) return res.status(404).json({ error: 'Entry not found' });
-    res.json(updated);
-  } catch (err) {
-    console.error('❌ Error updating entry:', err);
-    res.status(500).json({ error: 'Server error updating entry' });
-  }
-});
-
-/* ───────────── DELETE /api/entries/:id  (entry + ripples) ───────────── */
+/** DELETE /api/entries/:id */
 router.delete('/:id', async (req, res) => {
   try {
-    const deleted = await Entry.findOneAndDelete({
-      _id: req.params.id,
-      userId: req.user.userId
+    const { id } = req.params;
+    const del = await Entry.findOneAndDelete({
+      _id: id,
+      userId: req.user.userId,
     });
-    if (!deleted) return res.status(404).json({ error: 'Entry not found' });
-
-    await Ripple.deleteMany({ sourceEntryId: req.params.id });
-    await SuggestedTask.deleteMany({ sourceRippleId: { $in: [] } }); // optional clean-up
-    res.json({ message: 'Entry and associated ripples deleted' });
+    if (!del) return res.status(404).json({ error: 'Entry not found' });
+    res.json({ ok: true });
   } catch (err) {
-    console.error('❌ Error deleting entry:', err);
-    res.status(500).json({ error: 'Server error deleting entry' });
+    console.error('DELETE /entries/:id error:', err);
+    res.status(500).json({ error: 'Failed to delete entry' });
   }
 });
 
