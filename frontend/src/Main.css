@@ -1,191 +1,133 @@
-/*──────────────────────────────────────────────────────
-  Stream of Conshushness — Main.css (Global Styles)
-──────────────────────────────────────────────────────*/
-
-@import url('./variables.css');
-
-/*──────────────────────────────────────────────────────
-  Base Styles
-──────────────────────────────────────────────────────*/
-body {
-  font-family: var(--font-serif);
-  background-color: var(--color-background);
-  color: var(--color-text);
-  margin: 0;
-  padding: 0;
-  line-height: 1.6;
+/* ================================
+   Global base (safe + minimal)
+==================================*/
+html, body, #root {
+  height: 100%;
 }
-
-.app-layout {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  background: var(--color-background);
-  color: var(--color-text);
-}
-
-/*──────────────────────────────────────────────────────
-  Header
-──────────────────────────────────────────────────────*/
-header {
-  background-color: var(--color-header);
-  text-align: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--color-border);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
-}
-
-header h1 {
-  font-family: var(--font-decorative);
-  color: var(--color-surface);
-  font-size: 2.2em;
-  margin: 5px 0;
-}
-
-header nav a {
-  color: var(--color-surface);
-  text-decoration: none;
-  margin: 0 20px;
-  font-size: 1em;
-  font-family: var(--font-handwritten);
-  transition: color 0.3s;
-}
-
-header nav a:hover {
-  color: var(--color-hover);
-  text-decoration: underline;
-}
-
-/*──────────────────────────────────────────────────────
-  Layout
-──────────────────────────────────────────────────────*/
-.main-container {
-  display: flex;
-  gap: 2rem;
-  align-items: flex-start;
-  flex: 1;
-  overflow: hidden;
-  padding: 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
+* {
   box-sizing: border-box;
 }
 
-.main-container.right-sidebar {
-  flex-direction: row-reverse;
-}
-
-/* Sidebar */
-.main-sidebar {
-  width: 240px;
-  flex-shrink: 0;
-  background-color: var(--color-surface);
-  padding: 1.5rem;
-  border-radius: var(--radius-card);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  position: sticky;
-  top: 20px;
-}
-
-.main-sidebar h2,
-.main-sidebar h3 {
-  font-family: var(--font-serif);
+body {
+  margin: 0;
+  background: var(--color-bg);
   color: var(--color-text);
-  margin-top: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Main Feed */
-.main-feed {
-  flex: 1;
-  padding: 2rem;
-  overflow-y: auto;
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ================================
+   App shell layout
+==================================*/
+.app-layout {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  min-height: 100dvh;
 }
 
-/* Entry Cards */
+.app-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 0;
+}
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-bg);
+}
+
+.app-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-4);
+}
+
+.app-content > * {
+  max-width: 1000px;
+  margin-inline: auto;
+}
+
+/* ================================
+   Sticky header wrapper
+==================================*/
+.centered-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-surface) !important;
+  border-bottom: 1px solid var(--color-border) !important;
+  box-shadow: var(--shadow-soft);
+}
+
+/* ================================
+   Sidebar (static left or right)
+==================================*/
+.section-sidebar {
+  background-color: var(--color-surface) !important;
+  border-left: 1px solid var(--color-border) !important;
+}
+
+/* ================================
+   Entry cards in main feed
+==================================*/
 .entry-card {
-  background-color: var(--color-surface);
-  padding: 1.5rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  border: 1px solid var(--color-border);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  font-family: var(--font-serif);
+  box-shadow: var(--shadow-soft);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.entry-card h3 {
-  font-size: 1.25rem;
-  border-bottom: 1px dashed var(--color-border);
-  margin-bottom: 0.75rem;
+.entry-card:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
 }
 
-.entry-content p,
-.entry-content ul,
-.entry-content ol {
-  margin-bottom: 1rem;
-  line-height: 1.75;
-}
-
-/* Buttons */
-.btn,
-button {
-  background-color: var(--color-accent);
-  color: var(--color-surface);
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: var(--radius-button);
-  font-family: var(--font-handwritten);
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
-
-button:hover,
-.btn:hover {
-  background-color: var(--color-hover);
-}
-
-/* Form Inputs */
-input,
-select,
-textarea {
-  width: 100%;
-  padding: 0.6rem;
-  background-color: var(--color-surface);
+.entry-title {
+  font-size: 1.1rem;
+  font-weight: 600;
   color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-input);
-  font-family: var(--font-serif);
-  margin-bottom: 1rem;
+  margin: 0;
 }
 
-textarea {
-  resize: vertical;
-  min-height: 160px;
+.entry-meta {
+  font-size: 0.85rem;
+  color: var(--color-muted);
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-  .main-container {
-    flex-direction: column;
-    padding: 1rem;
-  }
-
-  .main-sidebar {
-    width: 100%;
-    position: static;
-    margin-bottom: 1.5rem;
-  }
-
-  .main-feed {
-    padding: 1rem;
-  }
-
-  header nav a {
-    display: inline-block;
-    margin: 0.5rem;
-  }
+.entry-body {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--color-text);
 }
-.main-container.right-sidebar {
-  display: block; /* instead of flex */
+
+/* ================================
+   Responsive tweaks
+==================================*/
+@media (max-width: 900px) {
+  .app-content {
+    padding: var(--space-3);
+  }
 }

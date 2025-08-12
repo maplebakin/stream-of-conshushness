@@ -1,36 +1,40 @@
-/*──────────────────────────────────────────────────────
-  Stream of Conshushness — Theme Variables
-──────────────────────────────────────────────────────*/
-
-/*──────────────────────────────────────────────────────
-  Fonts
-──────────────────────────────────────────────────────*/
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;700&family=Libre+Baskerville&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Pacifico&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Dancing+Script&display=swap');
-
-/*──────────────────────────────────────────────────────
-  Light Theme
-──────────────────────────────────────────────────────*/
 :root {
-  --color-background: #F5F1E7;         /* Soft Cream background */
-  --color-surface: #FFFFFF;            /* Clean panel/card surfaces */
-  --color-header: #C6A2A8;             /* Dusty Rose header/nav */
-  --color-text: #333333;               /* Deep ash/charcoal text */
-  --color-accent: #A3B5A2;             /* Muted Sage accents */
-  --color-accent-alt: #B97C68;         /* Warm Clay alternative accent */
-  --color-hover: #C2A269;              /* Antique Gold hover/links */
-  --color-border: #E5E1DA;             /* Subtle warm dividers/borders */
-  --radius-card: 12px;
-  --radius-button: 8px;
-  --radius-input: 8px;
-  --radius-tag: 999px;
-  --font-handwritten: 'Patrick Hand', cursive;
-  --font-serif: 'Libre Baskerville', serif;
---font-decorative: 'Dancing Script', cursive;
+  --color-mist: #c6b6bd;       /* softened overlay base - mood fog */
+  --color-ink: #262322;        /* deep text, never change you icon */
+  --color-vein: #4b4d4b;       /* muted neutral gray-green */
+  --color-lantern: #a9654b;    /* a smidge duskier, less orange */
+  --color-ripple: #92ad94;     /* dreamy green - keep */
+  --color-spool: #9a8ca5;      /* muted lavender thread - keep */
+  --color-plum: #5d4e5f;       /* richer, deeper than vein for contrast */
+  --color-border: #6a7c8a;     /* softened steel blue-gray */
 
+  --color-bg: var(--color-mist);
+  --color-surface: #e5dce6;    /* lighter than d3c4d1, less gray cast */
+  --color-text: var(--color-ink); 
+  --color-muted: var(--color-vein);
+  --color-accent: var(--color-ripple);
+  --color-accent-2: var(--color-spool);
+  --color-accent-dark: var(--color-plum);
+  --color-background: var(--color-bg);
+--color-petal: #e7d8e8;    /* hint of rosy blush, for highlights or hover */
+--color-ghost: #f4f1f5;    /* ultra-light background, almost invisible */
+--color-shadow: rgba(38, 35, 34, 0.15); /* matches ink */
+
+
+  --font-thread: "EB Garamond", Georgia, serif;
+  --font-glow: "Libre Baskerville", serif;
+  --font-echo: "Dancing Script", cursive;
+  --font-sans: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+
+  --radius: 12px;
+  --radius-card: var(--radius);
+  --radius-input: 6px;
+  --radius-button: 6px;
+  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.1);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
 }
-
-
-

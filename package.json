@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "type": "module",
   "main": "server.js",
-  "scripts": {
-    "dev": "concurrently \"nodemon server.js\" \"npm run dev --prefix frontend\"",
-    "start": "NODE_ENV=production node server.js",
-    "build": "cd frontend && npm install --include=dev && npm run build"
-  },
+"scripts": {
+  "dev": "concurrently \"nodemon server.js\" \"npm run frontend-dev\"",
+  "frontend-dev": "vite --host",
+  "start": "NODE_ENV=production node server.js",
+  "build": "cd frontend && npm install --include=dev && npm run build"
+}
+,
   "dependencies": {
     "bcrypt": "^6.0.0",
     "chrono-node": "^2.8.4",
@@ -21,13 +23,17 @@
     "jwt-decode": "^4.0.0",
     "mongodb": "^6.17.0",
     "mongoose": "^8.16.3",
+    "multer": "^2.0.2",
     "react-datepicker": "^8.4.0",
     "react-hot-toast": "^2.5.2",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
+    "autoprefixer": "^10.4.21",
     "concurrently": "^9.2.0",
     "nodemon": "^3.0.2",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
     "vite": "^7.0.4"
   }
 }

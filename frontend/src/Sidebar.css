@@ -1,54 +1,87 @@
-/* Sidebar.css */
+@import "./variables.css";
 
+/* Container on the RIGHT side, softened + slightly frosted */
 .section-sidebar {
-  width: 250px;
-  flex-shrink: 0;
-  padding: 10px;
-  border-right: 1px solid var(--border-color, #ccc);
+  width: 240px;
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  backdrop-filter: blur(6px);
+  border-left: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+  border-top-left-radius: var(--radius-card);
+  border-bottom-left-radius: var(--radius-card);
+  box-shadow: var(--shadow-elevated);
+  padding: 1.25rem 1rem;
 }
 
-.section-sidebar h2 {
-  font-size: 1.4rem;
-  margin-bottom: 1rem;
+/* Make sure it starts under the sticky header */
+.section-sidebar--right {
+  position: sticky;
+  top: var(--header-height);
+  align-self: start;
 }
 
-.section-sidebar ul {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 1rem;
-}
-
-.section-sidebar li {
-  margin-bottom: 0.5rem;
-}
-
-.section-sidebar a {
-  text-decoration: none;
-  color: var(--link-color, #336);
-}
-
-.section-sidebar button {
-  margin-top: 1rem;
-  padding: 5px 10px;
-  font-size: 1rem;
-}
-.new-page-form {
-  margin-top: 10px;
+/* Inner wrapper */
+.section-sidebar .sidebar-inner {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0.35rem;
 }
 
-.new-page-form input,
-.new-page-form textarea {
-  width: 100%;
-  padding: 6px;
-  border: 1px solid var(--border-color, #ccc);
-  border-radius: 6px;
-  font-size: 0.95rem;
+/* Label */
+.sidebar-title {
+  font-family: var(--font-thread, var(--font-serif));
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 65%, transparent);
+  margin: 0 0 0.35rem;
 }
 
-.new-page-form button {
-  align-self: flex-start;
-  padding: 6px 12px;
+/* Nav list */
+.sidebar-nav {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+/* Links → pill, not slab */
+.sidebar-nav a {
+  display: block;
+  padding: 0.55rem 0.75rem;
+  border-radius: 999px;
+  text-decoration: none;
+  font-family: var(--font-serif);
+  color: color-mix(in srgb, var(--color-text) 86%, transparent);
+  transition: background 0.2s ease, color 0.2s ease, transform 0.05s ease, box-shadow 0.2s ease;
+  outline: none;
+}
+
+.sidebar-nav a:hover {
+  background: color-mix(in srgb, var(--color-accent) 14%, white 86%);
+}
+
+.sidebar-nav a:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 45%, transparent);
+}
+
+.sidebar-nav a.active {
+  background: color-mix(in srgb, var(--color-accent) 18%, white 82%);
+  color: var(--color-ink);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 38%, transparent) inset;
+}
+
+.sidebar-nav a:active {
+  transform: translateY(1px);
+}
+
+.sidebar-sep {
+  height: 1px;
+  margin: 0.5rem 0;
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in srgb, var(--color-border) 60%, transparent),
+    transparent
+  );
 }

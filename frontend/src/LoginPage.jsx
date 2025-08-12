@@ -1,6 +1,8 @@
-import React, { useState, useContext, useRef } from 'react';
+// src/Login.jsx
+import React, { useState, useContext, useRef, useEffect } from 'react';
 import { AuthContext } from './AuthContext.jsx';
 import { useNavigate, Link } from 'react-router-dom';
+import './login.css';
 
 export default function LoginPage() {
   const { login } = useContext(AuthContext);
@@ -10,6 +12,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const usernameRef = useRef();
+
+  useEffect(() => {
+    usernameRef.current?.focus();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -36,44 +42,61 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="auth-container">
-      <h2>Login</h2>
-      {error && <p className="error">{error}</p>}
+    <main className="auth-page">
+      <section className="auth-card" aria-labelledby="auth-title">
+        <header className="auth-header">
+          <h1 id="auth-title" className="font-echo text-plum">Stream of Conshushness</h1>
+          <p className="auth-subtitle font-glow">Welcome back, traveler. Sign in to continue your thread.</p>
+        </header>
 
-      <form onSubmit={handleSubmit}>
-        <label>
-          Username
-          <input
-            type="text"
-            placeholder="Username"
-            autoFocus
-            ref={usernameRef}
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            disabled={loading}
-          />
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={loading}
-          />
-        </label>
-        <button type="submit" disabled={loading}>
-          {loading ? 'Logging in…' : 'Log In'}
-        </button>
-      </form>
+        {error && (
+          <div role="alert" className="auth-error font-glow">
+            {error}
+          </div>
+        )}
 
-      <div className="auth-switch">
-        <p>Don't have an account?</p>
-        <Link to="/register">
-          <button className="register-link" disabled={loading}>Register Here</button>
-        </Link>
-      </div>
-    </div>
+        <form onSubmit={handleSubmit} className="auth-form" noValidate>
+          <label className="auth-label">
+            Username
+            <input
+              type="text"
+              placeholder="Username"
+              ref={usernameRef}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              disabled={loading}
+              autoComplete="username"
+              className="auth-input"
+              required
+            />
+          </label>
+
+          <label className="auth-label">
+            Password
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+              autoComplete="current-password"
+              className="auth-input"
+              required
+            />
+          </label>
+
+          <button type="submit" disabled={loading} className="auth-submit">
+            {loading ? 'Logging in…' : 'Log In'}
+          </button>
+        </form>
+
+        <footer className="auth-footer">
+          <span className="font-glow">Don't have an account?</span>
+          <Link to="/register" className="auth-link">
+            Register here
+          </Link>
+        </footer>
+      </section>
+    </main>
   );
 }

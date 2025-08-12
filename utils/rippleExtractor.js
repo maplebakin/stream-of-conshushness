@@ -136,3 +136,106 @@ export const extractTagsAndClusters = (ripples) => {
   });
   return { tags:[...tags], clusters:[...clusters] };
 };
+// utils/rippleExtractor.js (add below your current code or replace exports)
+
+/* ---------- format helpers ---------- */
+const tz = 'America/Toronto';
+const toISODate = (d) => d ? new Date(d).toISOString().slice(0,10) : undefined;
+const toTimeHHmm = (d) => {
+  if (!d) return undefined;
+  const iso = new Date(d).toISOString(); // UTC HH:mm; fine for MVP
+  return iso.slice(11,16);
+};
+
+/**
+ * Map your flat ripples → entry-scoped suggestion buckets
+ * Entry shape expected: { _id, text, createdAt }
+ */
+export function extractEntrySuggestions(entry) {
+  const safeEntry = {
+    _id: entry._id,
+    content: entry.text ?? entry.content ?? '',
+    date: entry.createdAt ?? entry.date ?? new Date().toISOString()
+  };
+
+  // reuse your existing extractor
+  const flat = extractRipples([safeEntry]) || [];
+
+  const suggestedTasks = [];
+  const suggestedAppointments = [];
+  const suggestedEvents = [];
+  const tagSet = new Set();
+  const clusterSet = new Set();
+
+  for (const r of flat) {
+    // opportunistically harvest tags/clusters if your analyzers set them
+    (r.metadata?.extractedTags || []).forEach(t => tagSet.add(String(t).trim()));
+    if (r.assignedCluster) clusterSet.add(String(r.assignedCluster).trim());
+
+    // normalize based on type
+    if (r.type === 'appointment') {
+      const d = r.dueDate || parseDueDate(r.originalContext, new Date(safeEntry.date));
+      const dateStr = toISODate(d);
+      const timeStr = toTimeHHmm(d);
+
+      if (dateStr && timeStr) {
+        suggestedAppointments.push({
+          date: dateStr,               // 'YYYY-MM-DD'
+          time: timeStr,               // 'HH:mm'
+          details: r.extractedText || r.originalContext,
+          cluster: r.assignedCluster,
+          confidence: r.confidence ?? 0.6,
+          status: 'new'
+        });
+      }
+      continue;
+    }
+
+    if (r.type === 'deadline' || r.type === 'urgentTask' || r.type === 'suggestedTask' || r.type === 'procrastinatedTask' || r.type === 'recurringTask') {
+      const d = r.dueDate || parseDueDate(r.originalContext, new Date(safeEntry.date));
+      suggestedTasks.push({
+        title: r.extractedText,
+        dueDate: d ? toISODate(d) : undefined,
+        repeat: r.recurrence || parseRecurrence(r.originalContext) || undefined,
+        cluster: r.assignedCluster,
+        confidence: r.confidence ?? 0.6,
+        status: 'new'
+      });
+      continue;
+    }
+
+    // lightweight event detection (birthday/anniversary etc.) if your pattern labeled them
+    if (r.type === 'event' || r.type === 'importantEvent') {
+      const d = r.dueDate || parseDueDate(r.originalContext, new Date(safeEntry.date));
+      if (d) {
+        suggestedEvents.push({
+          name: r.extractedText,
+          date: toISODate(d),
+          yearly: /\b(birthday|anniversary|every year|annually)\b/i.test(r.originalContext),
+          confidence: r.confidence ?? 0.6,
+          status: 'new'
+        });
+      }
+      continue;
+    }
+  }
+
+  // dedupe within buckets (by simple signature)
+  const sigSet = new Set();
+  const dedupe = (arr, keyFn) => {
+    const out = [];
+    for (const it of arr) {
+      const k = keyFn(it);
+      if (!sigSet.has(k)) { sigSet.add(k); out.push(it); }
+    }
+    return out;
+  };
+
+  return {
+    suggestedTasks: dedupe(suggestedTasks, t => [t.title, t.dueDate, t.repeat, t.cluster].join('|').toLowerCase()),
+    suggestedAppointments: dedupe(suggestedAppointments, a => [a.date, a.time, a.details].join('|').toLowerCase()),
+    suggestedEvents: dedupe(suggestedEvents, e => [e.name, e.date, e.yearly].join('|').toLowerCase()),
+    suggestedTags: Array.from(tagSet),
+    suggestedClusters: Array.from(clusterSet)
+  };
+}
