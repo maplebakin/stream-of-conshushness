@@ -3,53 +3,51 @@ import mongoose from 'mongoose';
 
 const rippleSchema = new mongoose.Schema(
   {
-    /*  Who + where  */
-    userId       : { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    sourceEntryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Entry', required: true },
+    /* Who + where */
+    userId       : { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    sourceEntryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Entry', required: true, index: true },
     entryDate    : { type: String, required: true },   // 'YYYY-MM-DD'
 
-    /*  Core text  */
+    /* Core text */
     extractedText  : { type: String, required: true },
     originalContext: { type: String, required: true },
 
-    /*  Classification  */
+    /* Classification */
     type: {
-      type : String,
-      enum : [
+      type: String,
+      enum: [
         'urgentTask','suggestedTask','procrastinatedTask','recurringTask',
         'appointment','deadline','goal','wishlistItem','decision','concern',
         'gratitude','learning','habitForming','habitBreaking','moodIndicator',
         'importantEvent','yearlyEvent'
       ],
-      required: true
+      default: 'suggestedTask'
     },
-    priority       : { type: String, enum: ['high','medium','low'] },
-    timeSensitivity: { type: String },        // immediate / scheduled / long-term
-    contexts       : { type: mongoose.Schema.Types.Mixed },
-
-    /*  New scheduling helpers  */
-    dueDate   : { type: Date },               // parsed by chrono-node
-    recurrence: { type: String },             // 'daily' | 'weekly' | …
-
-    /*  Mood snapshots  */
-    mood: {
-      local : { type: Object },               // analysis of snippet
-      entry : { type: Object }                // analysis of whole entry
+    priority: {
+      type: String,
+      enum: ['low','normal','high','urgent'],
+      default: 'low'
     },
 
-    confidence : { type: Number, min: 0, max: 1 },
+    /* Assignment (clusters) */
+    assignedCluster : { type: String, default: null },
+    assignedClusters: { type: [String], default: [] },
 
-    /*  Moderation flow  */
-    status              : { type: String, enum: ['pending','approved','dismissed'], default: 'pending' },
-    createdTaskId       : { type: mongoose.Schema.Types.ObjectId, ref: 'Task' },
-    createdAppointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment' },
-    createdEventId      : { type: mongoose.Schema.Types.ObjectId, ref: 'ImportantEvent' },
-    assignedCluster     : { type: String },
+    /* Optional context tags */
+    contexts: { type: [String], default: [] },
 
-    /*  Meta  */
-    metadata      : { type: Object, default: {} },
-    extractedDate : { type: Date, default: Date.now },
-    processedDate : { type: Date }
+    /* Scheduling hints */
+    dueDate   : { type: String, default: null },                  // 'YYYY-MM-DD' or null
+    recurrence: { type: mongoose.Schema.Types.Mixed, default: null }, // e.g., { unit:'day', interval:2 }
+
+    /* Workflow */
+    status: {
+      type: String,
+      enum: ['pending','approved','dismissed'],
+      default: 'pending',
+      index: true
+    },
+    createdTaskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', default: null }
   },
   { timestamps: true }
 );

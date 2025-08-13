@@ -1,202 +1,232 @@
 // ─────────────────────────────────────────────
 //  suggestMetadata.js  —  refined August 2025
+//  Conservative, thresholded extraction.
 // ─────────────────────────────────────────────
 
-/*-------------------------------------------------
-  Quick-reference vocab lists
--------------------------------------------------*/
-export const moodIndicators = [
-  'happy','sad','angry','anxious','excited','tired','calm','overwhelmed',
-  'hyperfocused','dysregulated','validated','aligned','awakening'
+/* ---------------- mini utils ---------------- */
+const toStr = (v) => (typeof v === 'string' ? v : String(v ?? ''));
+const stripHTML = (s = '') => toStr(s).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+const lower = (s) => toStr(s).toLowerCase();
+const uniq = (arr) => [...new Set(arr)];
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
+const tokens = (s) => lower(stripHTML(s)).match(/[a-z0-9#@]+(?:'[a-z]+)?/g) || [];
+const includesWord = (s, w) => new RegExp(`\\b${w}\\b`, 'i').test(s);
+
+/* ---------------- lexicons ---------------- */
+// Keep these small + targeted to avoid overfiring.
+// You can grow them later per domain.
+
+const MOOD_POS = [
+  'calm','content','grateful','excited','hopeful','energized','validated','aligned','proud'
+];
+const MOOD_NEG = [
+  'tired','drained','overwhelmed','stressed','anxious','angry','sad','frustrated','dysregulated'
 ];
 
-export const contextTags = [
-  'reflection','dream','spiritual','neurodivergent','work','parenting',
-  'routine','relationship','identity','energy','ritual','manifestation'
-];
+// ND/metaphysical terms (context only)
+const ND_TERMS = ['adhd','autistic','aspergers','sensory','stimming','executive dysfunction'];
+const META_TERMS = ['tarot','manifest','ritual','sigil','chakra','astro','astrology','oracle','synchronicity'];
 
-export const priorityIndicators = [
-  'urgent','asap','critical','important','time sensitive',
-  'low priority','someday','can wait','procrastinating'
-];
+// Clusters: map cluster name -> indicative keywords
+const CLUSTER_HINTS = {
+  home      : ['clean','laundry','dishes','trash','kitchen','apartment','declutter','reset'],
+  colton    : ['colton','school','jk','kid','child','bedtime','morning routine','lunch','pickup'],
+  work      : ['resume','interview','client','deploy','merge','repo','ticket','sprint'],
+  health    : ['meds','medication','effexor','vyvanse','doctor','dentist','exercise','gym','sleep'],
+  finance   : ['budget','rent','bill','invoice','payment','subscription'],
+  games     : ['steam','switch','stardew','palworld','spirittea','game','quest','level'],
+  crochet   : ['crochet','pattern','yarn','hook','gauge','rows','stitch'],
+  spiritual : ['tarot','altar','ritual','meditate','manifest','sigil','oracle']
+};
 
-export const timeIndicators = [
-  'today','tomorrow','this week','next month','before','after',
-  'soon','later','eventually','deadline','recurring','every'
-];
+// Tags: map tag -> strong keyword cues (lowercase)
+// (Weak/implicit tags are not auto-added; keep this explicit.)
+const TAG_HINTS = {
+  priority   : ['priority'],
+  focus      : ['focus','deep work','no distractions'],
+  routine    : ['routine','daily','weekly','schedule'],
+  gratitude  : ['grateful','appreciate','thankful'],
+  idea       : ['idea','brainwave','concept','pitch'],
+  bug        : ['bug','error','stacktrace','exception'],
+};
 
-/*-------------------------------------------------
-  Core analyzers
--------------------------------------------------*/
+/* Priority/time lexicons for helper analyzers */
+const PRIORITY_HIGH = ['urgent','asap','critical','important','emergency','immediately','now'];
+const PRIORITY_MED  = ['should','need to','must','priority','todo','task'];
+const MAYBE_WORDS   = ['maybe','might','possibly','someday'];
+
+const TIME_IMMEDIATE = ['today','now','asap','immediately','right away','tonight','this morning','this afternoon','this evening'];
+const TIME_SOON      = ['tomorrow','soon','this week','by friday','by monday','over the weekend'];
+const TIME_LATER     = ['next week','next month','eventually','someday','later'];
+
+/* ---------------- exports: analyzers used elsewhere ---------------- */
 export function analyzeMood(text = '') {
-  const moods = analyzeWithDiversity(text, enhancedMoodPatterns);
+  const t = lower(stripHTML(text));
+  const found = new Set();
+  for (const w of MOOD_POS) if (includesWord(t, w)) found.add(w);
+  for (const w of MOOD_NEG) if (includesWord(t, w)) found.add(w);
+
+  // light emoji check (not exhaustive)
+  if (/[🙂😊😌😍✨]/.test(text)) found.add('positive');
+  if (/[😞😡😭😫😤]/.test(text)) found.add('negative');
+
+  // valence/intensity crude scoring
+  let pos = 0, neg = 0;
+  for (const w of MOOD_POS) if (includesWord(t, w)) pos++;
+  for (const w of MOOD_NEG) if (includesWord(t, w)) neg++;
+  const valence = pos === neg ? 0 : (pos > neg ? 1 : -1);
+  const intensity = Math.min(3, pos + neg); // 0..3 rough
+
   return {
-    moods   : moods.map(m => m.category),
-    details : moods
+    moods: [...found],
+    valence,
+    intensity
   };
 }
 
 export function analyzePriority(text = '') {
-  const lower = text.toLowerCase();
-  if (/\b(urgent|critical|asap|important)\b/.test(lower))   return 'high';
-  if (/\b(should|need to|must|priority)\b/.test(lower))     return 'medium';
+  const t = lower(stripHTML(text));
+  if (PRIORITY_HIGH.some(w => includesWord(t, w))) return 'high';
+  if (PRIORITY_MED.some(w => includesWord(t, w)))  return 'medium';
   return 'low';
 }
 
-export const analyzeContext = (content) => analyzeEnhancedContext(content);
+export function analyzeContext(content = '') {
+  const t = lower(stripHTML(content));
 
-export function analyzeTimeSensitivity(text = '') {
-  const lower = text.toLowerCase();
-  if (/\b(today|now|immediately|asap|urgent)\b/.test(lower))            return 'immediate';
-  if (/\b(tomorrow|soon|this week)\b/.test(lower))                      return 'short_term';
-  if (/\b(next week|next month|eventually|someday)\b/.test(lower))      return 'long_term';
-  return 'unspecified';
-}
-
-export function extractTags(text = '') {
-  const matches = text.match(/#(\w+)/g);
-  return matches ? matches.map(t => t.slice(1)) : [];
-}
-
-export function calculateConfidence(match, type) {
-  let base = 0.5;
-  if (/need to|must/.test(match[0]))              base += 0.3;
-  if (/urgent|important/.test(match[0]))          base += 0.2;
-  if (/maybe|might/.test(match[0]))               base -= 0.2;
-
-  /* guard if the regex didn’t capture group 1 */
-  const captured = (match[1] ?? '').trim();
-  const len = captured.length;
-  if (len > 20)  base += 0.1;
-  if (len && len < 5) base -= 0.2;
-
-  return Math.max(0.1, Math.min(1.0, base));
-}
-
-/*-------------------------------------------------
-  Diversity / context engine (pattern libs stubbed)
--------------------------------------------------*/
-const enhancedTagPatterns      = {};
-const enhancedMoodPatterns     = {};
-const enhancedClusterPatterns  = {};
-
-/* Light-weight context extractor */
-function analyzeEnhancedContext(content = '') {
-  const lower = content.toLowerCase();
-
-  const neurodivergentMarkers = ['adhd','autistic','sensory','stimming']
-    .filter(word => lower.includes(word));
-  const metaphysicalElements  = ['manifest','tarot','chakra','astro']
-    .filter(word => lower.includes(word));
+  const neurodivergentMarkers = ND_TERMS.filter(w => includesWord(t, w));
+  const metaphysicalElements  = META_TERMS.filter(w => includesWord(t, w));
 
   const processingStyle = [];
-  if (/visual/i.test(lower))  processingStyle.push('visual');
-  if (/auditory/i.test(lower)) processingStyle.push('auditory');
+  if (includesWord(t, 'visual'))  processingStyle.push('visual');
+  if (includesWord(t, 'auditory')) processingStyle.push('auditory');
+
+  const communicationStyle = [];
+  if (includesWord(t, 'script')) communicationStyle.push('scripted');
+  if (includesWord(t, 'unscripted')) communicationStyle.push('unscripted');
+
+  const energyLevel = [];
+  if (includesWord(t, 'exhausted') || includesWord(t, 'drained')) energyLevel.push('low');
+  if (includesWord(t, 'energized') || includesWord(t, 'hyped'))   energyLevel.push('high');
 
   return {
     neurodivergentMarkers,
     metaphysicalElements,
     processingStyle,
-    communicationStyle: [],   // reserved for future patterns
-    energyLevel: []           // reserved
+    communicationStyle,
+    energyLevel
   };
 }
 
-/* Generic pattern analyser (kept as-is, minor guard) */
-function analyzeWithDiversity(content, patterns) {
-  const lowerContent = content.toLowerCase();
-  const results = [];
+export function analyzeTimeSensitivity(text = '') {
+  const t = lower(stripHTML(text));
+  if (TIME_IMMEDIATE.some(w => includesWord(t, w))) return 'immediate';
+  if (TIME_SOON.some(w => includesWord(t, w)))      return 'short_term';
+  if (TIME_LATER.some(w => includesWord(t, w)))     return 'long_term';
+  return 'unspecified';
+}
 
-  const weight = { primary:3, secondary:2, contextual:1.5, mild:1, moderate:2, intense:3 };
+// Confidence used by regex-based ripple hits
+export function calculateConfidence(match, type) {
+  let base = 0.45;
+  const s = toStr(match?.[0] ?? '').toLowerCase();
 
-  Object.entries(patterns).forEach(([category, data]) => {
-    let score = 0;
-    let intensity = 'mild';
-    const matches = [];
-    const culturalContext = [];
+  if (PRIORITY_HIGH.some(w => s.includes(w))) base += 0.25;
+  if (PRIORITY_MED.some(w => s.includes(w)))  base += 0.1;
+  if (MAYBE_WORDS.some(w => s.includes(w)))   base -= 0.15;
 
-    Object.entries(data).forEach(([level, keywords]) => {
-      if (!Array.isArray(keywords)) return;
+  const captured = toStr(match?.[1] ?? '').trim();
+  if (captured.length > 20) base += 0.08;
+  if (captured && captured.length < 5) base -= 0.15;
 
-      keywords.forEach(keyword => {
-        if (lowerContent.includes(keyword.toLowerCase())) {
-          const w = weight[level] || 1;
-          score += w;
-          matches.push({ keyword, level, weight:w });
+  // task-like types get a small boost
+  if (['urgentTask','suggestedTask','procrastinatedTask','recurringTask','deadline'].includes(type)) base += 0.05;
 
-          if (level === 'intense')      intensity = 'intense';
-          else if (level === 'moderate' && intensity !== 'intense') intensity = 'moderate';
+  return clamp01(base);
+}
 
-          if (level.includes('neurodivergent')) culturalContext.push('neurodivergent');
-          if (level.includes('metaphysical'))   culturalContext.push('metaphysical');
-        }
-      });
-    });
+/* ---------------- local helpers ---------------- */
+function gatherHashtags(text) {
+  const m = toStr(text).match(/(^|\s)#([a-z0-9_-]{2,30})\b/gi) || [];
+  return m.map(s => s.replace(/^.*#/, '').toLowerCase());
+}
 
-    if (score > 0) {
-      results.push({
-        category,
-        score,
-        intensity,
-        matches,
-        confidence: Math.min(score / 5, 1),
-        culturalContext: [...new Set(culturalContext)]
-      });
-    }
+function gatherBracketTags(text) {
+  // [tag] or {tag} are treated as intentional metadata
+  const out = [];
+  const re = /[\[\{]([a-z0-9 _-]{2,30})[\]\}]/gi;
+  let m;
+  while ((m = re.exec(text))) {
+    out.push(m[1].trim().toLowerCase().replace(/\s+/g, '-'));
+  }
+  return out;
+}
+
+function guessTagsFromKeywords(text) {
+  const t = lower(stripHTML(text));
+  const hits = [];
+  Object.entries(TAG_HINTS).forEach(([tag, keys]) => {
+    if (keys.some(k => includesWord(t, k))) hits.push(tag);
   });
-
-  return results.sort((a, b) => b.score - a.score);
+  return hits;
 }
 
-/*-------------------------------------------------
-  Inclusive confidence stub (placeholder)
--------------------------------------------------*/
-function calculateInclusiveConfidence(results) {
-  return results.map(r => ({ ...r, adjustedConfidence: r.confidence }));
+function guessClusters(text) {
+  const t = lower(stripHTML(text));
+  const hits = [];
+  Object.entries(CLUSTER_HINTS).forEach(([cluster, keys]) => {
+    // require at least 2 distinct hits to avoid overfiring (except exact name)
+    const count = keys.reduce((acc, k) => acc + (includesWord(t, k) ? 1 : 0), 0);
+    if (includesWord(t, cluster) || count >= 2) hits.push(cluster);
+  });
+  return hits;
 }
 
-/*-------------------------------------------------
-  Public high-level API
--------------------------------------------------*/
+/* ---------------- default export ---------------- */
+/**
+ * suggestMetadata(text) ->
+ *   { tags: string[], moods: string[], clusters: string[],
+ *     context: object, confidence: number }
+ */
 export default function suggestMetadata(content) {
-  if (typeof content !== 'string' || !content.trim()) {
-    return {
-      tags: [], moods: [], clusters: [], context:null, suggestedRelationships:[], suggestedAccommodations:[],
-      metadata:{ analyzedAt:new Date().toISOString(), contentLength:0, wordCount:0, overallConfidence:0 }
-    };
+  const raw = toStr(content);
+  if (!raw.trim()) {
+    return { tags: [], moods: [], clusters: [], context: null, confidence: 0 };
   }
 
-  /* run analysis */
-  const tagRes     = analyzeWithDiversity(content, enhancedTagPatterns);
-  const moodRes    = analyzeWithDiversity(content, enhancedMoodPatterns);
-  const clusterRes = analyzeWithDiversity(content, enhancedClusterPatterns);
-  const context    = analyzeEnhancedContext(content);
+  const clean = stripHTML(raw);
+  const tok = tokens(clean);
+  const textLC = lower(clean);
 
-  const adjTags     = calculateInclusiveConfidence(tagRes);
-  const adjMoods    = calculateInclusiveConfidence(moodRes);
-  const adjClusters = calculateInclusiveConfidence(clusterRes);
+  // 1) Tags: explicit >> implicit; cap to avoid spam
+  const tagsExplicit = [...gatherHashtags(raw), ...gatherBracketTags(raw)];
+  const tagsImplicit = guessTagsFromKeywords(clean);
+  const tags = uniq([...tagsExplicit, ...tagsImplicit]).slice(0, 10);
 
-  /* threshold filter */
-  const THRESH = 0.2;
-  const keepTags     = adjTags.filter(t => t.adjustedConfidence >= THRESH);
-  const keepMoods    = adjMoods.filter(m => m.adjustedConfidence >= THRESH);
-  const keepClusters = adjClusters.filter(c => c.adjustedConfidence >= THRESH);
+  // 2) Moods (strings)
+  const moodInfo = analyzeMood(clean);
+  const moods = uniq(moodInfo.moods).slice(0, 6);
 
-  return {
-    tags : keepTags.map(t => ({ name:t.category, confidence:t.adjustedConfidence, intensity:t.intensity })),
-    moods: keepMoods.map(m => ({ name:m.category, confidence:m.adjustedConfidence, intensity:m.intensity })),
-    clusters: keepClusters.map(c => ({ name:c.category, confidence:c.adjustedConfidence })),
-    context,
-    metadata:{
-      analyzedAt: new Date().toISOString(),
-      contentLength: content.length,
-      wordCount: content.split(/\s+/).length,
-      overallConfidence: Math.max(
-        ...keepTags.map(t => t.adjustedConfidence),
-        ...keepMoods.map(m => m.adjustedConfidence),
-        ...keepClusters.map(c => c.adjustedConfidence),
-        0
-      )
-    }
-  };
+  // 3) Clusters (strings), conservative
+  const clusters = uniq(guessClusters(clean)).slice(0, 4);
+
+  // 4) Context object
+  const context = analyzeContext(clean);
+
+  // 5) Overall confidence (soft heuristic)
+  let conf = 0;
+  if (tagsExplicit.length) conf += 0.3;
+  if (moods.length)        conf += 0.2;
+  if (clusters.length)     conf += 0.25;
+
+  // urgency bumps
+  if (PRIORITY_HIGH.some(w => includesWord(textLC, w))) conf += 0.15;
+  if (PRIORITY_MED.some(w => includesWord(textLC, w)))  conf += 0.05;
+
+  // hedge if everything is super short/vague
+  if (clean.split(/\s+/).length < 4) conf = Math.min(conf, 0.35);
+
+  const confidence = clamp01(conf);
+
+  return { tags, moods, clusters, context, confidence };
 }

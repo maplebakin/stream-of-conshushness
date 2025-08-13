@@ -5,23 +5,66 @@ import auth from '../middleware/auth.js';
 
 import Ripple from '../models/Ripple.js';
 import Task from '../models/Task.js';
+// SuggestedTask may not always exist in your build; we guard its usage.
 import SuggestedTask from '../models/SuggestedTask.js';
 
 const router = express.Router();
 router.use(auth);
 
-/* utils */
+/* ───────────── helpers ───────────── */
 const isId = (id) => mongoose.Types.ObjectId.isValid(id);
 const toArray = (v) => (Array.isArray(v) ? v : v == null ? [] : [v]);
 const normalizeClusters = (val) => {
-  const arr = toArray(val)
-    .map(String)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  // unique while preserving order
-  return [...new Set(arr)];
+  const arr = toArray(val).map(String).map(s => s.trim()).filter(Boolean);
+  return [...new Set(arr)]; // unique while preserving order
 };
-const getUserId = (req) => req.user?._id || req.user?.userId || req.user?.id;
+const getUserId = (req) =>
+  req?.user?.userId || req?.user?._id || req?.user?.id;
+
+const isISODate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+function todayISOInToronto() {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Toronto',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  });
+  const p = fmt.formatToParts(new Date());
+  return `${p.find(x=>x.type==='year').value}-${p.find(x=>x.type==='month').value}-${p.find(x=>x.type==='day').value}`;
+}
+
+async function safeDeleteSuggestedTasks(filter) {
+  try {
+    if (SuggestedTask && typeof SuggestedTask.deleteMany === 'function') {
+      await SuggestedTask.deleteMany(filter);
+    }
+  } catch (e) {
+    // Non-fatal; keep logs quiet but traceable
+    console.warn('⚠️ SuggestedTask cleanup skipped:', e.message);
+  }
+}
+
+/* ───────────── GET /api/ripples/pending?date=YYYY-MM-DD ─────────────
+   Alias for older clients. Defaults to today's date if missing.
+   NOTE: Prefer GET /api/ripples/:date going forward.
+------------------------------------------------------------------ */
+router.get('/pending', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const date = req.query.date || todayISOInToronto();
+    if (!isISODate(date)) return res.status(400).json({ error: 'Invalid date format (YYYY-MM-DD)' });
+
+    const ripples = await Ripple.find({
+      userId,
+      entryDate: date,
+      $or: [{ status: { $exists: false } }, { status: 'pending' }],
+    }).sort({ createdAt: -1 });
+
+    res.json(ripples);
+  } catch (err) {
+    console.error('❌ Error fetching pending ripples:', err);
+    res.status(500).json({ error: 'Server error fetching ripples' });
+  }
+});
 
 /* ───────────── GET /api/ripples/:date  (YYYY-MM-DD) ─────────────
    Returns PENDING ripples for that entry date (for Daily review UI)
@@ -30,6 +73,7 @@ router.get('/:date', async (req, res) => {
   try {
     const userId = getUserId(req);
     const { date } = req.params;
+    if (!isISODate(date)) return res.status(400).json({ error: 'Invalid date format (YYYY-MM-DD)' });
 
     const ripples = await Ripple.find({
       userId,
@@ -61,10 +105,13 @@ router.put('/:id/approve', async (req, res) => {
     const ripple = await Ripple.findOne({ _id: id, userId });
     if (!ripple) return res.status(404).json({ error: 'Ripple not found' });
 
-    // Already approved? Return existing task.
+    // If already approved, try to return existing task; recreate if missing.
     if (ripple.status === 'approved' && ripple.createdTaskId) {
       const existing = await Task.findOne({ _id: ripple.createdTaskId, userId });
-      return res.json({ ripple, task: existing, reused: true });
+      if (existing) {
+        return res.json({ ripple, task: existing, reused: true });
+      }
+      // fallthrough to recreate task if prior one was deleted
     }
 
     // Determine clusters from body or ripple
@@ -77,16 +124,17 @@ router.put('/:id/approve', async (req, res) => {
     const clusters = bodyClusters.length ? bodyClusters : rippleClusters;
 
     // Build Task draft
+    const titleRaw = (req.body?.title ?? ripple.extractedText ?? '').toString().trim();
     const draft = {
       userId,
-      title: (req.body?.title ?? ripple.extractedText)?.toString().trim(),
+      title: titleRaw || 'Untitled task',
       priority: req.body?.priority ?? ripple.priority ?? 'low',
-      clusters, // <-- Task schema uses { clusters: [String] }
+      clusters, // Task schema uses { clusters: [String] }
     };
     if (req.body?.dueDate ?? ripple.dueDate) draft.dueDate = req.body?.dueDate ?? ripple.dueDate;
     if (req.body?.recurrence ?? ripple.recurrence) draft.repeat = req.body?.recurrence ?? ripple.recurrence;
 
-    // Optional traceability (safe to keep even if Task schema ignores them)
+    // Optional traceability
     draft.sourceRippleId = ripple._id;
     draft.sourceEntryId = ripple.sourceEntryId;
 
@@ -102,9 +150,9 @@ router.put('/:id/approve', async (req, res) => {
     await ripple.save();
 
     // Clean up any SuggestedTask mirrors
-    await SuggestedTask.deleteMany({ userId, sourceRippleId: ripple._id });
+    await safeDeleteSuggestedTasks({ userId, sourceRippleId: ripple._id });
 
-    res.json({ ripple, task });
+    res.json({ ripple, task, reused: false });
   } catch (err) {
     console.error('❌ Error approving ripple:', err);
     res.status(500).json({ error: 'Server error approving ripple' });
@@ -127,7 +175,7 @@ router.put('/:id/dismiss', async (req, res) => {
     );
     if (!ripple) return res.status(404).json({ error: 'Ripple not found' });
 
-    await SuggestedTask.deleteMany({ userId, sourceRippleId: ripple._id });
+    await safeDeleteSuggestedTasks({ userId, sourceRippleId: ripple._id });
 
     res.json({ ripple, message: 'Ripple dismissed' });
   } catch (err) {
@@ -194,9 +242,10 @@ router.post('/bulk/approve', async (req, res) => {
         ? defClusters
         : normalizeClusters(r.assignedClusters ?? r.assignedCluster));
 
+      const titleRaw = (defaults.title ?? r.extractedText ?? '').toString().trim();
       const draft = {
         userId,
-        title: (defaults.title ?? r.extractedText)?.toString().trim(),
+        title: titleRaw || 'Untitled task',
         priority: defaults.priority ?? r.priority ?? 'low',
         clusters,
       };
@@ -216,7 +265,7 @@ router.post('/bulk/approve', async (req, res) => {
       if (draft.repeat) r.recurrence = draft.repeat;
       await r.save();
 
-      await SuggestedTask.deleteMany({ userId, sourceRippleId: r._id });
+      await safeDeleteSuggestedTasks({ userId, sourceRippleId: r._id });
 
       results.push({ rippleId: r._id, taskId: task._id });
     }

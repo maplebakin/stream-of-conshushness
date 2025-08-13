@@ -6,6 +6,11 @@ import ImportantEvent from '../models/ImportantEvent.js';
 
 const router = express.Router();
 
+// Normalize JWT user id across payload shapes
+function getUserId(req) {
+  return req.user?._id || req.user?.userId || req.user?.id;
+}
+
 router.get('/:month', auth, async (req, res) => {
   const { month } = req.params; // "YYYY-MM"
 
@@ -17,24 +22,20 @@ router.get('/:month', auth, async (req, res) => {
 
     const [tasks, appointments, events] = await Promise.all([
       Task.find({
-        userId: req.user._id,
-        dueDate: { $gte: start, $lt: end }
-      }),
+        userId: getUserId(req),
+        dueDate: { $gte: `${year}-${rawMonth}-01`, $lt: `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-01` },
+      }).lean(),
       Appointment.find({
-        userId: req.user._id,
-        date: { $gte: `${month}-01`, $lt: `${month}-32` } // Appointments store date as string
-      }),
+        userId: getUserId(req),
+        date: { $gte: `${year}-${rawMonth}-01`, $lt: `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-01` },
+      }).lean(),
       ImportantEvent.find({
-        userId: req.user._id,
-        date: { $gte: `${month}-01`, $lt: `${month}-32` } // Also strings
-      }),
+        userId: getUserId(req),
+        date: { $regex: `^${year}-` }, // year filter; frontend can narrow by month if needed
+      }).lean(),
     ]);
 
-    res.json({
-      tasks,
-      appointments,
-      importantEvents: events,
-    });
+    res.json({ tasks, appointments, importantEvents: events });
   } catch (err) {
     console.error('❌ Calendar fetch error:', err);
     res.status(500).json({ error: 'Failed to load calendar data' });

@@ -1,192 +1,161 @@
-// backend/routes/entries.js
+// routes/entries.js
 import express from 'express';
 import Entry from '../models/Entry.js';
+import Ripple from '../models/Ripple.js';
 import auth from '../middleware/auth.js';
+import { analyzeEntry } from '../utils/analyzeEntry.js'; // ← NEW
 
 const router = express.Router();
 router.use(auth);
 
-/** YYYY-MM-DD (local-agnostic, safe fallback) */
-function toISODateOnly(d = new Date()) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+/* YYYY-MM-DD in America/Toronto */
+function todayISOInToronto() {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Toronto',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  });
+  const p = fmt.formatToParts(new Date());
+  const y = p.find(x => x.type === 'year').value;
+  const m = p.find(x => x.type === 'month').value;
+  const d = p.find(x => x.type === 'day').value;
+  return `${y}-${m}-${d}`;
 }
 
-/** Make a deduped, trimmed string array from various inputs */
-function normalizeTags(raw) {
-  if (!raw) return [];
-  if (Array.isArray(raw)) {
-    return Array.from(
-      new Set(
-        raw
-          .map((s) => String(s).trim())
-          .filter(Boolean)
-      )
-    );
-  }
-  // handle comma-separated string
-  if (typeof raw === 'string') {
-    return normalizeTags(
-      raw
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    );
-  }
-  return [];
+/* Normalize user id from JWT */
+function getUserId(req) {
+  return req.user?.userId || req.user?._id || req.user?.id;
 }
 
-/** Derive plain text from html/content as a last resort */
-function toPlainText({ text, html, content }) {
-  if (typeof text === 'string' && text.trim().length) return text.trim();
-  const src = typeof html === 'string' && html.trim().length
-    ? html
-    : typeof content === 'string'
-      ? content
-      : '';
-  if (!src) return '';
-  return src.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-/** Parse date string 'YYYY-MM-DD' to comparable ms (local midnight). */
-function dayMs(v) {
-  if (!v || typeof v !== 'string') return -Infinity;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
-  if (!m) return -Infinity;
-  const dt = new Date(+m[1], +m[2] - 1, +m[3]);
-  return dt.getTime();
-}
-
-/** Sort newest first by date, then createdAt/ObjectId time */
-function createdAtMs(e) {
-  if (e?.createdAt) {
-    const t = new Date(e.createdAt).getTime();
-    if (!Number.isNaN(t)) return t;
-  }
-  if (e?._id && typeof e._id === 'string' && e._id.length >= 8) {
-    const secs = parseInt(e._id.slice(0, 8), 16);
-    if (!Number.isNaN(secs)) return secs * 1000;
-  }
-  return -Infinity;
-}
-
-function sortNewestFirst(a, b) {
-  const da = dayMs(a.date);
-  const db = dayMs(b.date);
-  if (da !== db) return db - da;
-  const ca = createdAtMs(a);
-  const cb = createdAtMs(b);
-  if (ca !== cb) return cb - ca;
-  if (a._id && b._id && a._id !== b._id) return a._id < b._id ? 1 : -1;
-  return 0;
-}
-
-/* ========================= Routes ========================= */
-
-/** GET /api/entries  (optional ?section= or future filters) */
+/* ───────────────────────── GET /api/entries (optional filters) ─────────────────────────
+   Query: ?cluster=Home  or  ?section=Games  (both are optional)
+--------------------------------------------------------------------------------------- */
 router.get('/', async (req, res) => {
   try {
-    const { section } = req.query; // legacy allowance
-    const query = { userId: req.user.userId };
-    if (section) query.section = new RegExp(`^${section}$`, 'i');
+    const q = { userId: getUserId(req) };
+    if (req.query.cluster) q.cluster = req.query.cluster;
+    if (req.query.section) q.section = req.query.section;
 
-    const entries = await Entry.find(query).lean();
-    entries.sort(sortNewestFirst);
+    const entries = await Entry.find(q).sort({ date: -1, createdAt: -1 });
     res.json(entries);
   } catch (err) {
-    console.error('GET /entries error:', err);
     res.status(500).json({ error: 'Failed to fetch entries' });
   }
 });
 
-/** GET /api/entries/:date (YYYY-MM-DD) */
+/* ───────────────────────── GET /api/entries/:date ─────────────────────────
+   Return entries for a specific day (YYYY-MM-DD)
+--------------------------------------------------------------------------- */
 router.get('/:date', async (req, res) => {
   try {
     const entries = await Entry.find({
-      userId: req.user.userId,
-      date: req.params.date,
-    }).lean();
-    entries.sort(sortNewestFirst);
+      userId: getUserId(req),
+      date: req.params.date
+    }).sort({ createdAt: -1 });
     res.json(entries);
   } catch (err) {
-    console.error('GET /entries/:date error:', err);
     res.status(500).json({ error: 'Failed to fetch entries by date' });
   }
 });
 
-/** POST /api/entries */
+/* ───────────────────────── POST /api/entries ─────────────────────────
+   Create an entry, then analyze it to insert pending Ripples.
+   Body accepts: { date?, text?, html?, content?, mood?, cluster?, tags?, linkedGoal? }
+--------------------------------------------------------------------------- */
 router.post('/', async (req, res) => {
   try {
-    const {
-      date,
-      text,
-      html = '',
-      content = '',       // legacy
-      mood = '',
-      cluster = '',
-      tags,               // can be undefined, string, or array
-      linkedGoal = null,
+    const userId = getUserId(req);
 
-      // allow suggested structures if sent (optional)
-      suggestedTasks = [],
-      suggestedAppointments = [],
-      suggestedEvents = [],
-      suggestedTags = [],
-      suggestedClusters = [],
-    } = req.body || {};
+    // accept explicit date or default to "today" in Toronto
+    const entryDate = (req.body?.date && String(req.body.date)) || todayISOInToronto();
 
-    const finalText = toPlainText({ text, html, content });
-    if (!finalText) {
-      return res.status(400).json({ error: 'Entry text is required.' });
+    // support legacy "content" and prefer "text" if present
+    const textField =
+      (typeof req.body?.text === 'string' && req.body.text) ||
+      (typeof req.body?.content === 'string' && req.body.content) ||
+      '';
+
+    const html = String(req.body?.html || '');
+    const mood = String(req.body?.mood || '');
+    const cluster = String(req.body?.cluster || '');
+    const tags = Array.isArray(req.body?.tags) ? req.body.tags : [];
+    const linkedGoal = req.body?.linkedGoal ?? null;
+
+    // 1) Create the entry
+    const doc = await Entry.create({
+      userId,
+      date: entryDate,
+      text: textField,
+      html,
+      mood,
+      cluster,
+      tags,
+      linkedGoal
+    });
+
+    // 2) Analyze + extract ripple drafts (NEW)
+    const { ripples } = analyzeEntry({
+      text: textField,
+      html,
+      entryDate,
+      userId,
+      sourceEntryId: doc._id
+    });
+
+    // 3) Insert pending ripples (if any)
+    if (Array.isArray(ripples) && ripples.length) {
+      const drafts = ripples.map(r => ({
+        userId,
+        sourceEntryId: doc._id,
+        entryDate,
+        extractedText: r.extractedText,
+        originalContext: r.originalContext || textField || '',
+        type: r.type || 'suggestedTask',
+        priority: r.priority || 'low',
+        assignedClusters: r.assignedClusters || [],
+        assignedCluster: r.assignedCluster || null,
+        dueDate: r.dueDate ?? null,
+        recurrence: r.recurrence || r.repeat || null,
+        status: 'pending'
+      }));
+      await Ripple.insertMany(drafts);
     }
 
-    const doc = {
-      userId: req.user.userId,
-      date: typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
-        ? date
-        : toISODateOnly(new Date()),
-      text: finalText,
-      mood: mood || undefined,
-      cluster: cluster || undefined,
-      linkedGoal: linkedGoal || undefined,
-
-      // these all default to [] in the schema, but set explicitly for clarity
-      tags: normalizeTags(tags), // ← allows no tags; becomes []
-      suggestedTasks: Array.isArray(suggestedTasks) ? suggestedTasks : [],
-      suggestedAppointments: Array.isArray(suggestedAppointments) ? suggestedAppointments : [],
-      suggestedEvents: Array.isArray(suggestedEvents) ? suggestedEvents : [],
-      suggestedTags: Array.isArray(suggestedTags) ? suggestedTags : [],
-      suggestedClusters: Array.isArray(suggestedClusters) ? suggestedClusters : [],
-    };
-
-    const entry = await Entry.create(doc);
-
-    // return normalized html/content echoes for your frontend renderer
-    res.status(201).json({
-      ...entry.toObject(),
-      html,     // echo back so the client can render immediately
-      content,  // legacy
-    });
+    res.status(201).json(doc);
   } catch (err) {
-    console.error('POST /entries error:', err);
+    console.error('❌ Entry create failed:', err);
     res.status(500).json({ error: 'Failed to create entry' });
   }
 });
 
-/** DELETE /api/entries/:id */
+/* ───────────────────────── PATCH /api/entries/:id ─────────────────────────
+   Update entry fields (does not re-run analysis by default)
+--------------------------------------------------------------------------- */
+router.patch('/:id', async (req, res) => {
+  try {
+    const update = {};
+    ['text','html','mood','cluster','tags','linkedGoal','date'].forEach(k => {
+      if (k in req.body) update[k] = req.body[k];
+    });
+
+    const doc = await Entry.findOneAndUpdate(
+      { _id: req.params.id, userId: getUserId(req) },
+      update,
+      { new: true }
+    );
+    if (!doc) return res.status(404).json({ error: 'Entry not found' });
+    res.json(doc);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update entry' });
+  }
+});
+
+/* ───────────────────────── DELETE /api/entries/:id ───────────────────────── */
 router.delete('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    const del = await Entry.findOneAndDelete({
-      _id: id,
-      userId: req.user.userId,
-    });
-    if (!del) return res.status(404).json({ error: 'Entry not found' });
-    res.json({ ok: true });
+    const out = await Entry.deleteOne({ _id: req.params.id, userId: getUserId(req) });
+    if (out.deletedCount === 0) return res.status(404).json({ error: 'Entry not found' });
+    res.sendStatus(204);
   } catch (err) {
-    console.error('DELETE /entries/:id error:', err);
     res.status(500).json({ error: 'Failed to delete entry' });
   }
 });

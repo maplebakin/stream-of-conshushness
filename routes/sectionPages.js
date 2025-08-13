@@ -4,9 +4,14 @@ import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
+// Normalize JWT user id across payload shapes
+function getUserId(req) {
+  return req.user?._id || req.user?.userId || req.user?.id;
+}
+
 // Get all pages for a section
 router.get('/:section', authenticateToken, async (req, res) => {
-  const pages = await SectionPage.find({ section: req.params.section, userId: req.user._id });
+  const pages = await SectionPage.find({ section: req.params.section, userId: getUserId(req) });
   res.json(pages);
 });
 
@@ -15,16 +20,17 @@ router.get('/:section/:slug', authenticateToken, async (req, res) => {
   const page = await SectionPage.findOne({
     section: req.params.section,
     slug: req.params.slug,
-    userId: req.user._id,
+    userId: getUserId(req),
   });
   if (!page) return res.status(404).json({ error: 'Page not found' });
   res.json(page);
 });
 
-// Create a page
-router.post('/', authenticateToken, async (req, res) => {
-  const { section, slug, title, content } = req.body;
-  const page = new SectionPage({ section, slug, title, content, userId: req.user._id });
+// Create a new page
+router.post('/:section', authenticateToken, async (req, res) => {
+  const { section } = req.params;
+  const { slug, title, content } = req.body;
+  const page = new SectionPage({ section, slug, title, content, userId: getUserId(req) });
   await page.save();
   res.status(201).json(page);
 });
@@ -32,7 +38,7 @@ router.post('/', authenticateToken, async (req, res) => {
 // Update a page
 router.put('/:id', authenticateToken, async (req, res) => {
   const page = await SectionPage.findOneAndUpdate(
-    { _id: req.params.id, userId: req.user._id },
+    { _id: req.params.id, userId: getUserId(req) },
     req.body,
     { new: true }
   );
@@ -42,7 +48,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
 // Delete a page
 router.delete('/:id', authenticateToken, async (req, res) => {
-  const deleted = await SectionPage.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+  const deleted = await SectionPage.findOneAndDelete({ _id: req.params.id, userId: getUserId(req) });
   if (!deleted) return res.status(404).json({ error: 'Page not found' });
   res.json({ success: true });
 });

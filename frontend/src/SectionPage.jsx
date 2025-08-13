@@ -1,8 +1,8 @@
+// src/SectionPage.jsx
 import { useParams } from 'react-router-dom';
 import { useState, useEffect, useContext } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
-import Header from './Header.jsx';
 import SectionSidebar from './SectionSidebar.jsx';
 import './Main.css';
 
@@ -14,7 +14,7 @@ export default function SectionPage() {
   const [pages, setPages] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const normalizedSection = sectionName.toLowerCase();
+  const normalizedSection = (sectionName || '').toLowerCase();
   const isGames = normalizedSection === 'games';
 
   useEffect(() => {
@@ -23,102 +23,103 @@ export default function SectionPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Entries
+        // Entries for this section
         const entryRes = await axios.get(`/api/entries?section=${normalizedSection}`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${token}` }
         });
+        setEntries(entryRes.data || []);
 
-        const rawEntries = Array.isArray(entryRes.data) ? entryRes.data : [];
-
-        const grouped = rawEntries.reduce((acc, entry) => {
-          if (!acc[entry.date]) acc[entry.date] = [];
-          acc[entry.date].push(entry);
-          return acc;
-        }, {});
-
-        const groupedSorted = Object.entries(grouped)
-          .sort((a, b) => new Date(b[0]) - new Date(a[0]))
-          .map(([date, entries]) => [
-            date,
-            entries.sort((a, b) => new Date(b.createdAt || b._id) - new Date(a.createdAt || a._id)),
-          ]);
-
-        setEntries(groupedSorted);
-
-        // Games section
+        // Games & custom pages for "Games" section only
         if (isGames) {
-          const gameRes = await axios.get('/api/games', {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          setGames(Array.isArray(gameRes.data) ? gameRes.data : []);
+          const gamesRes = await axios.get('/api/games', { headers: { Authorization: `Bearer ${token}` }});
+          setGames(gamesRes.data || []);
         } else {
           setGames([]);
         }
 
-        // Section Pages
-        const pageRes = await axios.get(`/api/section-pages?section=${normalizedSection}`, {
-          headers: { Authorization: `Bearer ${token}` },
+        const pagesRes = await axios.get(`/api/section-pages/${normalizedSection}`, {
+          headers: { Authorization: `Bearer ${token}` }
         });
-        setPages(Array.isArray(pageRes.data) ? pageRes.data : []);
-
-      } catch (err) {
-        console.error('❌ Error loading section data:', err);
-        setEntries([]);
-        setGames([]);
-        setPages([]);
+        setPages(pagesRes.data || []);
+      } catch (e) {
+        console.warn('SectionPage fetch error:', e?.response?.data || e.message);
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, [token, sectionName]);
 
-  if (loading) return <p className="section-page">Loading...</p>;
-
   return (
-    <>
-      <Header />
-      <div className="main-container">
-        <SectionSidebar sectionName={sectionName} games={games} pages={pages} />
+    <div className="page two-col with-sidebar">
+      {/* Left fixed sidebar for section navigation */}
+      <aside className="static-sidebar">
+        <SectionSidebar currentSection={normalizedSection} />
+      </aside>
 
-        <div className="main-feed">
-          {entries.length === 0 ? (
-            <div className="empty-state" style={{ textAlign: 'center', padding: '2em' }}>
-              <div style={{ fontSize: 48, opacity: 0.3 }}>🗃️</div>
-              <p>No entries found for this section.</p>
-              {/* Optional: Add new entry button */}
-              {/* <button className="add-entry-btn">+ New Entry</button> */}
-            </div>
-          ) : (
-            entries.map(([date, dayEntries]) => (
-              <div key={date} className="entry-day-group" style={{ marginBottom: '2rem' }}>
-                <h3>{date}</h3>
-                {dayEntries.map((entry) => (
-                  <div key={entry._id} className="entry-card">
-                    <div
-                      className="entry-content"
-                      dangerouslySetInnerHTML={{ __html: entry.content }}
-                    />
-                    {entry.tags && (
-                      <div className="tags">
-                        {(Array.isArray(entry.tags) ? entry.tags : entry.tags.split(','))
-                          .map((tag) => tag.trim())
-                          .filter(Boolean)
-                          .map((tag) => (
-                            <span key={tag} className="tag-pill">
-                              #{tag}
-                            </span>
-                          ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ))
-          )}
+      {/* Main content area */}
+      <main className="content">
+        <div className="section-header">
+          <h2 style={{ margin: 0, textTransform: 'capitalize' }}>{normalizedSection}</h2>
         </div>
-      </div>
-    </>
+
+        {loading && <div className="card">Loading…</div>}
+
+        {!loading && (
+          <>
+            {/* Rolling entries */}
+            <div className="card scrollable">
+              <h3 style={{ marginTop: 0 }}>Entries</h3>
+              {entries.length === 0 ? (
+                <p className="muted">No entries yet for this section.</p>
+              ) : (
+                entries.map(e => (
+                  <article className="entry-card" key={e._id}>
+                    <div className="entry-meta">
+                      <span className="date">{e.date}</span>
+                      {e.mood && <span className="pill">{e.mood}</span>}
+                      {Array.isArray(e.tags) && e.tags.slice(0,5).map((t,i) => (
+                        <span key={i} className="pill pill-muted">#{t}</span>
+                      ))}
+                    </div>
+                    <div className="entry-text">{e.text}</div>
+                  </article>
+                ))
+              )}
+            </div>
+
+            {/* Section-specific extras */}
+            {isGames && (
+              <div className="card">
+                <h3 style={{ marginTop: 0 }}>Games</h3>
+                {games.length === 0 ? (
+                  <p className="muted">No games yet.</p>
+                ) : (
+                  <ul className="unstyled">
+                    {games.map(g => (
+                      <li key={g._id}>{g.title}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {/* Custom pages */}
+            <div className="card">
+              <h3 style={{ marginTop: 0 }}>Pages</h3>
+              {pages.length === 0 ? (
+                <p className="muted">No pages yet.</p>
+              ) : (
+                <ul className="unstyled">
+                  {pages.map(p => (
+                    <li key={p._id}>{p.title}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </>
+        )}
+      </main>
+    </div>
   );
 }

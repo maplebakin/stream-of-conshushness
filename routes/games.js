@@ -2,52 +2,90 @@ import express from 'express';
 import Game from '../models/Game.js';
 import GameNote from '../models/GameNote.js';
 import auth from '../middleware/auth.js';
-import { authenticateToken } from '../middleware/auth.js';
-
 
 const router = express.Router();
 
+/** helper: normalize user id across JWT shapes */
+function getUserId(req) {
+  return req.user?.userId || req.user?._id || req.user?.id;
+}
+
 // GET all games for logged-in user
 router.get('/', auth, async (req, res) => {
-  const games = await Game.find({ userId: req.user.id }).sort({ createdAt: -1 });
+  const games = await Game.find({ userId: getUserId(req) }).sort({ createdAt: -1 });
   res.json(games);
 });
 
 // POST create a new game
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', auth, async (req, res) => {
   const { title, description, imageUrl } = req.body;
-  const slug = title.toLowerCase().replace(/\s+/g, '-');
-  const newGame = new Game({ title, slug, description, imageUrl, userId: req.user.id });
-  await newGame.save();
-  res.status(201).json(newGame);
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+  const game = new Game({
+    userId: getUserId(req),
+    title,
+    slug,
+    description: description || '',
+    imageUrl: imageUrl || ''
+  });
+
+  await game.save();
+  res.status(201).json(game);
 });
 
-// GET one game + note
-router.get('/:slug', authenticateToken, async (req, res) => {
-  const game = await Game.findOne({ userId: req.user.id, slug: req.params.slug });
-  if (!game) return res.status(404).json({ message: 'Game not found' });
-
-  const note = await GameNote.findOne({ userId: req.user.id, gameId: game._id });
-  res.json({ game, note });
+// GET one game by slug
+router.get('/:slug', auth, async (req, res) => {
+  const game = await Game.findOne({ userId: getUserId(req), slug: req.params.slug });
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+  res.json(game);
 });
 
-// POST create/update note for a game
-router.post('/:slug/notes', authenticateToken, async (req, res) => {
-  const game = await Game.findOne({ userId: req.user.id, slug: req.params.slug });
-  if (!game) return res.status(404).json({ message: 'Game not found' });
+// PATCH update a game
+router.patch('/:slug', auth, async (req, res) => {
+  const { title, description, imageUrl } = req.body;
+  const update = {};
+  if (typeof title === 'string') update.title = title;
+  if (typeof description === 'string') update.description = description;
+  if (typeof imageUrl === 'string') update.imageUrl = imageUrl;
 
-  const { content } = req.body;
-  let note = await GameNote.findOne({ userId: req.user.id, gameId: game._id });
+  const game = await Game.findOneAndUpdate(
+    { userId: getUserId(req), slug: req.params.slug },
+    update,
+    { new: true }
+  );
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+  res.json(game);
+});
 
-  if (!note) {
-    note = new GameNote({ userId: req.user.id, gameId: game._id, content });
-  } else {
-    note.content = content;
-    note.updatedAt = new Date();
-  }
+// DELETE a game
+router.delete('/:slug', auth, async (req, res) => {
+  const out = await Game.deleteOne({ userId: getUserId(req), slug: req.params.slug });
+  if (out.deletedCount === 0) return res.status(404).json({ error: 'Game not found' });
+  res.sendStatus(204);
+});
 
+/* ---------- notes (optional) ---------- */
+
+// GET notes for a game
+router.get('/:slug/notes', auth, async (req, res) => {
+  const game = await Game.findOne({ userId: getUserId(req), slug: req.params.slug });
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+  const notes = await GameNote.find({ userId: getUserId(req), gameId: game._id }).sort({ createdAt: -1 });
+  res.json(notes);
+});
+
+// POST a new note for a game
+router.post('/:slug/notes', auth, async (req, res) => {
+  const game = await Game.findOne({ userId: getUserId(req), slug: req.params.slug });
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+
+  const note = new GameNote({
+    userId: getUserId(req),
+    gameId: game._id,
+    content: String(req.body.content || '').trim()
+  });
   await note.save();
-  res.json(note);
+  res.status(201).json(note);
 });
 
 export default router;

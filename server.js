@@ -3,11 +3,11 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 /* ───────────── Core ───────────── */
-import express            from 'express';
-import path, { dirname }  from 'path';
-import { fileURLToPath }  from 'url';
-import mongoose           from 'mongoose';
-import jwt                from 'jsonwebtoken';
+import express           from 'express';
+import path, { dirname } from 'path';
+import { fileURLToPath } from 'url';
+import mongoose          from 'mongoose';
+import jwt               from 'jsonwebtoken';
 
 /* ───────────── Utils & Middleware ───────────── */
 import cors     from 'cors';
@@ -24,9 +24,9 @@ import pageRoutes           from './routes/pages.js';
 import sectionPagesRouter   from './routes/sectionPages.js';
 import sectionRoutes        from './routes/sections.js';
 import entryRoutes          from './routes/entries.js';
-import appointmentsRouter   from './routes/appointments.js'; // ✅ name matches below
+import appointmentsRouter   from './routes/appointments.js';
 import noteRoutes           from './routes/notes.js';
-import eventsRouter         from './routes/events.js';       // ✅ name matches below
+import eventsRouter         from './routes/events.js';
 import scheduleRoutes       from './routes/schedule.js';
 import calendarRoutes       from './routes/calendar.js';
 import rippleRoutes         from './routes/ripples.js';
@@ -45,11 +45,20 @@ const __dirname  = dirname(__filename);
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-/* ───────────── Global Middleware ───────────── */
-app.use(cors());
-app.use(helmet());
-app.use(express.json());
+app.set('trust proxy', true);           // Render/Netlify proxy aware
+app.disable('x-powered-by');
 
+/* ───────────── Global Middleware ───────────── */
+app.use(cors({
+  origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+  credentials: false, // using Authorization header, not cookies
+}));
+
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, // allow images/icons if hosted elsewhere
+}));
+
+app.use(express.json({ limit: '2mb' })); // TipTap HTML can be chunky
 
 /* ───────────── REST Routes ───────────── */
 app.use('/api',                 authRoutes);                 // login / register
@@ -62,23 +71,25 @@ app.use('/api/pages',           auth, pageRoutes);
 app.use('/api/section-pages',   auth, sectionPagesRouter);
 app.use('/api/sections',        auth, sectionRoutes);
 app.use('/api/entries',         auth, entryRoutes);
-app.use('/api/appointments',    auth, appointmentsRouter);   // ✅ fixed
+app.use('/api/appointments',    auth, appointmentsRouter);
 app.use('/api/notes',           auth, noteRoutes);
-app.use('/api/events',          auth, eventsRouter);         // ✅ fixed
+app.use('/api/events',          auth, eventsRouter);
 app.use('/api/schedule',        auth, scheduleRoutes);
 app.use('/api/calendar-data',   auth, calendarRoutes);
 app.use('/api/ripples',         auth, rippleRoutes);
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 app.use('/api/suggested-tasks', auth, suggestedTaskRoutes);
 app.use('/api/clusters',        auth, clusterRoutes);
-app.use('/api/upload',          auth, uploadRouter); 
+app.use('/api/upload',          auth, uploadRouter);
+
+/* uploads (static) */
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 /* ───────────── GraphQL Endpoint ───────────── */
 app.use('/graphql', createHandler({
   schema,
   rootValue: root,
   context: (req) => {
-    const authHeader = req.headers['authorization'] || '';
+    const authHeader = req.headers?.authorization || '';
     const token      = authHeader.split(' ')[1];
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -92,11 +103,28 @@ app.use('/graphql', createHandler({
 /* ───────────── Health Check ───────────── */
 app.get('/health', (_, res) => res.send('OK'));
 
+/* ───────────── 404 & Error Handling ───────────── */
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  next();
+});
+
+app.use((err, req, res, next) => {
+  console.error('💥 Uncaught error:', err);
+  res.status(err.status || 500).json({ error: err.message || 'Server error' });
+});
+
 /* ───────────── Serve Front-End ───────────── */
 const CLIENT_BUILD_PATH = path.join(__dirname, 'frontend', 'dist');
 app.use(express.static(CLIENT_BUILD_PATH));
+
 app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/graphql')) return next();
+  // don’t hijack API/GraphQL/uploads/file requests
+  if (req.path.startsWith('/api') || req.path.startsWith('/graphql') || req.path.startsWith('/uploads')) {
+    return next();
+  }
   res.sendFile(path.join(CLIENT_BUILD_PATH, 'index.html'));
 });
 

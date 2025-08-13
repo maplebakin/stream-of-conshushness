@@ -1,185 +1,76 @@
 // src/DailyRipples.jsx
-import React, { useEffect, useState, useContext, useMemo } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
-import './DailyRipples.css';
+import './Main.css';
 
-/* --- tiny helpers --- */
-const uniq = (arr) => [...new Set(arr.filter(Boolean).map(String))];
-const norm = (v) => (Array.isArray(v) ? v : v == null ? [] : [v]);
-
-/* --- pill multi-select --- */
-function ClusterChips({ allClusters, value, onChange }) {
-  const [input, setInput] = useState('');
-
-  const toggle = (name) => {
-    const set = new Set(value);
-    set.has(name) ? set.delete(name) : set.add(name);
-    onChange([...set]);
-  };
-
-  const addFromInput = (e) => {
-    e.preventDefault();
-    const name = input.trim();
-    if (!name) return;
-    onChange(uniq([...value, name]));
-    setInput('');
-  };
-
-  return (
-    <div className="flex flex-wrap gap-2 items-center">
-      {allClusters.map((c) => (
-        <button
-          key={c}
-          type="button"
-          onClick={() => toggle(c)}
-          className={`chip ${value.includes(c) ? 'chip--active' : ''}`}
-          title={value.includes(c) ? 'Remove' : 'Add'}
-        >
-          {c}
-        </button>
-      ))}
-
-      <form onSubmit={addFromInput} className="inline-flex">
-        <input
-          className="chip-input"
-          placeholder="+ Add cluster"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-        />
-      </form>
-    </div>
-  );
-}
-
-function DailyRipples({ date }) {
+export default function DailyRipples({ date }) {
   const { token } = useContext(AuthContext);
   const [ripples, setRipples] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [clusters, setClusters] = useState([]); // list of cluster names
-  const [selected, setSelected] = useState({}); // rippleId -> string[]
 
-  /* auth header memo */
-  const authHeader = useMemo(
-    () => ({ Authorization: `Bearer ${token}` }),
-    [token]
-  );
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
-  /* load clusters once */
-  useEffect(() => {
-    let mounted = true;
-    axios
-      .get('/api/clusters', { headers: authHeader })
-      .then((res) => {
-        // accept either { name } objects or plain strings
-        const names = (res.data || []).map((c) => (typeof c === 'string' ? c : c.name)).filter(Boolean);
-        if (mounted) setClusters(uniq(names));
-      })
-      .catch(() => {}) // clusters optional
-    return () => { mounted = false; };
-  }, [authHeader]);
-
-  /* load ripples for date */
-  useEffect(() => {
-    if (!date) return;
+  async function fetchRipples() {
     setLoading(true);
-    axios
-      .get(`/api/ripples/${date}`, { headers: authHeader })
-      .then((res) => {
-        const items = res.data || [];
-        setRipples(items);
-        // seed selected map from ripple.assignedClusters / assignedCluster
-        const seed = {};
-        for (const r of items) {
-          const base = uniq([
-            ...(norm(r.assignedClusters)),
-            ...(r.assignedCluster ? [r.assignedCluster] : []),
-          ]);
-          seed[r._id] = base;
-        }
-        setSelected(seed);
-      })
-      .catch((err) => console.error('❌ Failed to load daily ripples:', err))
-      .finally(() => setLoading(false));
-  }, [date, authHeader]);
-
-  const approveRipple = async (ripple) => {
-    const ids = selected[ripple._id] || [];
     try {
-      await axios.put(
-        `/api/ripples/${ripple._id}/approve`,
-        ids.length ? { assignedClusters: ids } : {},
-        { headers: authHeader }
-      );
-      setRipples((prev) => prev.filter((r) => r._id !== ripple._id));
-    } catch (err) {
-      console.error('Approve ripple error:', err);
+      const { data } = await axios.get(`/api/ripples/${date}`, { headers: authHeaders });
+      setRipples(Array.isArray(data) ? data : []);
+    } finally {
+      setLoading(false);
     }
-  };
+  }
 
-  const dismissRipple = async (id) => {
-    try {
-      await axios.put(`/api/ripples/${id}/dismiss`, {}, { headers: authHeader });
-      setRipples((prev) => prev.filter((r) => r._id !== id));
-    } catch (err) {
-      console.error('Dismiss ripple error:', err);
-    }
-  };
+  useEffect(() => {
+    if (date) fetchRipples();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
 
-  const setRippleClusters = (id, values) =>
-    setSelected((m) => ({ ...m, [id]: values }));
+  async function approve(ripple) {
+    const { data } = await axios.put(`/api/ripples/${ripple._id}/approve`, {}, { headers: authHeaders });
+    // remove from list after approval
+    setRipples(prev => prev.filter(r => r._id !== ripple._id));
+    // you can also emit an event or callback to refresh tasks if desired
+  }
 
-  if (loading) return <div className="ripple-box font-glow text-vein">Loading ripples…</div>;
+  async function dismiss(ripple) {
+    await axios.put(`/api/ripples/${ripple._id}/dismiss`, {}, { headers: authHeaders });
+    setRipples(prev => prev.filter(r => r._id !== ripple._id));
+  }
 
   return (
-    <div className="ripple-box">
-      <h3 className="font-thread text-vein mb-2">Ripples</h3>
-
-      {ripples.length === 0 ? (
-        <p className="ripple-empty font-glow text-vein">No suggestions for this day.</p>
+    <div>
+      <h3 className="font-thread text-vein">Ripples to Review</h3>
+      {loading ? (
+        <div className="muted">Loading…</div>
+      ) : ripples.length === 0 ? (
+        <div className="muted">No pending ripples for this day.</div>
       ) : (
-        <ul className="ripple-list space-y-3">
-          {ripples.map((r) => {
-            const chosen = selected[r._id] || [];
-            return (
-              <li
-                key={r._id}
-                className="ripple-item bg-lantern border border-veil shadow-sm rounded-lg p-3 text-ink"
-              >
-                <p className="ripple-text font-glow text-sm mb-2">{r.extractedText}</p>
-
-                <div className="mb-2">
-                  <ClusterChips
-                    allClusters={clusters}
-                    value={chosen}
-                    onChange={(vals) => setRippleClusters(r._id, vals)}
-                  />
-                </div>
-
-                <div className="ripple-actions flex gap-2">
-                  <button
-                    className="px-3 py-1 rounded-button bg-thread text-mist hover:bg-plum hover:text-veil font-thread text-sm transition-all"
-                    onClick={() => approveRipple(r)}
-                    title="Create Task"
-                  >
-                    + Add to Tasks
-                    {chosen.length > 0 ? ` (${chosen.length})` : ''}
-                  </button>
-                  <button
-                    className="px-3 py-1 rounded-button bg-muted text-ink hover:bg-veil hover:text-mist font-thread text-sm transition-all"
-                    onClick={() => dismissRipple(r._id)}
-                    title="Dismiss"
-                  >
-                    ✕ Dismiss
-                  </button>
-                </div>
-              </li>
-            );
-          })}
+        <ul className="tasks" style={{ listStyle: 'none', padding: 0, margin: '8px 0', display: 'grid', gap: 8 }}>
+          {ripples.map(r => (
+            <li key={r._id} className="task" style={{ background: 'var(--card, #fff)', borderRadius: 12, padding: '10px 12px', boxShadow: '0 1px 4px rgba(0,0,0,.06)', display: 'grid', gap: 8 }}>
+              <div className="title">{r.extractedText || '(no text)'}</div>
+              <div className="muted" style={{ fontSize: '0.85rem' }}>{r.originalContext}</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className="button chip"
+                  onClick={() => approve(r)}
+                  title="Turn into a task"
+                >
+                  Approve → Task
+                </button>
+                <button
+                  className="button chip"
+                  onClick={() => dismiss(r)}
+                  title="Dismiss this ripple"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </li>
+          ))}
         </ul>
       )}
     </div>
   );
 }
-
-export default DailyRipples;
