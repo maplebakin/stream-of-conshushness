@@ -61,7 +61,7 @@ const DOW = { SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6 };
 /** Compute next due date for a repeating task */
 function nextDueDate({ currentDue, repeat, fromDateISO }) {
   if (!repeat) return null;
-  const unit = repeat.unit || String(repeat).toLowerCase(); // allows legacy strings
+  const unit = repeat.unit || String(repeat).toLowerCase(); // allow legacy strings like "daily"
   const interval = Number(repeat.interval || 1);
 
   // Anchor: if currentDue exists, use that; else use fromDate (today).
@@ -73,13 +73,12 @@ function nextDueDate({ currentDue, repeat, fromDateISO }) {
 
   if (unit === 'week' || /weekly/.test(unit)) {
     const from = parseISO(fromDateISO || anchor);
-    const baseDow = from.getDay(); // 0..6
     const by = Array.isArray(repeat.byDay) ? repeat.byDay : [];
 
     // If specific weekdays provided (e.g., ['MO','TH']), find the next one strictly after 'from'
     if (by.length) {
       const wanted = by
-        .map(s => DOW[(s || '').toUpperCase()] )
+        .map(s => DOW[(s || '').toUpperCase()])
         .filter(v => v !== undefined);
 
       for (let i = 1; i <= 21; i++) {
@@ -138,7 +137,7 @@ const defaultSort = { completed: 1, dueDate: 1, createdAt: 1 };
  *   countOnly=0|1
  *   cluster, completed
  *
- * Note: Recurring tasks now show ONLY when due (or overdue), not every day.
+ * Recurring tasks show ONLY when due (or overdue), not every day.
  */
 router.get('/', async (req, res) => {
   const view = (req.query.view || 'today').toLowerCase();
@@ -173,6 +172,49 @@ router.get('/', async (req, res) => {
 
   const tasks = await Task.find(q).sort(defaultSort);
   res.json(tasks);
+});
+/**
+ * GET /api/tasks/counts/inbox-by-cluster
+ * Returns counts of undated, incomplete tasks grouped by cluster name.
+ * Works with both legacy `cluster` (string) and modern `clusters` (array).
+ * Response: [{ cluster: 'Arts & Crafts', count: 3 }, ...]
+ */
+router.get('/counts/inbox-by-cluster', async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?._id || req.user?.id;
+    const match = {
+      userId: new mongoose.Types.ObjectId(userId),
+      completed: false,
+      $or: [{ dueDate: { $exists: false } }, { dueDate: null }, { dueDate: '' }]
+    };
+
+    const pipeline = [
+      { $match: match },
+      // normalize to an array field
+      { $addFields: {
+          clustersComputed: {
+            $cond: [
+              { $gt: [{ $size: { $ifNull: ['$clusters', []] } }, 0] },
+              '$clusters',
+              { $cond: [
+                { $and: [ { $ne: ['$cluster', null] }, { $ne: ['$cluster', '' ] } ] },
+                ['$cluster'],
+                ['Unassigned']
+              ] }
+            ]
+          }
+      }},
+      { $unwind: '$clustersComputed' },
+      { $group: { _id: '$clustersComputed', count: { $sum: 1 } } },
+      { $project: { _id: 0, cluster: '$_id', count: 1 } },
+      { $sort: { cluster: 1 } }
+    ];
+
+    const out = await Task.aggregate(pipeline);
+    res.json(out);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to get inbox counts by cluster' });
+  }
 });
 
 /** POST /api/tasks — create */
@@ -277,6 +319,38 @@ router.post('/:id/complete', async (req, res) => {
   } catch (e) {
     console.error('complete error', e);
     res.status(500).json({ error: 'Failed to complete task' });
+  }
+});
+
+/**
+ * POST /api/tasks/:id/skip
+ * Advances a repeating task to its next scheduled date (keeps completed:false).
+ * Body: { fromDate?: 'YYYY-MM-DD' }  (defaults to today in Toronto)
+ */
+router.post('/:id/skip', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const id = req.params.id;
+    const fromDate = req.body?.fromDate || todayISOInToronto();
+
+    const task = await Task.findOne({ _id: id, userId });
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+    if (!task.repeat) return res.status(400).json({ error: 'Task is not repeating' });
+
+    const next = nextDueDate({
+      currentDue: task.dueDate,
+      repeat: task.repeat,
+      fromDateISO: fromDate
+    });
+
+    const updated = await Task.findOneAndUpdate(
+      { _id: id, userId },
+      { $set: { dueDate: next, completed: false } },
+      { new: true }
+    );
+    res.json(updated);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to skip task occurrence' });
   }
 });
 

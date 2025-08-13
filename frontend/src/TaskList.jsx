@@ -4,6 +4,7 @@ import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import { todayISOInToronto } from './utils/date.js';
 import './Main.css';
+import { describeRepeat } from './utils/repeat.js';
 
 export default function TaskList({ date, header = 'Tasks' }) {
   const { token } = useContext(AuthContext);
@@ -136,6 +137,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
                 {t.title}
               </div>
               {t.cluster && <div className="cluster muted">{t.cluster}</div>}
+              {t.repeat && <div className="repeat muted">{describeRepeat(t.repeat)}</div>}
               {t.dueDate && <div className="due muted">due {t.dueDate}</div>}
             </li>
           ))}
