@@ -1,112 +1,139 @@
-import React, { useState, useContext } from 'react';
-import axios from './api/axiosInstance';
+import React, { useContext, useEffect, useState } from 'react';
 import { AuthContext } from './AuthContext.jsx';
-import './TaskModal.css';
+import { createTask, updateTask } from '../api/tasks.js';
 
+const RRULE_PRESETS = [
+  ['Every day', 'FREQ=DAILY'],
+  ['Every other day', 'FREQ=DAILY;INTERVAL=2'],
+  ['Weekdays', 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR'],
+  ['Weekends', 'FREQ=WEEKLY;BYDAY=SA,SU'],
+  ['Every Wednesday', 'FREQ=WEEKLY;BYDAY=WE'],
+];
 
 export default function TaskModal({
+  task,                 // optional: if present -> edit
   onClose,
-  onTaskCreated,
-  entryId = null,
-  clusters = [],
-  goalId = null,
-  date = null, // optional: pre-fill dueDate (YYYY-MM-DD)
+  onSaved,
+  defaultDate = '',
+  defaultCluster = ''
 }) {
   const { token } = useContext(AuthContext);
+  const isEdit = !!(task && task._id);
 
-  const [title, setTitle] = useState('');
-  const [notes, setNotes] = useState('');
-  const [dueDate, setDueDate] = useState(date || '');
-  const [repeat, setRepeat] = useState('');
-  const [clusterInput, setClusterInput] = useState(''); // comma-separated
+  const [title, setTitle] = useState(task?.title || '');
+  const [dueDate, setDueDate] = useState(task?.dueDate || defaultDate || '');
+  const [repeat, setRepeat] = useState(task?.repeat || '');
+  const [priority, setPriority] = useState(task?.priority || 'low');
+  const [clustersText, setClustersText] = useState(
+    (task?.clusters || (defaultCluster ? [defaultCluster] : []))?.join(', ')
+  );
+  const [notes, setNotes] = useState(task?.notes || '');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!title.trim()) return;
+  useEffect(() => {
+    if (!isEdit) return;
+    setTitle(task?.title || '');
+    setDueDate(task?.dueDate || '');
+    setRepeat(task?.repeat || '');
+    setPriority(task?.priority || 'low');
+    setClustersText((task?.clusters || []).join(', '));
+    setNotes(task?.notes || '');
+  }, [isEdit, task?._id]);
 
-    const payload = {
-      title: title.trim(),
-      notes: notes.trim() || undefined,
-      dueDate: dueDate || undefined, // backend accepts YYYY-MM-DD or Date
-      repeat: repeat || undefined,
-      goalId: goalId || undefined,
-      entryId: entryId || undefined,
-      clusters: [
-        ...clusters,
-        ...(
-          clusterInput
-            ? clusterInput.split(',').map(s => s.trim()).filter(Boolean)
-            : []
-        )
-      ]
-    };
+  function parseClusters(text) {
+    return text
+      .split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean);
+  }
 
+  async function handleSave() {
+    setErr('');
+    if (!title.trim()) { setErr('Title required'); return; }
+    setSaving(true);
     try {
-      const { data } = await axios.post('/api/tasks', payload, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      onTaskCreated?.(data);
+      const body = {
+        title: title.trim(),
+        dueDate: dueDate || '',
+        repeat: repeat || '',
+        priority,
+        clusters: parseClusters(clustersText),
+        notes: notes || ''
+      };
+      const saved = isEdit
+        ? await updateTask({ token, id: task._id, patch: body })
+        : await createTask({ token, body });
+
+      onSaved?.(saved);
       onClose?.();
-    } catch (err) {
-      console.error('Create task failed:', err);
+    } catch (e) {
+      setErr(e.message || 'Failed to save task');
+    } finally {
+      setSaving(false);
     }
-  };
+  }
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
-        <h2>Create Task</h2>
-        <form onSubmit={handleSubmit} className="entry-form">
-          <label>Title</label>
-          <input
-            type="text"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            placeholder="Short label (e.g., Email school)"
-            required
-          />
+        <h3 style={{marginTop:0}}>{isEdit ? 'Edit Task' : 'New Task'}</h3>
 
-          <label>Notes (optional)</label>
-          <textarea
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            placeholder="Extra details…"
-            rows={3}
-          />
+        <label className="field">
+          <span>Title</span>
+          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Do the thing" />
+        </label>
 
-          <div className="two-col">
-            <div>
-              <label>Due Date</label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={e => setDueDate(e.target.value)}
-              />
+        <div className="row" style={{display:'flex', gap:8}}>
+          <label className="field" style={{flex:1}}>
+            <span>Due date</span>
+            <input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} />
+          </label>
+          <label className="field" style={{flex:1}}>
+            <span>Priority</span>
+            <div style={{display:'flex', gap:6}}>
+              {['low','medium','high'].map(p => (
+                <button key={p}
+                        type="button"
+                        className={`chip ${priority===p?'chip-active':''}`}
+                        onClick={()=>setPriority(p)}>
+                  {p}
+                </button>
+              ))}
             </div>
-            <div>
-              <label>Repeat</label>
-              <input
-                type="text"
-                value={repeat}
-                onChange={e => setRepeat(e.target.value)}
-                placeholder="daily, weekly Tue…"
-              />
-            </div>
-          </div>
+          </label>
+        </div>
 
-          <label>Clusters (comma-separated)</label>
-          <input
-            type="text"
-            value={clusterInput}
-            onChange={e => setClusterInput(e.target.value)}
-            placeholder="Home, Colton…"
-          />
-
-          <div className="modal-buttons">
-            <button type="button" onClick={onClose}>Cancel</button>
-            <button type="submit" disabled={!title.trim()}>Create Task</button>
+        <label className="field">
+          <span>Repeat (RRULE)</span>
+          <input value={repeat} onChange={e=>setRepeat(e.target.value)} placeholder="FREQ=WEEKLY;BYDAY=WE" />
+          <div style={{display:'flex', gap:6, flexWrap:'wrap', marginTop:6}}>
+            {RRULE_PRESETS.map(([label, rule]) => (
+              <button key={rule} type="button" className="chip chip-ghost" onClick={()=>setRepeat(rule)}>
+                {label}
+              </button>
+            ))}
           </div>
-        </form>
+        </label>
+
+        <label className="field">
+          <span>Clusters (comma separated)</span>
+          <input value={clustersText} onChange={e=>setClustersText(e.target.value)} placeholder="home, colton" />
+        </label>
+
+        <label className="field">
+          <span>Notes</span>
+          <textarea rows={4} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Optional details…" />
+        </label>
+
+        {err && <div style={{color:'crimson', marginTop:8}}>{err}</div>}
+
+        <div style={{display:'flex', justifyContent:'flex-end', gap:8, marginTop:12}}>
+          <button onClick={onClose} disabled={saving}>Cancel</button>
+          <button onClick={handleSave} disabled={saving || !title.trim()}>
+            {saving ? 'Saving…' : (isEdit ? 'Save' : 'Create')}
+          </button>
+        </div>
       </div>
     </div>
   );

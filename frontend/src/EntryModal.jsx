@@ -20,7 +20,8 @@ export default function EntryModal({
   onClose,
   onSaved,
   defaultCluster = '',
-  defaultTags = []
+  defaultTags = [],
+  defaultDate // ← key: Daily page can set this
 }) {
   const { token } = useContext(AuthContext);
 
@@ -29,7 +30,7 @@ export default function EntryModal({
   const [tagsInput, setTagsInput] = useState(Array.isArray(defaultTags) ? defaultTags.join(', ') : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [textLen, setTextLen] = useState(0); // ← drives canSave
+  const [textLen, setTextLen] = useState(0); // drives canSave
 
   // keep inputs in sync if props change
   useEffect(() => setCluster(defaultCluster || ''), [defaultCluster]);
@@ -66,16 +67,15 @@ export default function EntryModal({
         ? tagsInput.split(',').map(s => s.trim()).filter(Boolean)
         : [];
 
-      const basePayload = {
-        date: todayISOInToronto(),
+      const payload = {
+        date: defaultDate || todayISOInToronto(), // ← honor Daily page
         text,            // required plain text
         html,            // rich content
         content: html,   // legacy/analysis compatibility
         mood: mood || undefined,
-        cluster: cluster || undefined
+        cluster: cluster || undefined,
+        ...(tagsArr.length ? { tags: tagsArr } : {})
       };
-
-      const payload = tagsArr.length ? { ...basePayload, tags: tagsArr } : basePayload;
 
       const res = await fetch('/api/entries', {
         method: 'POST',
@@ -96,19 +96,22 @@ export default function EntryModal({
     } finally {
       setSaving(false);
     }
-  }, [editor, token, tagsInput, mood, cluster, onSaved, onClose]);
+  }, [editor, token, tagsInput, mood, cluster, defaultDate, onSaved, onClose]);
 
-  // Cmd/Ctrl+Enter to save
+  // Cmd/Ctrl+Enter to save; Esc to close
   useEffect(() => {
     const handler = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
         if (canSave) handleSave();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose?.();
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [canSave, handleSave]);
+  }, [canSave, handleSave, onClose]);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -146,6 +149,14 @@ export default function EntryModal({
         {/* Editor gets most of the visual space */}
         <div className="editor-wrap" style={{ marginTop: 12 }}>
           <EditorContent editor={editor} />
+        </div>
+
+        {/* tiny status row */}
+        <div style={{ display:'flex', justifyContent:'space-between', marginTop:6 }}>
+          <span className="muted" style={{ fontSize:12 }}>
+            {defaultDate ? `Saving to: ${defaultDate}` : `Saving to: ${todayISOInToronto()}`}
+          </span>
+          <span className="muted" style={{ fontSize:12 }}>{textLen} chars</span>
         </div>
 
         {error && (

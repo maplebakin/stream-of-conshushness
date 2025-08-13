@@ -1,141 +1,311 @@
+// routes/tasks.js
 import express from 'express';
 import Task from '../models/Task.js';
 import auth from '../middleware/auth.js';
 
 const router = express.Router();
+router.use(auth);
 
-/* helpers */
-function toDayRange(isoDate) {
-  // isoDate is "YYYY-MM-DD"
-  const start = new Date(`${isoDate}T00:00:00.000Z`);
-  const end   = new Date(`${isoDate}T23:59:59.999Z`);
-  return { start, end };
-}
-function parseMaybeISODate(val) {
-  if (!val) return undefined;
-  // Accept "YYYY-MM-DD" or any JS-parsable date
-  if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return new Date(`${val}T00:00:00.000Z`);
-  const d = new Date(val);
-  return isNaN(d) ? undefined : d;
+/** Normalize user id across JWT shapes */
+function getUserId(req) {
+  return req.user?.userId || req.user?._id || req.user?.id;
 }
 
-/* GET /api/tasks?date=YYYY-MM-DD or ?dueDate=YYYY-MM-DD */
-router.get('/', async (req, res) => {
-  const date = req.query.date || req.query.dueDate;
-  const query = { userId: req.user.userId };
+/** YYYY-MM-DD in America/Toronto */
+function todayISOInToronto() {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Toronto',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  });
+  const p = fmt.formatToParts(new Date());
+  const y = p.find(x => x.type === 'year').value;
+  const m = p.find(x => x.type === 'month').value;
+  const d = p.find(x => x.type === 'day').value;
+  return `${y}-${m}-${d}`;
+}
 
-  if (date) {
-    const { start, end } = toDayRange(date);
-    query.dueDate = { $gte: start, $lt: end };
+/** Parse ISO to Date (local midnight) */
+function parseISO(iso) {
+  const [y, m, d] = String(iso).split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
+/** Add days, return ISO local */
+function addDaysISO(iso, n) {
+  const dt = parseISO(iso);
+  dt.setDate(dt.getDate() + n);
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const d = String(dt.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** Clamp day-of-month (e.g., Feb 31 → Feb 28/29) */
+function addMonthsClampISO(iso, n) {
+  const [y, m, d] = String(iso).split('-').map(Number);
+  const base = new Date(y, (m - 1) + n, 1);
+  const targetDay = Math.min(
+    d || 1,
+    new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate()
+  );
+  base.setDate(targetDay);
+  const yy = base.getFullYear();
+  const mm = String(base.getMonth() + 1).padStart(2, '0');
+  const dd = String(base.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+/** Map MO..SU -> 0..6 (Sun=0) */
+const DOW = { SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6 };
+
+/** Compute next due date for a repeating task */
+function nextDueDate({ currentDue, repeat, fromDateISO }) {
+  if (!repeat) return null;
+  const unit = repeat.unit || String(repeat).toLowerCase(); // allows legacy strings
+  const interval = Number(repeat.interval || 1);
+
+  // Anchor: if currentDue exists, use that; else use fromDate (today).
+  const anchor = currentDue || fromDateISO || todayISOInToronto();
+
+  if (unit === 'day' || /daily/.test(unit)) {
+    return addDaysISO(fromDateISO || anchor, Math.max(1, interval));
   }
 
-  try {
-    const tasks = await Task.find(query)
-      .sort({ completed: 1, dueDate: 1, priority: 1, createdAt: 1 });
-    res.json(tasks);
-  } catch (err) {
-    console.error('GET /tasks error:', err);
-    res.status(500).json({ error: 'Failed to fetch tasks' });
-  }
-});
+  if (unit === 'week' || /weekly/.test(unit)) {
+    const from = parseISO(fromDateISO || anchor);
+    const baseDow = from.getDay(); // 0..6
+    const by = Array.isArray(repeat.byDay) ? repeat.byDay : [];
 
-/* POST /api/tasks */
-router.post('/', auth, async (req, res) => {
-  try {
-    // backward-compat: allow "content" to map to title if title missing
-    let {
-      title,
-      notes,
-      content,        // legacy
-      dueDate,
-      repeat,
-      goalId,
-      entryId,
-      clusters
-    } = req.body;
+    // If specific weekdays provided (e.g., ['MO','TH']), find the next one strictly after 'from'
+    if (by.length) {
+      const wanted = by
+        .map(s => DOW[(s || '').toUpperCase()] )
+        .filter(v => v !== undefined);
 
-    if (!title && content) title = String(content).trim();
-    if (!title || !title.trim()) {
-      return res.status(400).json({ error: 'Task title required' });
+      for (let i = 1; i <= 21; i++) {
+        const cand = new Date(from);
+        cand.setDate(cand.getDate() + i);
+        const dow = cand.getDay();
+        if (wanted.includes(dow)) {
+          // (Basic) interval handling: if interval>1, only accept every Nth week from anchor week
+          if (interval > 1) {
+            const weeksFromAnchor = Math.floor(i / 7);
+            if (weeksFromAnchor % interval !== 0) continue;
+          }
+          const yy = cand.getFullYear();
+          const mm = String(cand.getMonth() + 1).padStart(2, '0');
+          const dd = String(cand.getDate()).padStart(2, '0');
+          return `${yy}-${mm}-${dd}`;
+        }
+      }
+      // fallback: just +interval weeks
+      return addDaysISO(fromDateISO || anchor, 7 * Math.max(1, interval));
     }
 
-    const due = parseMaybeISODate(dueDate);
-    const task = new Task({
-      userId : req.user.userId,
-      title  : title.trim(),
-      notes  : notes || undefined,
-      dueDate: due,
-      repeat : repeat || undefined,
-      goalId : goalId || undefined,
-      entryId: entryId || undefined,
-      clusters: Array.isArray(clusters) ? clusters : (clusters ? [clusters] : [])
+    // No specific weekday → bump by N weeks
+    return addDaysISO(fromDateISO || anchor, 7 * Math.max(1, interval));
+  }
+
+  if (unit === 'month' || /monthly/.test(unit)) {
+    return addMonthsClampISO(fromDateISO || anchor, Math.max(1, interval));
+  }
+
+  // Unknown format → default to +1 day
+  return addDaysISO(fromDateISO || anchor, 1);
+}
+
+/** Base query from req */
+function baseQuery(req) {
+  const userId = getUserId(req);
+  const q = { userId };
+  const { cluster, completed } = req.query;
+
+  if (cluster) q.cluster = cluster;
+  if (completed === 'true') q.completed = true;
+  if (completed === 'false') q.completed = false;
+
+  return q;
+}
+
+/** Sort: due soon first; undated last */
+const defaultSort = { completed: 1, dueDate: 1, createdAt: 1 };
+
+/**
+ * GET /api/tasks
+ *   view=today|inbox|overdue|date|all  (default today)
+ *   date=YYYY-MM-DD (default Toronto today)
+ *   includeOverdue=0|1 (default 1 when view=today)
+ *   countOnly=0|1
+ *   cluster, completed
+ *
+ * Note: Recurring tasks now show ONLY when due (or overdue), not every day.
+ */
+router.get('/', async (req, res) => {
+  const view = (req.query.view || 'today').toLowerCase();
+  const date = req.query.date || todayISOInToronto();
+  const includeOverdue = req.query.includeOverdue !== '0';
+  const countOnly = req.query.countOnly === '1';
+
+  const q = baseQuery(req);
+
+  if (view === 'today') {
+    q.completed ??= false;
+    q.$or = [{ dueDate: date }];
+    if (includeOverdue) q.$or.push({ dueDate: { $lt: date } });
+  } else if (view === 'inbox') {
+    q.completed ??= false;
+    q.$or = [{ dueDate: { $exists: false } }, { dueDate: null }, { dueDate: '' }];
+  } else if (view === 'overdue') {
+    q.completed ??= false;
+    q.dueDate = { $lt: date };
+  } else if (view === 'date') {
+    q.dueDate = date;
+  } else if (view === 'all') {
+    // no extra filters
+  } else {
+    return res.status(400).json({ error: 'Invalid view' });
+  }
+
+  if (countOnly) {
+    const count = await Task.countDocuments(q);
+    return res.json({ count });
+  }
+
+  const tasks = await Task.find(q).sort(defaultSort);
+  res.json(tasks);
+});
+
+/** POST /api/tasks — create */
+router.post('/', async (req, res) => {
+  try {
+    const {
+      title,
+      details = '',
+      dueDate = null,
+      cluster = '',
+      clusters = [],
+      repeat = null,
+      entryId = null,
+      goalId = null
+    } = req.body;
+
+    if (!title || !String(title).trim()) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+
+    const task = await Task.create({
+      userId: getUserId(req),
+      title: String(title).trim(),
+      details: String(details || ''),
+      dueDate: dueDate || null,
+      cluster,
+      clusters: Array.isArray(clusters) ? clusters : [],
+      repeat,
+      entryId,
+      goalId,
+      completed: false
     });
 
-    const saved = await task.save();
-    res.status(201).json(saved);
-  } catch (err) {
-    console.error('POST /tasks error:', err);
+    res.status(201).json(task);
+  } catch (e) {
     res.status(500).json({ error: 'Failed to create task' });
   }
 });
 
-/* PUT /api/tasks/:id */
-router.put('/:id', auth, async (req, res) => {
+/** PATCH /api/tasks/:id — standard update */
+router.patch('/:id', async (req, res) => {
   try {
-    const update = { ...req.body };
+    const update = {};
+    [
+      'title', 'details', 'dueDate', 'cluster', 'clusters',
+      'repeat', 'completed', 'entryId', 'goalId'
+    ].forEach((k) => {
+      if (k in req.body) update[k] = req.body[k];
+    });
 
-    // normalize fields
-    if (update.title) update.title = String(update.title).trim();
-    if (update.dueDate) update.dueDate = parseMaybeISODate(update.dueDate);
-    if (update.clusters) {
-      update.clusters = Array.isArray(update.clusters)
-        ? update.clusters
-        : [update.clusters];
-    }
+    if (update.dueDate === '' || update.dueDate === undefined) delete update.dueDate;
+    if (update.dueDate === null) update.dueDate = null;
 
-    const updated = await Task.findOneAndUpdate(
-      { _id: req.params.id, userId: req.user.userId },
+    const task = await Task.findOneAndUpdate(
+      { _id: req.params.id, userId: getUserId(req) },
       update,
       { new: true }
     );
-    if (!updated) return res.status(404).json({ error: 'Task not found' });
-    res.json(updated);
-  } catch (err) {
-    console.error('PUT /tasks/:id error:', err);
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+    res.json(task);
+  } catch {
     res.status(500).json({ error: 'Failed to update task' });
   }
 });
 
-/* PUT /api/tasks/:id/carry-forward?days=1  (MVP) */
-router.put('/:id/carry-forward', auth, async (req, res) => {
+/**
+ * POST /api/tasks/:id/complete
+ * Completes a task. If the task has `repeat`, it ADVANCES to the next due date
+ * and stays incomplete (rolling task pattern). Returns the updated (advanced) task.
+ * Body: { fromDate?: 'YYYY-MM-DD' }  (defaults to today in Toronto)
+ */
+router.post('/:id/complete', async (req, res) => {
   try {
-    const days = Number(req.query.days ?? 1);
-    const task = await Task.findOne({ _id: req.params.id, userId: req.user.userId });
+    const userId = getUserId(req);
+    const id = req.params.id;
+    const fromDate = req.body?.fromDate || todayISOInToronto();
+
+    const task = await Task.findOne({ _id: id, userId });
     if (!task) return res.status(404).json({ error: 'Task not found' });
 
-    const base = task.dueDate ? new Date(task.dueDate) : new Date();
-    base.setUTCDate(base.getUTCDate() + (Number.isFinite(days) ? days : 1));
-    task.dueDate = base;
-    await task.save();
-    res.json(task);
-  } catch (err) {
-    console.error('PUT /tasks/:id/carry-forward error:', err);
-    res.status(500).json({ error: 'Failed to carry task forward' });
+    if (task.repeat) {
+      const next = nextDueDate({
+        currentDue: task.dueDate,
+        repeat: task.repeat,
+        fromDateISO: fromDate
+      });
+      const updated = await Task.findOneAndUpdate(
+        { _id: id, userId },
+        { $set: { dueDate: next, completed: false } },
+        { new: true }
+      );
+      return res.json(updated);
+    }
+
+    // Non-repeating: mark complete
+    const updated = await Task.findOneAndUpdate(
+      { _id: id, userId },
+      { $set: { completed: true } },
+      { new: true }
+    );
+    res.json(updated);
+  } catch (e) {
+    console.error('complete error', e);
+    res.status(500).json({ error: 'Failed to complete task' });
   }
 });
 
-/* DELETE /api/tasks/:id */
-router.delete('/:id', auth, async (req, res) => {
+/** DELETE /api/tasks/:id */
+router.delete('/:id', async (req, res) => {
   try {
-    const deleted = await Task.findOneAndDelete({
-      _id: req.params.id,
-      userId: req.user.userId
-    });
-    if (!deleted) return res.status(404).json({ error: 'Task not found' });
-    res.json({ message: 'Task deleted' });
-  } catch (err) {
-    console.error('DELETE /tasks/:id error:', err);
+    const out = await Task.deleteOne({ _id: req.params.id, userId: getUserId(req) });
+    if (out.deletedCount === 0) return res.status(404).json({ error: 'Task not found' });
+    res.sendStatus(204);
+  } catch {
     res.status(500).json({ error: 'Failed to delete task' });
+  }
+});
+
+/**
+ * POST /api/tasks/carry-forward
+ * Moves all incomplete overdue tasks (dueDate < today) to today.
+ */
+router.post('/carry-forward', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const today = todayISOInToronto();
+    const criteria = { userId, completed: false, dueDate: { $lt: today } };
+
+    const result = await Task.updateMany(criteria, { $set: { dueDate: today } });
+    const moved = result.modifiedCount ?? result.nModified ?? 0;
+    res.json({ moved, date: today });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to carry forward tasks' });
   }
 });
 

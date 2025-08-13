@@ -11,6 +11,14 @@ import { toDisplayDate } from './utils/date.js';
 import './Main.css';
 import './dailypage.css';
 
+function todayISOInToronto() {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Toronto',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  });
+  const p = fmt.formatToParts(new Date());
+  return `${p.find(x=>x.type==='year').value}-${p.find(x=>x.type==='month').value}-${p.find(x=>x.type==='day').value}`;
+}
 function toISO(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -23,12 +31,18 @@ export default function DailyPage() {
   const navigate = useNavigate();
   const { token } = useContext(AuthContext);
 
-  const todayISO = useMemo(() => toISO(new Date()), []);
+  const todayISO = useMemo(() => todayISOInToronto(), []);
   const [dateISO, setDateISO] = useState(routeDate || todayISO);
-  const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
+
+  // cause TaskList to refetch (we pass as key)
+  const [taskListKey, setTaskListKey] = useState(0);
+
+  // modals
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [showApptModal, setShowApptModal] = useState(false);
+
+  // user toggle: auto-carry overdue tasks when landing on Today
+  const [autoCarry, setAutoCarry] = useState(() => localStorage.getItem('auto_cf') === '1');
 
   useEffect(() => {
     if (!routeDate) {
@@ -36,23 +50,43 @@ export default function DailyPage() {
     } else {
       setDateISO(routeDate);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeDate]);
 
+  // optional: run carry-forward automatically on Today once per calendar day
   useEffect(() => {
-    if (!dateISO) return;
-    setLoading(true);
-    axios
-      .get(`/api/tasks?date=${dateISO}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => setTasks(res.data || []))
-      .catch(err => console.error('Failed to load tasks for day:', err))
-      .finally(() => setLoading(false));
-  }, [dateISO, token]);
+    if (!autoCarry) return;
+    if (dateISO !== todayISO) return;
+    const last = localStorage.getItem('cf_last_run');
+    if (last === todayISO) return;
+
+    axios.post('/api/tasks/carry-forward', null, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    })
+    .then(() => {
+      localStorage.setItem('cf_last_run', todayISO);
+      setTaskListKey(k => k + 1);
+    })
+    .catch(() => {});
+  }, [autoCarry, dateISO, todayISO, token]);
 
   const go = (offsetDays) => {
     const d = new Date(dateISO + 'T00:00:00');
     d.setDate(d.getDate() + offsetDays);
     navigate(`/day/${toISO(d)}`);
   };
+
+  // manual carry-forward button (server-side bulk)
+  async function carryForwardNow() {
+    try {
+      await axios.post('/api/tasks/carry-forward', null, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      setTaskListKey(k => k + 1);
+    } catch (e) {
+      console.error('carry-forward failed', e);
+    }
+  }
 
   return (
     <main className="daily-page">
@@ -75,7 +109,25 @@ export default function DailyPage() {
           <span className="daily-date font-glow text-vein" title="ISO date">{dateISO}</span>
         </div>
 
-        <div className="daily-actions">
+        <div className="daily-actions" style={{ gap: 8, display: 'flex', alignItems: 'center' }}>
+          {dateISO === todayISO && (
+            <>
+              <button
+                className="button chip"
+                onClick={() => {
+                  const next = !autoCarry;
+                  setAutoCarry(next);
+                  localStorage.setItem('auto_cf', next ? '1' : '0');
+                }}
+                title="Automatically carry forward overdue tasks on Today"
+              >
+                Auto-carry: {autoCarry ? 'On' : 'Off'}
+              </button>
+              <button className="button chip" onClick={carryForwardNow}>
+                Carry forward now
+              </button>
+            </>
+          )}
           <button className="button bg-lantern text-ink rounded-button px-4 py-2 font-thread shadow-soft hover:bg-plum hover:text-mist transition-all" onClick={() => setShowEntryModal(true)}>
             + New Entry
           </button>
@@ -88,9 +140,8 @@ export default function DailyPage() {
       <section className="daily-layout">
         <div className="daily-main">
           <div className="panel">
-            {loading ? <div className="text-vein font-glow">Loading tasks…</div> : (
-              <TaskList tasks={tasks} selectedDate={dateISO} />
-            )}
+            {/* TaskList fetches its own data using the date prop */}
+            <TaskList key={taskListKey} date={dateISO} header="Today’s Tasks" />
           </div>
 
           <div className="panel">
@@ -116,13 +167,11 @@ export default function DailyPage() {
 
       {showEntryModal && (
         <EntryModal
+          defaultDate={dateISO}         /* make entries land on the viewed day */
           onClose={() => setShowEntryModal(false)}
-          defaultDate={dateISO}
           onSaved={() => {
-            axios
-              .get(`/api/tasks?date=${dateISO}`, { headers: { Authorization: `Bearer ${token}` } })
-              .then(res => setTasks(res.data || []))
-              .catch(() => {});
+            // ripples + tasks may have changed; remount TaskList
+            setTaskListKey(k => k + 1);
           }}
         />
       )}
