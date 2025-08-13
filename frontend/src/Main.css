@@ -31,12 +31,7 @@ a {
   min-height: 100dvh;
 }
 
-.app-body {
-  display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
-  gap: 0;
-}
+
 
 .app-main {
   display: flex;
@@ -54,10 +49,28 @@ a {
   padding: var(--space-4);
 }
 
+/* 🔓 Unclamp everything inside .app-content */
 .app-content > * {
-  max-width: 1000px;
-  margin-inline: auto;
+  max-width: none !important;
+  margin-inline: 0 !important;
+  width: 100% !important;
 }
+
+/* Make the grid robust (no accidental shrink) */
+.app-body {
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr) 260px; /* main | right sidebar */
+  gap: 16px;
+  align-items: start;
+  padding: 16px 24px;
+}
+@media (max-width: 1024px) {
+  .app-body { grid-template-columns: 1fr; }
+  .section-sidebar--right { display: none; }
+}
+
+/* Safety: main should be allowed to expand */
+.app-main, .app-content { min-width: 0; width: 100%; }
 
 /* ================================
    Sticky header wrapper
@@ -122,6 +135,19 @@ a {
   line-height: 1.5;
   color: var(--color-text);
 }
+/* Layout grid (main + optional right sidebar) */
+.app-body {
+  display: grid;
+  grid-template-columns: 1fr 260px; /* main | right nav */
+  gap: 1rem;
+  align-items: start;
+}
+
+/* When pages hide the right sidebar (e.g., /calendar), let main go full width */
+.app-layout.no-right-sidebar .app-body {
+  grid-template-columns: 1fr;
+}
+
 
 /* ================================
    Responsive tweaks
@@ -130,4 +156,53 @@ a {
   .app-content {
     padding: var(--space-3);
   }
+}
+/* ───────────────── GLOBAL DE-CLAMP + LAYOUT RESET ───────────────── */
+
+/* Make sure everything can actually fill the viewport */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+/* Kill any max-width + center margins on the main wrappers */
+.app-layout,
+.app-body,
+.app-main,
+.app-content {
+  max-width: none !important;
+  width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* If you had a generic "container" class anywhere, un-clamp it too */
+.container, .content, [class*="container"], [class*="content"] {
+  max-width: none !important;
+  width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Use a real app-wide grid: main + optional right sidebar */
+.app-body {
+  display: grid;
+  grid-template-columns: 1fr 260px;       /* main | right sidebar */
+  gap: 16px;
+  align-items: start;
+  padding: 16px 24px;                     /* gentle gutters */
+}
+
+/* Collapse the right sidebar on narrow screens (so it never “half clamps”) */
+@media (max-width: 1024px) {
+  .app-body { grid-template-columns: 1fr; }
+  .section-sidebar--right { display: none; }
+}
+
+/* Panels and large components can now fill full width */
+.panel,
+.calendar-page,
+.daily-page,
+.stream-page {
+  width: 100%;
 }
