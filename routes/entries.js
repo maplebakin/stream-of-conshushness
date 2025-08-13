@@ -103,7 +103,11 @@ router.post('/', async (req, res) => {
 
     // 3) Insert pending ripples (if any)
     if (Array.isArray(ripples) && ripples.length) {
-      const drafts = ripples.map(r => ({
+      const drafts = ripples.map(r => {
+        // default cluster from the entry if extractor didn't assign any
+        const assigned = Array.isArray(r.assignedClusters) ? r.assignedClusters : [];
+        const finalClusters = assigned.length ? assigned : (cluster ? [cluster] : []);
+        return {
         userId,
         sourceEntryId: doc._id,
         entryDate,
@@ -111,12 +115,13 @@ router.post('/', async (req, res) => {
         originalContext: r.originalContext || textField || '',
         type: r.type || 'suggestedTask',
         priority: r.priority || 'low',
-        assignedClusters: r.assignedClusters || [],
-        assignedCluster: r.assignedCluster || null,
+         assignedClusters: finalClusters,
+         assignedCluster: finalClusters[0] || null,
         dueDate: r.dueDate ?? null,
         recurrence: r.recurrence || r.repeat || null,
         status: 'pending'
-      }));
+      };
+     });
       await Ripple.insertMany(drafts);
     }
 

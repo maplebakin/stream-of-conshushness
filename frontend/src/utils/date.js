@@ -48,8 +48,10 @@ export function parseISO(iso) {
 export function toDisplayDate(iso, tz = 'America/Toronto') {
   if (!iso) return '';
   const [y, m, d] = String(iso).split('-').map(Number);
-  // Use UTC date then format in the target tz to avoid DST weirdness
-  const date = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+
+  // Build a Date anchored at **UTC noon** to avoid TZ rollbacks (midnight UTC is yesterday in Toronto).
+  const safe = new Date(Date.UTC(y, (m || 1) - 1, d || 1, 12, 0, 0));
+
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz,
     weekday: 'short',
@@ -57,8 +59,9 @@ export function toDisplayDate(iso, tz = 'America/Toronto') {
     day: '2-digit',
     year: 'numeric'
   });
-  return fmt.format(date); // e.g., "Wed, Aug 13, 2025"
+  return fmt.format(safe); // e.g., "Wed, Aug 13, 2025"
 }
+
 
 /** Simple helpers */
 export function addDays(iso, n) {
