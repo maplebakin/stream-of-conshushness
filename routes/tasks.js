@@ -1,6 +1,8 @@
 // routes/tasks.js
 import express from 'express';
+import mongoose from 'mongoose';
 import Task from '../models/Task.js';
+import Entry from '../models/Entry.js';
 import auth from '../middleware/auth.js';
 
 const router = express.Router();
@@ -173,6 +175,7 @@ router.get('/', async (req, res) => {
   const tasks = await Task.find(q).sort(defaultSort);
   res.json(tasks);
 });
+
 /**
  * GET /api/tasks/counts/inbox-by-cluster
  * Returns counts of undated, incomplete tasks grouped by cluster name.
@@ -181,7 +184,7 @@ router.get('/', async (req, res) => {
  */
 router.get('/counts/inbox-by-cluster', async (req, res) => {
   try {
-    const userId = req.user?.userId || req.user?._id || req.user?.id;
+    const userId = getUserId(req);
     const match = {
       userId: new mongoose.Types.ObjectId(userId),
       completed: false,
@@ -213,6 +216,7 @@ router.get('/counts/inbox-by-cluster', async (req, res) => {
     const out = await Task.aggregate(pipeline);
     res.json(out);
   } catch (e) {
+    console.error('counts/inbox-by-cluster error', e);
     res.status(500).json({ error: 'Failed to get inbox counts by cluster' });
   }
 });
@@ -250,7 +254,62 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(task);
   } catch (e) {
+    console.error('POST /api/tasks error', e);
     res.status(500).json({ error: 'Failed to create task' });
+  }
+});
+
+/**
+ * NEW: POST /api/tasks/from-entry
+ * Spawn a task from an entry in one tap.
+ * Body: {
+ *   entryId: string (required),
+ *   title?: string (fallback: first 120 chars of entry.text),
+ *   dueDate?: 'YYYY-MM-DD' | null,
+ *   cluster?: string,          // default: entry.cluster or ''
+ *   clusters?: string[],       // optional
+ *   goalId?: string | null
+ * }
+ */
+router.post('/from-entry', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const {
+      entryId,
+      title,
+      dueDate = null,
+      cluster = '',
+      clusters = [],
+      goalId = null
+    } = req.body;
+
+    if (!entryId) return res.status(400).json({ error: 'entryId required' });
+
+    const entry = await Entry.findOne({ _id: entryId, userId });
+    if (!entry) return res.status(404).json({ error: 'Entry not found' });
+
+    const taskTitle =
+      (title && String(title).trim()) ||
+      (entry.text || '').slice(0, 120).trim() ||
+      'Untitled task';
+
+    const task = await Task.create({
+      userId,
+      title: taskTitle,
+      details: '',
+      dueDate,
+      cluster: cluster || entry.cluster || '',
+      clusters: Array.isArray(clusters) && clusters.length ? clusters : [],
+      repeat: null,
+      entryId: entry._id,
+      goalId,
+      completed: false
+    });
+
+    res.status(201).json(task);
+  } catch (e) {
+    console.error('POST /api/tasks/from-entry error', e);
+    res.status(500).json({ error: 'Failed to create task from entry' });
   }
 });
 
@@ -275,7 +334,8 @@ router.patch('/:id', async (req, res) => {
     );
     if (!task) return res.status(404).json({ error: 'Task not found' });
     res.json(task);
-  } catch {
+  } catch (e) {
+    console.error('PATCH /api/tasks/:id error', e);
     res.status(500).json({ error: 'Failed to update task' });
   }
 });
@@ -350,6 +410,7 @@ router.post('/:id/skip', async (req, res) => {
     );
     res.json(updated);
   } catch (e) {
+    console.error('skip error', e);
     res.status(500).json({ error: 'Failed to skip task occurrence' });
   }
 });
@@ -360,7 +421,8 @@ router.delete('/:id', async (req, res) => {
     const out = await Task.deleteOne({ _id: req.params.id, userId: getUserId(req) });
     if (out.deletedCount === 0) return res.status(404).json({ error: 'Task not found' });
     res.sendStatus(204);
-  } catch {
+  } catch (e) {
+    console.error('DELETE /api/tasks/:id error', e);
     res.status(500).json({ error: 'Failed to delete task' });
   }
 });
@@ -379,6 +441,7 @@ router.post('/carry-forward', async (req, res) => {
     const moved = result.modifiedCount ?? result.nModified ?? 0;
     res.json({ moved, date: today });
   } catch (e) {
+    console.error('carry-forward error', e);
     res.status(500).json({ error: 'Failed to carry forward tasks' });
   }
 });

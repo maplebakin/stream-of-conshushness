@@ -27,23 +27,35 @@ function getUserId(req) {
 }
 
 /* ───────────────────────── GET /api/entries (optional filters) ─────────────────────────
-   Query: ?cluster=Home  or  ?section=Games  (both are optional)
+   Query (all optional):
+     - ?date=YYYY-MM-DD
+     - ?cluster=Home
+     - ?section=Games
+     - ?unassignedCluster=true   (only entries with no cluster)
 --------------------------------------------------------------------------------------- */
 router.get('/', async (req, res) => {
   try {
+    const { date, cluster, section, unassignedCluster } = req.query;
+
     const q = { userId: getUserId(req) };
-    if (req.query.cluster) q.cluster = req.query.cluster;
-    if (req.query.section) q.section = req.query.section;
+    if (date) q.date = String(date);
+    if (cluster) q.cluster = String(cluster);
+    if (section) q.section = String(section);
+    if (unassignedCluster === 'true') {
+      q.$or = [{ cluster: '' }, { cluster: null }, { cluster: { $exists: false } }];
+    }
 
     const entries = await Entry.find(q).sort({ date: -1, createdAt: -1 });
     res.json(entries);
   } catch (err) {
+    console.error('GET /api/entries error:', err);
     res.status(500).json({ error: 'Failed to fetch entries' });
   }
 });
 
 /* ───────────────────────── GET /api/entries/:date ─────────────────────────
    Return entries for a specific day (YYYY-MM-DD)
+   (Kept for backward compatibility; prefer GET /api/entries?date=YYYY-MM-DD)
 --------------------------------------------------------------------------- */
 router.get('/:date', async (req, res) => {
   try {
@@ -53,13 +65,14 @@ router.get('/:date', async (req, res) => {
     }).sort({ createdAt: -1 });
     res.json(entries);
   } catch (err) {
+    console.error('GET /api/entries/:date error:', err);
     res.status(500).json({ error: 'Failed to fetch entries by date' });
   }
 });
 
 /* ───────────────────────── POST /api/entries ─────────────────────────
    Create an entry, then analyze it to insert pending Ripples.
-   Body accepts: { date?, text?, html?, content?, mood?, cluster?, tags?, linkedGoal? }
+   Body accepts: { date?, text?, html?, content?, mood?, cluster?, section?, tags?, linkedGoal? }
 --------------------------------------------------------------------------- */
 router.post('/', async (req, res) => {
   try {
@@ -77,6 +90,7 @@ router.post('/', async (req, res) => {
     const html = String(req.body?.html || '');
     const mood = String(req.body?.mood || '');
     const cluster = String(req.body?.cluster || '');
+    const section = String(req.body?.section || '');
     const tags = Array.isArray(req.body?.tags) ? req.body.tags : [];
     const linkedGoal = req.body?.linkedGoal ?? null;
 
@@ -88,6 +102,7 @@ router.post('/', async (req, res) => {
       html,
       mood,
       cluster,
+      section,
       tags,
       linkedGoal
     });
@@ -108,20 +123,20 @@ router.post('/', async (req, res) => {
         const assigned = Array.isArray(r.assignedClusters) ? r.assignedClusters : [];
         const finalClusters = assigned.length ? assigned : (cluster ? [cluster] : []);
         return {
-        userId,
-        sourceEntryId: doc._id,
-        entryDate,
-        extractedText: r.extractedText,
-        originalContext: r.originalContext || textField || '',
-        type: r.type || 'suggestedTask',
-        priority: r.priority || 'low',
-         assignedClusters: finalClusters,
-         assignedCluster: finalClusters[0] || null,
-        dueDate: r.dueDate ?? null,
-        recurrence: r.recurrence || r.repeat || null,
-        status: 'pending'
-      };
-     });
+          userId,
+          sourceEntryId: doc._id,
+          entryDate,
+          extractedText: r.extractedText,
+          originalContext: r.originalContext || textField || '',
+          type: r.type || 'suggestedTask',
+          priority: r.priority || 'low',
+          assignedClusters: finalClusters,
+          assignedCluster: finalClusters[0] || null,
+          dueDate: r.dueDate ?? null,
+          recurrence: r.recurrence || r.repeat || null,
+          status: 'pending'
+        };
+      });
       await Ripple.insertMany(drafts);
     }
 
@@ -138,7 +153,7 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   try {
     const update = {};
-    ['text','html','mood','cluster','tags','linkedGoal','date'].forEach(k => {
+    ['text','html','mood','cluster','section','tags','linkedGoal','date'].forEach(k => {
       if (k in req.body) update[k] = req.body[k];
     });
 
@@ -150,6 +165,7 @@ router.patch('/:id', async (req, res) => {
     if (!doc) return res.status(404).json({ error: 'Entry not found' });
     res.json(doc);
   } catch (err) {
+    console.error('PATCH /api/entries/:id error:', err);
     res.status(500).json({ error: 'Failed to update entry' });
   }
 });
@@ -161,6 +177,7 @@ router.delete('/:id', async (req, res) => {
     if (out.deletedCount === 0) return res.status(404).json({ error: 'Entry not found' });
     res.sendStatus(204);
   } catch (err) {
+    console.error('DELETE /api/entries/:id error:', err);
     res.status(500).json({ error: 'Failed to delete entry' });
   }
 });

@@ -2,13 +2,13 @@
 
 /* Page shell */
 .daily-page {
-  padding: var(--space-4);
+  padding: var(--space-5);
   background: var(--color-mist);
   color: var(--color-ink);
 }
 
 /* Layout */
-.daily-layout {
+.daily-page .daily-layout {
   display: grid;
   grid-template-columns: 1fr 320px;
   gap: var(--space-4);
@@ -16,50 +16,136 @@
 }
 
 @media (max-width: 1100px) {
-  .daily-layout {
+  .daily-page .daily-layout {
     grid-template-columns: 1fr;
   }
-  .daily-side {
+  .daily-page .daily-side {
     order: 2;
   }
 }
 
-/* Header */
-.daily-header {
-  display: flex;
+/* ---------------------------------------
+   Header (soft ribbon, centered + roomy)
+---------------------------------------- */
+.daily-page .daily-header {
+  margin-bottom: var(--space-4);
+}
+
+.daily-page .centered-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-3);
-  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius-card) + 6px);
+  background:
+    radial-gradient(1200px 200px at 50% -40%, rgba(199,181,213,.18), transparent 60%),
+    var(--color-surface);
+  box-shadow: var(--shadow-soft);
 }
 
-.centered-header h2 {
+.daily-page .centered-header h2 {
   font-family: var(--font-echo);
-  font-size: 1.75rem;
+  font-size: clamp(1.5rem, 2vw + 1rem, 2.25rem);
   color: var(--color-plum);
+  text-align: center;
+  margin: 0;
+  line-height: 1.2;
 }
 
-.daily-date {
+/* Force arrow nav buttons to be equal width & height */
+.daily-page .centered-header .button.nav-arrow {
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+}
+
+/* Keep date pill at natural size and centered */
+.daily-page .daily-date {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  min-width: 3.5rem; /* prevents squish on single-digit days */
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
+  border: 1px solid rgba(0,0,0,.08);
+  background: linear-gradient(180deg, rgba(255,255,255,.65), rgba(255,255,255,.4));
+  backdrop-filter: blur(6px);
   font-size: 0.9rem;
   font-family: var(--font-glow);
   color: var(--color-vein);
+  white-space: nowrap;
 }
 
-/* Actions */
-.daily-actions {
-  display: inline-flex;
+.daily-page .centered-header .button:hover {
+  background: rgba(199,181,213,.18);
+  border-color: rgba(0,0,0,.08);
+  transform: translateY(-1px);
+}
+
+.daily-page .today-btn {
+  padding: 0 .9rem;
+  height: 2.25rem;
+  font-family: var(--font-thread);
+  border-radius: 999px;
+}
+
+/* Actions row under header */
+.daily-page .daily-actions {
+  margin-top: var(--space-2);
+  display: flex;
   gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
-/* Panels */
-.panel {
+/* ---------------------------------------
+   Soft Buttons & Chips (scoped!)
+---------------------------------------- */
+.daily-page .button {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  padding: .4rem .8rem;
+  border-radius: var(--radius-input);
+  font-family: var(--font-thread);
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+  transition: background .15s ease, border-color .15s ease, transform .08s ease;
+}
+
+.daily-page .button:hover {
+  background: rgba(199,181,213,.15);
+  border-color: rgba(0,0,0,.08);
+  transform: translateY(-1px);
+}
+
+.daily-page .button.chip {
+  border-radius: 999px;
+  padding: .35rem .8rem;
+  font-size: 0.9rem;
+  background: linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,.5));
+  border: 1px solid rgba(0,0,0,.08);
+}
+
+.daily-page .button.chip:hover {
+  background: linear-gradient(180deg, rgba(199,181,213,.22), rgba(199,181,213,.12));
+}
+
+/* Accent buttons keep their bg; soften hover */
+.daily-page .bg-lantern:hover,
+.daily-page .bg-spool:hover {
+  filter: brightness(0.98);
+  transform: translateY(-1px);
+}
+
+/* ---------------------------------------
+   Panels (scoped)
+---------------------------------------- */
+.daily-page .panel {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   padding: var(--space-4);
@@ -67,18 +153,28 @@
   box-shadow: var(--shadow-soft);
 }
 
-.daily-main .panel + .panel,
-.daily-side .panel + .panel {
+.daily-page .daily-main .panel + .panel,
+.daily-page .daily-side .panel + .panel {
   margin-top: var(--space-4);
 }
 
-/* Lists */
-.list {
-  display: grid;
-  gap: 12px;
+/* Entry cards (Today’s Entries) */
+.daily-page .entry-card {
+  background: linear-gradient(180deg, rgba(255,255,255,.66), rgba(255,255,255,.5));
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-soft);
 }
 
-.list-item {
+.daily-page .entry-card + .entry-card {
+  margin-top: var(--space-2);
+}
+
+/* Lists */
+.daily-page .list { display: grid; gap: 12px; }
+
+.daily-page .list-item {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
@@ -88,51 +184,42 @@
   gap: var(--space-2);
 }
 
-.list-item .title {
+.daily-page .list-item .title {
   font-weight: 600;
   font-family: var(--font-thread);
 }
 
-.list-item .meta {
+.daily-page .list-item .meta {
   font-size: 0.9rem;
   color: var(--color-vein);
   font-family: var(--font-glow);
 }
 
 /* Tags & Chips */
-.tags {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
+.daily-page .tags { display: flex; gap: 6px; flex-wrap: wrap; }
 
-.tag, .status-chip {
+.daily-page .tag,
+.daily-page .status-chip {
   font-size: 0.8rem;
   padding: 2px 8px;
   border-radius: 999px;
   font-family: var(--font-glow);
 }
 
-.tag {
+.daily-page .tag {
   background: rgba(0, 0, 0, 0.06);
   color: var(--color-vein);
 }
 
-.status-chip {
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.status-chip.done   { background: rgba(138,161,193,.22); }
-.status-chip.due    { background: rgba(199,181,213,.22); }
-.status-chip.alert  { background: rgba(255, 99, 71, .20); }
+.daily-page .status-chip { background: rgba(0, 0, 0, 0.05); }
+.daily-page .status-chip.done   { background: rgba(138,161,193,.22); }
+.daily-page .status-chip.due    { background: rgba(199,181,213,.22); }
+.daily-page .status-chip.alert  { background: rgba(255, 99, 71, .18); }
 
 /* Appointment list */
-.appt-list {
-  display: grid;
-  gap: var(--space-2);
-}
+.daily-page .appt-list { display: grid; gap: var(--space-2); }
 
-.appt-item {
+.daily-page .appt-item {
   display: grid;
   grid-template-columns: auto 1fr auto;
   gap: var(--space-2);
@@ -143,28 +230,22 @@
   padding: var(--space-3);
 }
 
-.appt-time {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.appt-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.daily-page .appt-time { font-weight: 600; font-variant-numeric: tabular-nums; }
+.daily-page .appt-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Ripple box */
-.ripple-item {
+.daily-page .ripple-item {
   margin-top: var(--space-2);
   padding: var(--space-3);
   border-radius: var(--radius-input);
-  background: rgba(0, 0, 0, 0.04);
+  background: linear-gradient(180deg, rgba(0,0,0,.035), rgba(0,0,0,.02));
   border: 1px solid var(--color-border);
 }
 
 /* Form fields */
-.input, .select, .textarea {
+.daily-page .input,
+.daily-page .select,
+.daily-page .textarea {
   width: 100%;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-input);
@@ -173,8 +254,59 @@
   color: var(--color-ink);
   font-size: 0.95rem;
 }
-
-.input:focus, .select:focus, .textarea:focus {
+.daily-page .input:focus,
+.daily-page .select:focus,
+.daily-page .textarea:focus {
   outline: 2px solid var(--color-spool);
   outline-offset: 1px;
 }
+
+/* Entries panel header layout */
+.daily-page .entries-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+/* Entry card text spacing */
+.daily-page .entry-card .entry-text { margin-bottom: .5rem; }
+
+/* Quick-assign row */
+.daily-page .qa-row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.daily-page .qa-label { font-size: 0.85rem; color: var(--color-vein); font-family: var(--font-glow); }
+
+/* Soft select */
+.daily-page .qa-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.55));
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 999px;
+  padding: .35rem .9rem;
+  font-family: var(--font-thread);
+  font-size: .95rem;
+  color: var(--color-ink);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  transition: background .15s ease, transform .08s ease, border-color .15s ease;
+}
+.daily-page .qa-select:hover { background: linear-gradient(180deg, rgba(199,181,213,.18), rgba(199,181,213,.1)); }
+.daily-page .qa-select:focus { outline: 2px solid var(--color-spool); outline-offset: 2px; }
+.daily-page .qa-select:disabled { opacity: .65; cursor: default; }
+
+/* Soft action button */
+.daily-page .qa-btn {
+  border: 1px solid rgba(0,0,0,.08);
+  background: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.55));
+  color: var(--color-ink);
+  padding: .35rem .85rem;
+  border-radius: 999px;
+  font-family: var(--font-thread);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  transition: background .15s ease, transform .08s ease, border-color .15s ease;
+}
+.daily-page .qa-btn:hover { background: linear-gradient(180deg, rgba(199,181,213,.2), rgba(199,181,213,.12)); transform: translateY(-1px); }
+.daily-page .qa-btn:disabled { opacity: .65; cursor: default; transform: none; }

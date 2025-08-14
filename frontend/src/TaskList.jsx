@@ -4,6 +4,7 @@ import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import { todayISOInToronto } from './utils/date.js';
 import './Main.css';
+import './TaskList.css';
 import { describeRepeat } from './utils/repeat.js';
 
 export default function TaskList({ date, header = 'Tasks' }) {
@@ -23,6 +24,11 @@ export default function TaskList({ date, header = 'Tasks' }) {
   const [inbox, setInbox] = useState([]);
   const [inboxCount, setInboxCount] = useState(0);
 
+  // NEW: Add Task composer
+  const [showComposer, setShowComposer] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [adding, setAdding] = useState(false);
+
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
   async function fetchTasks() {
@@ -34,7 +40,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
               view: 'today',
               date,
               includeOverdue: includeOverdue ? '1' : '0',
-              includeRecurring: includeRecurring ? '1' : '0'
+              includeRecurring: includeRecurring ? '1' : '0',
             }
           : { view: 'date', date }
       );
@@ -62,31 +68,30 @@ export default function TaskList({ date, header = 'Tasks' }) {
   }, [date, includeOverdue, includeRecurring]);
 
   async function toggleComplete(task) {
-  // Completing a repeating task → advance it, not mark done permanently
-  if (!task.completed && task.repeat) {
-    const { data: updated } = await axios.post(
-      `/api/tasks/${task._id}/complete`,
-      { fromDate: date },                       // anchor from the day you're on
+    // Repeating: advance schedule
+    if (!task.completed && task.repeat) {
+      const { data: updated } = await axios.post(
+        `/api/tasks/${task._id}/complete`,
+        { fromDate: date },
+        { headers: authHeaders }
+      );
+      // If it moved to a different date, remove from this list
+      if (updated.dueDate !== date) {
+        setTasks(prev => prev.filter(t => t._id !== task._id));
+      } else {
+        setTasks(prev => prev.map(t => (t._id === task._id ? updated : t)));
+      }
+      return;
+    }
+
+    // Non-repeating: toggle completed
+    const { data: updated } = await axios.patch(
+      `/api/tasks/${task._id}`,
+      { completed: !task.completed },
       { headers: authHeaders }
     );
-    // If it advanced to a future day, remove from today's list
-    if (updated.dueDate !== date) {
-      setTasks(prev => prev.filter(t => t._id !== task._id));
-    } else {
-      setTasks(prev => prev.map(t => (t._id === task._id ? updated : t)));
-    }
-    return;
+    setTasks(prev => prev.map(t => (t._id === task._id ? updated : t)));
   }
-
-  // Non-repeating tasks: simple toggle
-  const { data: updated } = await axios.patch(
-    `/api/tasks/${task._id}`,
-    { completed: !task.completed },
-    { headers: authHeaders }
-  );
-  setTasks(prev => prev.map(t => (t._id === task._id ? updated : t)));
-}
-
 
   async function addInboxTaskToDay(task) {
     const { data: updated } = await axios.patch(
@@ -94,29 +99,126 @@ export default function TaskList({ date, header = 'Tasks' }) {
       { dueDate: date },
       { headers: authHeaders }
     );
-    // remove from inbox, decrement count, and add to the visible list
     setInbox(prev => prev.filter(x => x._id !== task._id));
     setInboxCount(c => Math.max(0, c - 1));
     setTasks(prev => [updated, ...prev]);
   }
 
+  // NEW: create task directly from header composer
+  async function createTask() {
+    const title = (newTitle || '').trim();
+    if (!title) return;
+    setAdding(true);
+    try {
+      const { data } = await axios.post(
+        '/api/tasks',
+        { title, dueDate: date },
+        { headers: authHeaders }
+      );
+      setTasks(prev => [data, ...prev]);
+      setNewTitle('');
+      setShowComposer(false);
+    } catch (e) {
+      console.error('Failed to create task', e);
+      // optional: toast
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  function handleComposerKey(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      createTask();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setShowComposer(false);
+      setNewTitle('');
+    }
+  }
+
   return (
-    <div className="tasks-panel">
-      <div className="panel-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+    <div className="task-list">
+      <div className="task-list-header">
         <h3 className="font-thread text-vein">{header}</h3>
-        {isToday && (
-          <div className="toggles" style={{ display: 'flex', gap: 12 }}>
-            <label className="muted">
-              <input type="checkbox" checked={includeOverdue} onChange={() => setIncludeOverdue(v => !v)} />
-              &nbsp;Carry-forward overdue
-            </label>
-            <label className="muted">
-              <input type="checkbox" checked={includeRecurring} onChange={() => setIncludeRecurring(v => !v)} />
-              &nbsp;Show recurring
-            </label>
-          </div>
-        )}
+
+        {/* Right side: toggles + add task */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {isToday && (
+            <div className="task-toggles">
+              <button
+                className={`pill-toggle ${includeOverdue ? 'active' : ''}`}
+                aria-pressed={includeOverdue}
+                type="button"
+                onClick={() => setIncludeOverdue(v => !v)}
+                title="Show overdue items in today's view"
+              >
+                Carry-forward
+              </button>
+              <button
+                className={`pill-toggle ${includeRecurring ? 'active' : ''}`}
+                aria-pressed={includeRecurring}
+                type="button"
+                onClick={() => setIncludeRecurring(v => !v)}
+                title="Show repeating tasks that are due"
+              >
+                Recurring
+              </button>
+            </div>
+          )}
+
+          {/* Add Task trigger */}
+          {!showComposer && (
+            <button
+              className="add-task-btn"
+              type="button"
+              onClick={() => setShowComposer(true)}
+              title="Add a task for this day"
+            >
+              + Add task
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Inline composer */}
+      {showComposer && (
+        <div
+          className="add-task-row"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr auto auto',
+            gap: 8,
+            marginBottom: 12,
+            alignItems: 'center'
+          }}
+        >
+          <input
+            className="add-task-input input"
+            autoFocus
+            placeholder="New task…"
+            value={newTitle}
+            onChange={e => setNewTitle(e.target.value)}
+            onKeyDown={handleComposerKey}
+          />
+          <button
+            className="make-task-btn"
+            type="button"
+            onClick={createTask}
+            disabled={adding || !newTitle.trim()}
+          >
+            Add
+          </button>
+          <button
+            className="set-cluster-btn"
+            type="button"
+            onClick={() => { setShowComposer(false); setNewTitle(''); }}
+            disabled={adding}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="muted">Loading…</div>
@@ -125,17 +227,17 @@ export default function TaskList({ date, header = 'Tasks' }) {
       ) : (
         <ul className="tasks" style={{ listStyle: 'none', padding: 0, margin: '8px 0', display: 'grid', gap: 8 }}>
           {tasks.map(t => (
-            <li key={t._id} className={`task ${t.completed ? 'done' : ''}`} style={{ background: 'var(--card, #fff)', borderRadius: 12, padding: '10px 12px', boxShadow: '0 1px 4px rgba(0,0,0,.06)', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <li
+              key={t._id}
+              className={`task-item ${t.completed ? 'done' : ''}`}
+            >
               <button
                 className="checkbox"
                 onClick={() => toggleComplete(t)}
                 aria-label={t.completed ? 'Mark incomplete' : 'Mark complete'}
                 title={t.completed ? 'Mark incomplete' : 'Mark complete'}
-                style={{ width: 18, height: 18, borderRadius: 4, border: '1px solid rgba(0,0,0,.2)', background: t.completed ? 'var(--mist, #e8e8e8)' : 'transparent' }}
               />
-              <div className="title" style={{ flex: 1 }}>
-                {t.title}
-              </div>
+              <div className="task-title">{t.title}</div>
               {t.cluster && <div className="cluster muted">{t.cluster}</div>}
               {t.repeat && <div className="repeat muted">{describeRepeat(t.repeat)}</div>}
               {t.dueDate && <div className="due muted">due {t.dueDate}</div>}
@@ -153,7 +255,6 @@ export default function TaskList({ date, header = 'Tasks' }) {
             setShowInbox(next);
             if (next && inbox.length === 0) fetchInbox();
           }}
-          style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '6px 0', marginTop: 8 }}
         >
           {showInbox ? '▼' : '▶'} Inbox (undated) — {inboxCount}
         </button>
@@ -165,13 +266,12 @@ export default function TaskList({ date, header = 'Tasks' }) {
             ) : (
               <ul className="tasks" style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
                 {inbox.map(t => (
-                  <li key={t._id} className="task" style={{ background: 'var(--card, #fff)', borderRadius: 12, padding: '10px 12px', boxShadow: '0 1px 4px rgba(0,0,0,.06)', display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div className="title" style={{ flex: 1 }}>{t.title}</div>
+                  <li key={t._id} className="task-item">
+                    <div className="task-title">{t.title}</div>
                     <button
-                      className="small"
+                      className="make-task-btn"
                       onClick={() => addInboxTaskToDay(t)}
                       title={`Set due date to ${date}`}
-                      style={{ fontSize: '0.85rem', padding: '4px 8px', borderRadius: 8, border: '1px solid rgba(0,0,0,.12)', background: 'var(--color-background, #f7f5ed)' }}
                     >
                       Add to this day
                     </button>

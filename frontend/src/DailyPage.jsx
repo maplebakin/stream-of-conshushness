@@ -1,4 +1,3 @@
-// src/DailyPage.jsx
 import React, { useEffect, useMemo, useState, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from './api/axiosInstance';
@@ -7,6 +6,7 @@ import EntryModal from './EntryModal.jsx';
 import TaskList from './TaskList.jsx';
 import DailyRipples from './DailyRipples.jsx';
 import AppointmentModal from './AppointmentModal.jsx';
+import EntryQuickAssign from './components/EntryQuickAssign.jsx';
 import { toDisplayDate } from './utils/date.js';
 import './Main.css';
 import './dailypage.css';
@@ -34,15 +34,17 @@ export default function DailyPage() {
   const todayISO = useMemo(() => todayISOInToronto(), []);
   const [dateISO, setDateISO] = useState(routeDate || todayISO);
 
-  // cause TaskList to refetch (we pass as key)
   const [taskListKey, setTaskListKey] = useState(0);
-
-  // modals
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [showApptModal, setShowApptModal] = useState(false);
-
-  // user toggle: auto-carry overdue tasks when landing on Today
   const [autoCarry, setAutoCarry] = useState(() => localStorage.getItem('auto_cf') === '1');
+
+  // ENTRIES
+  const [entries, setEntries] = useState([]);
+  const [loadingEntries, setLoadingEntries] = useState(false);
+  const [unassignedOnly, setUnassignedOnly] = useState(() =>
+    localStorage.getItem('entries_unassigned_only') === '1'
+  );
 
   useEffect(() => {
     if (!routeDate) {
@@ -53,7 +55,6 @@ export default function DailyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeDate]);
 
-  // optional: run carry-forward automatically on Today once per calendar day
   useEffect(() => {
     if (!autoCarry) return;
     if (dateISO !== todayISO) return;
@@ -76,7 +77,6 @@ export default function DailyPage() {
     navigate(`/day/${toISO(d)}`);
   };
 
-  // manual carry-forward button (server-side bulk)
   async function carryForwardNow() {
     try {
       await axios.post('/api/tasks/carry-forward', null, {
@@ -88,13 +88,43 @@ export default function DailyPage() {
     }
   }
 
+  // Load entries for the day
+  async function loadEntries() {
+    if (!token) return;
+    setLoadingEntries(true);
+    try {
+      const params = new URLSearchParams({ date: dateISO });
+      if (unassignedOnly) params.set('unassignedCluster', 'true');
+
+      const res = await axios.get(`/api/entries?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setEntries(res.data || []);
+    } catch {
+      setEntries([]);
+    } finally {
+      setLoadingEntries(false);
+    }
+  }
+  useEffect(() => { loadEntries(); }, [dateISO, token, unassignedOnly]);
+
+  function handleEntryUpdated(updated) {
+    setEntries(prev => prev.map(e => e._id === updated._id ? updated : e));
+    if (unassignedOnly && updated.cluster && updated.cluster !== '') {
+      setEntries(prev => prev.filter(e => e._id !== updated._id));
+    }
+  }
+  function handleTaskCreated() {
+    setTaskListKey(k => k + 1);
+  }
+
   return (
     <main className="daily-page">
       <header className="daily-header">
         <div className="centered-header">
-          <button className="button" onClick={() => go(-1)} aria-label="Previous day">◀</button>
+          <button className="button nav-arrow" onClick={() => go(-1)} aria-label="Previous day">◀</button>
           <h2 className="font-echo text-plum text-2xl">{toDisplayDate(dateISO)}</h2>
-          <button className="button" onClick={() => go(1)} aria-label="Next day">▶</button>
+          <button className="button nav-arrow" onClick={() => go(1)} aria-label="Next day">▶</button>
 
           {dateISO !== todayISO && (
             <button
@@ -140,12 +170,46 @@ export default function DailyPage() {
       <section className="daily-layout">
         <div className="daily-main">
           <div className="panel">
-            {/* TaskList fetches its own data using the date prop */}
             <TaskList key={taskListKey} date={dateISO} header="Today’s Tasks" />
           </div>
 
+            {/* MOVED: Ripples ABOVE entries */}
           <div className="panel">
             <DailyRipples date={dateISO} />
+          </div>
+
+          {/* Today’s Entries Panel */}
+          <div className="panel">
+            <div className="entries-header">
+              <h3 className="font-thread text-vein">Today’s Entries</h3>
+              <button
+                className="button chip"
+                onClick={() => {
+                  const next = !unassignedOnly;
+                  setUnassignedOnly(next);
+                  localStorage.setItem('entries_unassigned_only', next ? '1' : '0');
+                }}
+                title="Show only entries without a cluster"
+              >
+                {unassignedOnly ? 'Showing: Unassigned' : 'Showing: All'}
+              </button>
+            </div>
+
+            {loadingEntries && <p className="muted">Loading entries...</p>}
+            {!loadingEntries && entries.length === 0 && (
+              <p className="muted">{unassignedOnly ? 'No unassigned entries 🎉' : 'No entries yet.'}</p>
+            )}
+
+            {entries.map(en => (
+              <div key={en._id} className="entry-card">
+                <div className="entry-text">{en.text || <span className="muted">(no text)</span>}</div>
+                <EntryQuickAssign
+                  entry={en}
+                  onUpdated={handleEntryUpdated}
+                  onTaskCreated={handleTaskCreated}
+                />
+              </div>
+            ))}
           </div>
         </div>
 
@@ -167,11 +231,11 @@ export default function DailyPage() {
 
       {showEntryModal && (
         <EntryModal
-          defaultDate={dateISO}         /* make entries land on the viewed day */
+          defaultDate={dateISO}
           onClose={() => setShowEntryModal(false)}
           onSaved={() => {
-            // ripples + tasks may have changed; remount TaskList
             setTaskListKey(k => k + 1);
+            loadEntries();
           }}
         />
       )}
