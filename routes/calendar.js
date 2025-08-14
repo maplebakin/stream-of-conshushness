@@ -1,185 +1,148 @@
+// routes/calendar.js
 import express from 'express';
-import mongoose from 'mongoose';
 import auth from '../middleware/auth.js';
 import Task from '../models/Task.js';
-import Appointment from '../models/Appointment.js';
+import Appointment from '../models/Appointment.js';       // ← adjust path if yours differs
 import ImportantEvent from '../models/ImportantEvent.js';
 
 const router = express.Router();
+router.use(auth);
 
-/* ───────── helpers ───────── */
+/* Helpers */
 function getUserId(req) {
   return req.user?.userId || req.user?._id || req.user?.id;
 }
-function iso(y, m, d) {
-  const mm = String(m).padStart(2, '0');
-  const dd = String(d).padStart(2, '0');
-  return `${y}-${mm}-${dd}`;
-}
-function lastDayOfMonth(year, month1to12) {
-  return new Date(year, month1to12, 0).getDate();
-}
-function todayISOInToronto() {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Toronto',
-    year: 'numeric', month: '2-digit', day: '2-digit'
-  });
-  const p = fmt.formatToParts(new Date());
-  const y = p.find(x => x.type === 'year').value;
-  const m = p.find(x => x.type === 'month').value;
-  const d = p.find(x => x.type === 'day').value;
-  return `${y}-${m}-${d}`;
-}
-function daysBetween(aISO, bISO) {
-  const [ay, am, ad] = aISO.split('-').map(Number);
-  const [by, bm, bd] = bISO.split('-').map(Number);
-  const a = new Date(ay, (am || 1) - 1, ad || 1);
-  const b = new Date(by, (bm || 1) - 1, bd || 1);
-  return Math.round((a - b) / (1000 * 60 * 60 * 24));
+
+function clampMonth(s) {
+  // Expect "YYYY-MM"
+  const m = /^(\d{4})-(\d{2})$/.exec(String(s || ''));
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mm = Number(m[2]);
+  if (mm < 1 || mm > 12) return null;
+  return { y, m: mm };
 }
 
-/* ──────────────────────────────────────────────────────────────────────────────
-   GET /api/calendar/:month   (month = "YYYY-MM")
-   Returns per-day counts for badges on the month grid.
+function pad2(n) { return String(n).padStart(2, '0'); }
+function toISODate(y, m, d) { return `${y}-${pad2(m)}-${pad2(d)}`; } // m,d are 1-based
+function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); }   // m = 1..12
 
-   Response:
-   {
-     range: { start, end },
-     days: {
-       "YYYY-MM-DD": { tasks, appointments, events }
-     },
-     // optional passthrough if you add ?raw=1 for debugging:
-     raw?: { tasks: [...], appointments: [...], importantEvents: [...] }
-   }
-────────────────────────────────────────────────────────────────────────────── */
-router.get('/:month', auth, async (req, res) => {
+/** ──────────────────────────────────────────────────────────────────────────────
+ * GET /api/calendar/:ym
+ * Returns per-day counts for the given month.
+ * Response: { days: { 'YYYY-MM-DD': { tasks, appointments, events } } }
+ * ───────────────────────────────────────────────────────────────────────────── */
+router.get('/:ym', async (req, res) => {
   try {
-    const uid = getUserId(req);
-    if (!uid) return res.status(401).json({ error: 'Unauthorized' });
+    const parsed = clampMonth(req.params.ym);
+    if (!parsed) return res.status(400).json({ error: 'Invalid month. Use YYYY-MM' });
 
-    const [yearStr, monStr] = String(req.params.month || '').split('-');
-    const year = Number(yearStr);
-    const month = Number(monStr); // 1..12
-    if (!year || !month || month < 1 || month > 12) {
-      return res.status(400).json({ error: 'Invalid month param. Use YYYY-MM' });
-    }
+    const { y, m } = parsed;
+    const userId = getUserId(req);
+    const startISO = toISODate(y, m, 1);
+    const endISO = toISODate(y, m, daysInMonth(y, m));
 
-    const start = iso(year, month, 1);
-    const end = iso(year, month, lastDayOfMonth(year, month));
+    // Fetch month data in parallel
+    const [tasks, appts, impEvents] = await Promise.all([
+      Task.find({
+        userId,
+        dueDate: { $gte: startISO, $lte: endISO }
+      }).select('dueDate').lean(),
 
-    // Aggregate counts per day (strings "YYYY-MM-DD" compare lexicographically fine)
-    const userObjId = new mongoose.Types.ObjectId(uid);
+      Appointment.find({
+        userId,
+        date: { $gte: startISO, $lte: endISO }
+      }).select('date').lean(),
 
-    const tasksAgg = Task.aggregate([
-      { $match: {
-          userId: userObjId,
-          completed: false,
-          dueDate: { $gte: start, $lte: end }
-      }},
-      { $group: { _id: '$dueDate', count: { $sum: 1 } } }
+      ImportantEvent.find({
+        userId,
+        date: { $gte: startISO, $lte: endISO }
+      }).select('date').lean()
     ]);
-
-    const apptAgg = Appointment.aggregate([
-      { $match: {
-          userId: userObjId,
-          date: { $gte: start, $lte: end }
-      }},
-      { $group: { _id: '$date', count: { $sum: 1 } } }
-    ]);
-
-    const eventAgg = ImportantEvent.aggregate([
-      { $match: {
-          userId: userObjId,
-          date: { $gte: start, $lte: end }
-      }},
-      { $group: { _id: '$date', count: { $sum: 1 } } }
-    ]);
-
-    const [tCounts, aCounts, eCounts] = await Promise.all([tasksAgg, apptAgg, eventAgg]);
 
     const days = {};
-    for (const t of tCounts) {
-      days[t._id] ??= { tasks: 0, appointments: 0, events: 0 };
-      days[t._id].tasks = t.count;
-    }
-    for (const a of aCounts) {
-      days[a._id] ??= { tasks: 0, appointments: 0, events: 0 };
-      days[a._id].appointments = a.count;
-    }
-    for (const e of eCounts) {
-      days[e._id] ??= { tasks: 0, appointments: 0, events: 0 };
-      days[e._id].events = e.count;
-    }
+    const bump = (iso, key) => {
+      if (!iso) return;
+      days[iso] ??= { tasks: 0, appointments: 0, events: 0 };
+      days[iso][key] += 1;
+    };
 
-    // Optionally include raw docs for debugging if ?raw=1
-    if (req.query.raw === '1') {
-      const [tasksRaw, appointmentsRaw, eventsRaw] = await Promise.all([
-        Task.find({ userId: uid, completed: false, dueDate: { $gte: start, $lte: end } }).lean(),
-        Appointment.find({ userId: uid, date: { $gte: start, $lte: end } }).lean(),
-        ImportantEvent.find({ userId: uid, date: { $gte: start, $lte: end } }).lean(),
-      ]);
-      return res.json({ range: { start, end }, days, raw: {
-        tasks: tasksRaw, appointments: appointmentsRaw, importantEvents: eventsRaw
-      } });
-    }
+    tasks.forEach(t => bump(t.dueDate, 'tasks'));
+    appts.forEach(a => bump(a.date, 'appointments'));
+    impEvents.forEach(e => bump(e.date, 'events'));
 
-    res.json({ range: { start, end }, days });
-  } catch (err) {
-    console.error('❌ calendar/:month error:', err);
-    res.status(500).json({ error: 'Failed to load calendar data' });
+    res.json({ days });
+  } catch (e) {
+    console.error('calendar month error', e);
+    res.status(500).json({ error: 'Failed to compute calendar month' });
   }
 });
 
-/* ──────────────────────────────────────────────────────────────────────────────
-   GET /api/calendar/upcoming?from=YYYY-MM-DD&window=60&limit=20
-   Sidebar feed: countdowns for important events and appointments.
-   Items that are in the past are omitted automatically.
-────────────────────────────────────────────────────────────────────────────── */
-router.get('/upcoming/list', auth, async (req, res) => {
+/** ──────────────────────────────────────────────────────────────────────────────
+ * GET /api/calendar/upcoming/list?from=YYYY-MM-DD
+ * Sidebar feed of upcoming appointments & important events (today and future).
+ * Response: { today, appointments: [...], events: [...] }
+ * Each item: { id, title, date, cluster?, daysUntil }
+ * ───────────────────────────────────────────────────────────────────────────── */
+router.get('/upcoming/list', async (req, res) => {
   try {
-    const uid = getUserId(req);
-    if (!uid) return res.status(401).json({ error: 'Unauthorized' });
+    const userId = getUserId(req);
 
-    const today = todayISOInToronto();
-    const from = req.query.from || today;
-    const windowDays = Math.max(1, Number(req.query.window || 60));
-    const limit = Math.max(1, Number(req.query.limit || 20));
+    // from=YYYY-MM-DD; default to Toronto "today"
+    const from =
+      /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.from || ''))
+        ? String(req.query.from)
+        : new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Toronto',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          }).format(new Date());
 
-    // Compute inclusive end date
-    const [y, m, d] = from.split('-').map(Number);
-    const dt = new Date(y, (m || 1) - 1, d || 1);
-    dt.setDate(dt.getDate() + windowDays);
-    const end = iso(dt.getFullYear(), dt.getMonth() + 1, dt.getDate());
+    const toDate = (iso) => {
+      const [yy, mm, dd] = iso.split('-').map(Number);
+      return new Date(yy, (mm || 1) - 1, dd || 1);
+    };
+    const diffDays = (aISO, bISO) =>
+      Math.round((toDate(aISO) - toDate(bISO)) / 86400000);
 
-    const [appts, events] = await Promise.all([
-      Appointment.find(
-        { userId: uid, date: { $gte: from, $lte: end } },
-        { title: 1, date: 1 }
-      ).sort({ date: 1 }).limit(limit).lean(),
-      ImportantEvent.find(
-        { userId: uid, date: { $gte: from, $lte: end } },
-        { title: 1, name: 1, date: 1 }
-      ).sort({ date: 1 }).limit(limit).lean()
+    const [appts, impEvents] = await Promise.all([
+      Appointment.find({ userId, date: { $gte: from } })
+        .select('date details _id cluster')
+        .sort({ date: 1 })
+        .limit(50)
+        .lean(),
+      ImportantEvent.find({ userId, date: { $gte: from } })
+        .select('date title _id cluster')
+        .sort({ date: 1 })
+        .limit(50)
+        .lean()
     ]);
 
-    const appointments = appts.map(a => ({
-      id: a._id,
-      title: a.title || 'Appointment',
-      date: a.date,
-      daysUntil: daysBetween(a.date, today)
-    })).filter(a => a.daysUntil >= 0);
+    const appointments = appts
+      .map(a => ({
+        id: a._id,
+        title: a.details || '(appointment)',
+        date: a.date,
+        cluster: a.cluster || null,
+        daysUntil: diffDays(a.date, from)
+      }))
+      .filter(x => x.daysUntil >= 0);
 
-    const importantEvents = events.map(e => ({
-      id: e._id,
-      title: e.title || e.name || 'Important event',
-      date: e.date,
-      daysUntil: daysBetween(e.date, today)
-    })).filter(e => e.daysUntil >= 0);
+    const events = impEvents
+      .map(e => ({
+        id: e._id,
+        title: e.title,
+        date: e.date,
+        cluster: e.cluster || null,
+        daysUntil: diffDays(e.date, from)
+      }))
+      .filter(x => x.daysUntil >= 0);
 
-    res.json({ today, appointments, events: importantEvents });
-  } catch (err) {
-    console.error('❌ calendar/upcoming error:', err);
-    res.status(500).json({ error: 'Failed to load upcoming items' });
+    res.json({ today: from, appointments, events });
+  } catch (e) {
+    console.error('calendar upcoming error', e);
+    res.status(500).json({ error: 'Failed to load upcoming' });
   }
 });
 

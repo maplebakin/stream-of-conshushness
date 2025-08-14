@@ -3,7 +3,7 @@ import axios from './api/axiosInstance.js';
 import { AuthContext } from './AuthContext.jsx';
 import './EntryModal.css';
 
-export default function AppointmentModal({ date, onClose }) {
+export default function AppointmentModal({ date, onClose, onSaved }) {
   const { token } = useContext(AuthContext);
   const [time, setTime] = useState('');
   const [details, setDetails] = useState('');
@@ -15,6 +15,7 @@ export default function AppointmentModal({ date, onClose }) {
       await axios.post('/api/appointments', { date, time, details, cluster }, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      onSaved?.();
       onClose?.();
     } catch (err) {
       console.error('Create appointment failed:', err);

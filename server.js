@@ -33,6 +33,7 @@ import rippleRoutes         from './routes/ripples.js';
 import suggestedTaskRoutes  from './routes/suggestedTasks.js';
 import clusterRoutes        from './routes/clusters.js';
 import uploadRouter         from './utils/upload.js';
+import importantEventsRouter   from './routes/important-events.js';
 
 /* ───────────── GraphQL ───────────── */
 import { createHandler } from 'graphql-http/lib/use/express';
@@ -74,13 +75,12 @@ app.use('/api/entries',         auth, entryRoutes);
 app.use('/api/appointments',    auth, appointmentsRouter);
 app.use('/api/notes',           auth, noteRoutes);
 app.use('/api/events',          auth, eventsRouter);
-app.use('/api/schedule',        auth, scheduleRoutes);
-app.use('/api/calendar-data',   auth, calendarRoutes);
+app.use('/api/calendar',        auth, calendarRoutes);
 app.use('/api/ripples',         auth, rippleRoutes);
 app.use('/api/suggested-tasks', auth, suggestedTaskRoutes);
 app.use('/api/clusters',        auth, clusterRoutes);
 app.use('/api/upload',          auth, uploadRouter);
-
+app.use('/api/important-events', auth, importantEventsRouter);
 /* uploads (static) */
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 

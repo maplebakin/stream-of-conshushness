@@ -1,3 +1,7 @@
+/* ─────────────────────────────────────────────────────────
+   TaskList — soft pastel, clear states, accessible focus
+   ───────────────────────────────────────────────────────── */
+
 .task-list {
   padding: 1rem;
   background: var(--color-surface);
@@ -6,10 +10,12 @@
   box-shadow: var(--shadow-soft);
 }
 
+/* Header */
 .task-list-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: .75rem;
   margin-bottom: 1rem;
 }
 
@@ -20,26 +26,39 @@
   margin: 0;
 }
 
-.add-task-btn {
-  background: var(--color-spool);
+/* Primary action chips (Add/Set/Make) — unified style */
+.add-task-btn,
+.set-cluster-btn,
+.make-task-btn {
+  background: linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.6));
   color: var(--color-ink);
-  border: none;
+  border: 1px solid rgba(0,0,0,.08);
   padding: 0.4rem 0.75rem;
-  border-radius: var(--radius-button);
+  border-radius: 999px;
   font-family: var(--font-thread);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.4rem;
   box-shadow: var(--shadow-soft);
   cursor: pointer;
-  transition: background 0.2s ease;
+  font-size: 0.85rem;
+  transition: background .15s ease, color .15s ease, transform .08s ease, border-color .15s ease;
+}
+.add-task-btn:hover,
+.set-cluster-btn:hover,
+.make-task-btn:hover {
+  background: linear-gradient(180deg, rgba(199,181,213,.25), rgba(199,181,213,.12));
+  border-color: rgba(0,0,0,.10);
+  transform: translateY(-1px);
+}
+.add-task-btn:focus-visible,
+.set-cluster-btn:focus-visible,
+.make-task-btn:focus-visible {
+  outline: 2px solid var(--color-spool);
+  outline-offset: 2px;
 }
 
-.add-task-btn:hover {
-  background: var(--color-plum);
-  color: var(--color-mist);
-}
-
+/* Task items */
 .task-item {
   display: flex;
   align-items: center;
@@ -47,7 +66,7 @@
   border: 1px solid var(--color-border);
   background: var(--color-card);
   padding: 0.5rem 0.75rem;
-  border-radius: var(--radius);
+  border-radius: var(--radius-card);
   margin-bottom: 0.5rem;
   font-family: var(--font-glow);
   font-size: 0.95rem;
@@ -64,13 +83,24 @@
   color: var(--color-text);
 }
 
+/* Square checkbox button used in list (keep minimal) */
 .checkbox {
-  background: none;
-  border: none;
+  width: 18px;
+  height: 18px;
+  display: inline-block;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,.18);
+  background: var(--color-surface);
   cursor: pointer;
-  color: var(--color-accent-dark);
+  transition: background .15s ease, transform .08s ease, border-color .15s ease;
 }
+.checkbox:hover { border-color: rgba(0,0,0,.28); transform: translateY(-1px); }
 
+/* Inline actions on a task row */
+.task-actions {
+  display: flex;
+  gap: 0.3rem;
+}
 .task-actions button {
   background: none;
   border: none;
@@ -78,9 +108,130 @@
   cursor: pointer;
   color: var(--color-accent);
   font-family: var(--font-thread);
-  transition: color 0.2s ease;
+  transition: color 0.15s ease, transform .08s ease;
+}
+.task-actions button:hover { color: var(--color-plum); transform: translateY(-1px); }
+
+/* Optional: keep ripples above entries if using this hook class */
+.daily-main .ripples-panel { order: -1; }
+
+/* ─────────────────────────────────────────────────────────
+   Toggles (Carry-forward / Recurring)
+   Replace harsh checkboxes with readable pill toggles
+   ───────────────────────────────────────────────────────── */
+
+.task-toggles {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.task-actions button:hover {
-  color: var(--color-plum);
+/* Base pill */
+.pill-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .35rem .9rem .35rem .55rem; /* space for dot */
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.10);
+  background: linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.6));
+  color: var(--color-ink);
+  font-family: var(--font-thread);
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+  transition: background .15s ease, border-color .15s ease, transform .08s ease, color .15s ease;
 }
+
+/* Little status dot (left) */
+.pill-toggle::before {
+  content: "";
+  width: .6rem;
+  height: .6rem;
+  border-radius: 999px;
+  background: rgba(0,0,0,.18); /* OFF */
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.15);
+  transition: background .15s ease, transform .08s ease, box-shadow .15s ease;
+}
+
+/* Hover/focus */
+.pill-toggle:hover {
+  background: linear-gradient(180deg, rgba(199,181,213,.22), rgba(199,181,213,.12));
+  border-color: rgba(0,0,0,.12);
+  transform: translateY(-1px);
+}
+.pill-toggle:focus-visible {
+  outline: 2px solid var(--color-spool);
+  outline-offset: 2px;
+}
+
+/* ON state — unmistakable */
+.pill-toggle.active {
+  background: linear-gradient(180deg, rgba(199,181,213,.35), rgba(199,181,213,.18));
+  border-color: rgba(0,0,0,.12);
+  color: var(--color-ink);
+}
+.pill-toggle.active::before {
+  background: var(--color-plum);
+  box-shadow: 0 0 0 2px rgba(255,255,255,.9) inset, 0 0 0 1px rgba(0,0,0,.06);
+}
+
+/* Disabled state (if you ever need it) */
+.pill-toggle[disabled] {
+  opacity: .55;
+  cursor: default;
+  transform: none;
+}
+
+/* Legacy checkbox-based toggles (if you still render them anywhere) */
+.toggles label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  user-select: none;
+}
+.toggles input[type="checkbox"] {
+  appearance: none;
+  width: 30px;
+  height: 18px;
+  border-radius: 999px;
+  background-color: rgba(0,0,0,.12);
+  position: relative;
+  outline: none;
+  cursor: pointer;
+  transition: background-color .15s ease;
+}
+.toggles input[type="checkbox"]::before {
+  content: '';
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: white;
+  transition: transform .15s ease;
+}
+.toggles input[type="checkbox"]:checked { background-color: var(--color-plum); }
+.toggles input[type="checkbox"]:checked::before { transform: translateX(12px); }
+
+/* ─────────────────────────────────────────────────────────
+   Inbox row tweak
+   ───────────────────────────────────────────────────────── */
+.inbox .inbox-toggle {
+  border: 1px solid rgba(0,0,0,.10);
+  background: linear-gradient(180deg, rgba(255,255,255,.8), rgba(255,255,255,.6));
+  color: var(--color-ink);
+  padding: .35rem .75rem;
+  border-radius: 999px;
+  font-family: var(--font-thread);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  transition: background .15s ease, transform .08s ease, border-color .15s ease;
+}
+.inbox .inbox-toggle:hover {
+  background: linear-gradient(180deg, rgba(199,181,213,.22), rgba(199,181,213,.12));
+  transform: translateY(-1px);
+}
+.inbox .inbox-toggle:focus-visible { outline: 2px solid var(--color-spool); outline-offset: 2px; }

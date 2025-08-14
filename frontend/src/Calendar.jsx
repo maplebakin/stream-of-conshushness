@@ -3,7 +3,9 @@ import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
+import AppointmentModal from './AppointmentModal.jsx'; // ✅ reuse
 import './Calendar.css';
+import ImportantEventModal from './ImportantEventModal.jsx';
 
 // Toronto "today" in YYYY-MM-DD (safe, no UTC flip)
 function todayISOInTZ(timeZone = 'America/Toronto') {
@@ -34,6 +36,64 @@ function countdownLabel(days) {
   return `In ${days} days`;
 }
 
+/** Minimal inline modal for important events (title + date) */
+function QuickEventModal({ defaultDate, onClose, onSaved }) {
+  const { token } = useContext(AuthContext);
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const [title, setTitle] = useState('');
+  const [date, setDate] = useState(defaultDate);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    const t = title.trim();
+    if (!t) return;
+    setSaving(true);
+    try {
+      // Adjust endpoint/shape to your API if needed
+      await axios.post('/api/events', { title: t, date, important: true }, { headers });
+      onSaved?.();
+      onClose?.();
+    } catch (e) {
+      console.error('Failed to create event', e);
+      alert('Could not create event');
+    } finally {
+      setSaving(false);
+    }
+  }
+  function onKey(e) {
+    if (e.key === 'Enter') { e.preventDefault(); save(); }
+    if (e.key === 'Escape') { e.preventDefault(); onClose?.(); }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-card">
+        <h3 className="font-thread text-vein" style={{ marginTop: 0 }}>Add important event</h3>
+        <div style={{ display:'grid', gap: 8 }}>
+          <input
+            className="input"
+            autoFocus
+            placeholder="Event title…"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            onKeyDown={onKey}
+          />
+          <input
+            className="input"
+            type="date"
+            value={date}
+            onChange={e => setDate(e.target.value)}
+          />
+          <div style={{ display:'flex', gap: 8, justifyContent:'flex-end' }}>
+            <button className="button chip" onClick={onClose} disabled={saving}>Cancel</button>
+            <button className="button chip" onClick={save} disabled={saving || !title.trim()}>Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Calendar() {
   const navigate = useNavigate();
   const { token } = useContext(AuthContext);
@@ -60,6 +120,10 @@ export default function Calendar() {
   const [dayCounts, setDayCounts] = useState({});
   // sidebar upcoming
   const [upcoming, setUpcoming] = useState({ appointments: [], events: [], today: tzToday });
+
+  // NEW: modal state
+  const [showApptModal, setShowApptModal] = useState(false);
+  const [showEventModal, setShowEventModal] = useState(false);
 
   async function loadMonth() {
     const { data } = await axios.get(`/api/calendar/${monthParam(y, mIdx)}`, { headers });
@@ -100,7 +164,17 @@ export default function Calendar() {
         <h3 className="font-thread text-vein" style={{ marginBottom: 8 }}>Upcoming</h3>
 
         <section style={{ marginBottom: 16 }}>
-          <h4 className="muted" style={{ marginBottom: 6 }}>Important Events ⭐</h4>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 6 }}>
+            <h4 className="muted" style={{ margin: 0 }}>Important Events ⭐</h4>
+            <button
+              className="button chip"
+              type="button"
+              onClick={() => setShowEventModal(true)}
+              title="Add important event"
+            >
+              + Add
+            </button>
+          </div>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
             {upcoming.events.filter(e => countdownLabel(e.daysUntil)).length === 0 ? (
               <li className="muted">Nothing soon.</li>
@@ -120,7 +194,17 @@ export default function Calendar() {
         </section>
 
         <section>
-          <h4 className="muted" style={{ marginBottom: 6 }}>Appointments 🗓️</h4>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 6 }}>
+            <h4 className="muted" style={{ margin: 0 }}>Appointments 🗓️</h4>
+            <button
+              className="button chip"
+              type="button"
+              onClick={() => setShowApptModal(true)}
+              title="Add appointment"
+            >
+              + Add
+            </button>
+          </div>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
             {upcoming.appointments.filter(a => countdownLabel(a.daysUntil)).length === 0 ? (
               <li className="muted">Nothing scheduled.</li>
@@ -141,7 +225,7 @@ export default function Calendar() {
       </aside>
 
       {/* Main month grid */}
-      <section className="panel" style={{ padding: 12 }}>
+      <section className="panel calendar-panel">
         <header className="calendar-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 8 }}>
           <div className="title">
             <h2>{monthName} {y}</h2>
@@ -183,34 +267,18 @@ export default function Calendar() {
                         {counts.tasks > 0 && <span className="pill" title={`${counts.tasks} task(s)`}>● {counts.tasks}</span>}
                       </div>
                     </div>
+
                     {/* Colored dots row */}
-{d && (
-  <div className="calendar-dots">
-    {counts.events > 0 && (
-      <span
-        className="calendar-dot event"
-        title={`${counts.events} important event(s)`}
-      />
-    )}
-    {Array.from({ length: Math.min(counts.tasks, 3) }).map((_, i) => (
-  <span key={`t${i}`} className="calendar-dot task" />
-))}
-
-    {counts.appointments > 0 && (
-      <span
-        className="calendar-dot appt"
-        title={`${counts.appointments} appointment(s)`}
-      />
-    )}
-    {counts.tasks > 0 && (
-      <span
-        className="calendar-dot task"
-        title={`${counts.tasks} task(s)`}
-      />
-    )}
-  </div>
-)}
-
+                    {d && (
+                      <div className="calendar-dots">
+                        {counts.events > 0 && <span className="calendar-dot event" title={`${counts.events} important event(s)`} />}
+                        {Array.from({ length: Math.min(counts.tasks, 3) }).map((_, i) => (
+                          <span key={`t${i}`} className="calendar-dot task" />
+                        ))}
+                        {counts.appointments > 0 && <span className="calendar-dot appt" title={`${counts.appointments} appointment(s)`} />}
+                        {counts.tasks > 0 && <span className="calendar-dot task" title={`${counts.tasks} task(s)`} />}
+                      </div>
+                    )}
                   </>
                 ) : null}
               </button>
@@ -224,6 +292,23 @@ export default function Calendar() {
           <span className="legend-item"><span className="legend-swatch task" />● tasks</span>
         </div>
       </section>
+
+      {/* Modals */}
+     {showApptModal && (
+  <AppointmentModal
+    date={tzToday}
+    onClose={() => setShowApptModal(false)}
+    onSaved={() => { setShowApptModal(false); loadUpcoming(); loadMonth(); }}
+  />
+)}
+{showEventModal && (
+  <ImportantEventModal
+    date={tzToday}
+    onClose={() => setShowEventModal(false)}
+    onSaved={() => { setShowEventModal(false); loadUpcoming(); loadMonth(); }}
+  />
+)}
+
     </main>
   );
 }
