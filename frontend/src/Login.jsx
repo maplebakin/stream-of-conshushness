@@ -95,6 +95,9 @@ export default function LoginPage() {
           <Link to="/register" className="auth-link">
             Register here
           </Link>
+          <p style={{ marginTop: 8 }}>
+  <a href="/forgot">Forgot your password?</a>
+</p>
         </footer>
       </section>
     </main>
