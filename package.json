@@ -3,14 +3,12 @@
   "version": "1.0.0",
   "type": "module",
   "main": "server.js",
-"scripts": {
-  "dev": "concurrently \"nodemon server.js\" \"npm run frontend-dev\"",
-  "frontend-dev": "cd frontend && npm run dev",
-  "start": "NODE_ENV=production node server.js",
-  "build": "cd frontend && npm install --include=dev && npm run build"
-}
-
-,
+  "scripts": {
+    "dev": "concurrently \"nodemon server.js\" \"npm run frontend-dev\"",
+    "frontend-dev": "cd frontend && npm run dev",
+    "start": "NODE_ENV=production node server.js",
+    "build": "cd frontend && npm install --include=dev && npm run build"
+  },
   "dependencies": {
     "bcrypt": "^6.0.0",
     "chrono-node": "^2.8.4",
@@ -25,6 +23,7 @@
     "mongodb": "^6.17.0",
     "mongoose": "^8.16.3",
     "multer": "^2.0.2",
+    "nodemailer": "^7.0.5",
     "react-datepicker": "^8.4.0",
     "react-hot-toast": "^2.5.2",
     "uuid": "^11.1.0"

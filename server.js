@@ -34,6 +34,7 @@ import suggestedTaskRoutes  from './routes/suggestedTasks.js';
 import clusterRoutes        from './routes/clusters.js';
 import uploadRouter         from './utils/upload.js';
 import importantEventsRouter   from './routes/important-events.js';
+import adminRoutes from './routes/admin.js';
 
 /* ───────────── GraphQL ───────────── */
 import { createHandler } from 'graphql-http/lib/use/express';
@@ -83,6 +84,7 @@ app.use('/api/upload',          auth, uploadRouter);
 app.use('/api/important-events', auth, importantEventsRouter);
 /* uploads (static) */
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use('/api/admin', adminRoutes);
 
 /* ───────────── GraphQL Endpoint ───────────── */
 app.use('/graphql', createHandler({
