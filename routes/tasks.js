@@ -119,14 +119,34 @@ function nextDueDate({ currentDue, repeat, fromDateISO }) {
 function baseQuery(req) {
   const userId = getUserId(req);
   const q = { userId };
+
   const { cluster, completed } = req.query;
 
-  if (cluster) q.cluster = cluster;
+  // Completed filter passthrough
   if (completed === 'true') q.completed = true;
   if (completed === 'false') q.completed = false;
 
+  // Cluster filter (supports legacy `cluster` string AND new `clusters[]` array)
+  if (cluster) {
+    const clusters = Array.isArray(cluster)
+      ? cluster
+      : String(cluster).split(',').map(s => s.trim()).filter(Boolean);
+
+    if (clusters.length) {
+      const clusterOr = {
+        $or: [
+          { cluster: { $in: clusters } },   // legacy single string
+          { clusters: { $in: clusters } }   // new array
+        ]
+      };
+      // Use $and so it can coexist with the date-based $or added later
+      q.$and = q.$and ? [...q.$and, clusterOr] : [clusterOr];
+    }
+  }
+
   return q;
 }
+
 
 /** Sort: due soon first; undated last */
 const defaultSort = { completed: 1, dueDate: 1, createdAt: 1 };

@@ -18,22 +18,26 @@ function useAuthedFetch(token) {
 }
 
 export default function AdminPanel() {
-  const { token } = useContext(AuthContext);
-  const api = useMemo(() => useAuthedFetch(token), [token]);
+  const { token, user } = useContext(AuthContext);
+  const api = useAuthedFetch(token);
 
-  const [isAdmin, setIsAdmin] = useState(null);
-  const [q, setQ] = useState('');
-  const [users, setUsers] = useState([]);
-  const [cursor, setCursor] = useState('');
-  const [nextCursor, setNextCursor] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
 
-  // Reset form state
+  // list state
+  const [q, setQ] = useState('');
+  const [users, setUsers] = useState([]);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [busyList, setBusyList] = useState(false);
+
+  // per-row new password inputs
+  const [pwMap, setPwMap] = useState({}); // { userId: 'newpass' }
+
+  // quick reset by username
   const [targetUser, setTargetUser] = useState('');
   const [newPassword, setNewPassword] = useState('');
 
-  // Check admin
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -42,119 +46,150 @@ export default function AdminPanel() {
         if (mounted) setIsAdmin(!!me?.user?.isAdmin);
       } catch {
         if (mounted) setIsAdmin(false);
+      } finally {
+        if (mounted) setLoading(false);
       }
     })();
-    return () => (mounted = false);
+    return () => { mounted = false; };
   }, [api]);
 
-  async function loadUsers(reset = false) {
-    setLoading(true);
-    setMsg('');
+  async function loadUsers(reset = true) {
     try {
-      const params = new URLSearchParams();
-      if (q) params.set('q', q);
-      if (!reset && cursor) params.set('cursor', cursor);
-      params.set('limit', '25');
+      setBusyList(true);
+      const url = new URL('/api/admin/users', window.location.origin);
+      if (q) url.searchParams.set('q', q);
+      if (!reset && nextCursor) url.searchParams.set('cursor', nextCursor);
+      url.searchParams.set('limit', '25');
 
-      const data = await api(`/api/admin/users?${params.toString()}`);
-      const merged = reset ? data.users : [...users, ...data.users];
-      setUsers(merged);
+      const data = await api(url.toString());
+      if (reset) {
+        setUsers(data.users || []);
+      } else {
+        setUsers(prev => [...prev, ...(data.users || [])]);
+      }
       setNextCursor(data.nextCursor || null);
-      setCursor(data.nextCursor || '');
     } catch (e) {
-      setMsg(e.message);
+      setMsg(e.message || 'Failed to load users');
     } finally {
-      setLoading(false);
+      setBusyList(false);
     }
   }
 
-  function doSearch(e) {
-    e.preventDefault();
-    setCursor('');
-    loadUsers(true);
+  function updatePw(id, val) {
+    setPwMap(prev => ({ ...prev, [id]: val }));
   }
 
-  async function doReset(e) {
-    e.preventDefault();
-    setMsg('');
+  async function setPasswordFor(id) {
     try {
-      await api('/api/admin/users/reset-password', {
-        method: 'POST',
-        body: JSON.stringify({ username: targetUser, newPassword }),
+      const pass = pwMap[id] || '';
+      await api(`/api/admin/users/${id}/password`, {
+        method: 'PUT',
+        body: JSON.stringify({ newPassword: pass }),
       });
-      setMsg(`Password reset for @${targetUser}.`);
+      setMsg('Password updated.');
+      updatePw(id, '');
+    } catch (e) {
+      setMsg(e.message || 'Failed to set password');
+    }
+  }
+
+  async function quickResetByUsername() {
+    try {
+      await api('/api/admin/reset-username', {
+        method: 'POST',
+        body: JSON.stringify({ username: targetUser.trim(), newPassword }),
+      });
+      setMsg(`Password updated for ${targetUser.trim()}`);
+      setTargetUser('');
       setNewPassword('');
     } catch (e) {
-      setMsg(e.message);
+      setMsg(e.message || 'Failed to reset password');
     }
   }
 
-  if (isAdmin === null) {
-    return <div className="auth-card"><h2>Admin</h2><p>Checking admin rights…</p></div>;
-  }
-  if (!isAdmin) {
-    return <div className="auth-card"><h2>Admin</h2><p>Nope. You’re not an admin.</p></div>;
-  }
+  if (loading) return <div style={{ padding: 16 }}>Loading…</div>;
+  if (!user || !isAdmin) return <div style={{ padding: 16 }}>Admin access required.</div>;
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2 style={{ marginTop: 0 }}>Admin Panel</h2>
+    <div style={{ padding: 16, maxWidth: 900 }}>
+      <h2 style={{ marginBottom: 12 }}>Admin Panel</h2>
 
-      <div className="card" style={{ padding: 16, marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0 }}>Reset a user's password</h3>
-        <form onSubmit={doReset} style={{ display: 'grid', gap: 8, maxWidth: 420 }}>
+      {/* Quick reset by username */}
+      <div style={{ padding: 12, border: '1px solid var(--color-border,#444)', borderRadius: 8, marginBottom: 16 }}>
+        <h3 style={{ marginTop: 0 }}>Quick Reset by Username</h3>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             placeholder="username"
             value={targetUser}
-            onChange={(e) => setTargetUser(e.target.value)}
-            required
+            onChange={e => setTargetUser(e.target.value)}
           />
           <input
             type="password"
-            placeholder="new password (min 6)"
+            placeholder="new password (min 8)"
             value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            minLength={6}
-            required
+            onChange={e => setNewPassword(e.target.value)}
           />
-          <button type="submit">Reset Password</button>
-        </form>
+          <button
+            onClick={quickResetByUsername}
+            disabled={!targetUser.trim() || (newPassword?.length || 0) < 8}
+          >
+            Reset
+          </button>
+        </div>
       </div>
 
-      <div className="card" style={{ padding: 16 }}>
+      {/* User search + list */}
+      <div style={{ padding: 12, border: '1px solid var(--color-border,#444)', borderRadius: 8 }}>
         <h3 style={{ marginTop: 0 }}>Users</h3>
-        <form onSubmit={doSearch} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <input placeholder="search by username" value={q} onChange={(e) => setQ(e.target.value)} />
-          <button type="submit">Search</button>
-          <button type="button" onClick={() => { setQ(''); setUsers([]); setCursor(''); setNextCursor(null); }}>Clear</button>
-        </form>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+          <input
+            placeholder="search username"
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') loadUsers(true); }}
+            style={{ flex: 1 }}
+          />
+          <button onClick={() => loadUsers(true)} disabled={busyList}>
+            {busyList ? 'Loading…' : 'Search'}
+          </button>
+        </div>
 
-        {users.length === 0 && <p style={{ color: 'var(--color-muted)' }}>No users loaded yet.</p>}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 1.4fr 120px', gap: 8, alignItems: 'center' }}>
+          <div style={{ fontWeight: 600 }}>Username</div>
+          <div style={{ fontWeight: 600 }}>Admin</div>
+          <div style={{ fontWeight: 600 }}>New Password</div>
+          <div style={{ fontWeight: 600 }}>Action</div>
 
-        {users.length > 0 && (
-          <div style={{ display: 'grid', gap: 8 }}>
-            {users.map(u => (
-              <div key={u._id} style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                  <div>
-                    <b>@{u.username}</b>
-                    {u.isAdmin && <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--color-accent-dark)' }}>admin</span>}
-                    {u.email && <div style={{ fontSize: 12 }}>{u.email}</div>}
-                  </div>
-                  <button
-                    onClick={() => setTargetUser(u.username)}
-                    title="Load username into reset form"
-                  >
-                    Select
-                  </button>
-                </div>
+          {users.map(u => (
+            <React.Fragment key={u._id}>
+              <div>{u.username}</div>
+              <div>{u.isAdmin ? 'Yes' : 'No'}</div>
+              <div>
+                <input
+                  type="password"
+                  value={pwMap[u._id] || ''}
+                  onChange={e => updatePw(u._id, e.target.value)}
+                  placeholder="min 8 chars"
+                  style={{ width: '100%' }}
+                />
               </div>
-            ))}
-            {nextCursor && (
-              <button onClick={() => loadUsers(false)} disabled={loading}>
-                {loading ? 'Loading…' : 'Load more'}
-              </button>
-            )}
+              <div>
+                <button
+                  onClick={() => setPasswordFor(u._id)}
+                  disabled={!pwMap[u._id] || pwMap[u._id].length < 8}
+                >
+                  Set Password
+                </button>
+              </div>
+            </React.Fragment>
+          ))}
+        </div>
+
+        {nextCursor && (
+          <div style={{ marginTop: 12 }}>
+            <button onClick={() => loadUsers(false)} disabled={busyList}>
+              {busyList ? 'Loading…' : 'Load more'}
+            </button>
           </div>
         )}
       </div>
