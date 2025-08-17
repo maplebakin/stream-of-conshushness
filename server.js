@@ -84,7 +84,7 @@ app.use('/api/upload',          auth, uploadRouter);
 app.use('/api/important-events', auth, importantEventsRouter);
 /* uploads (static) */
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin',           auth, adminRoutes);
 
 /* ───────────── GraphQL Endpoint ───────────── */
 app.use('/graphql', createHandler({
