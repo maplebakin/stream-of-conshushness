@@ -1,5 +1,7 @@
+// src/pages/UserSettings.jsx
 import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { AuthContext } from '../AuthContext.jsx';
+import '../Settings.css';
 
 function useAuthedFetch(token) {
   return useMemo(
@@ -28,7 +30,6 @@ export default function UserSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
-
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
 
@@ -60,9 +61,7 @@ export default function UserSettings() {
     setMsg('');
     setSaving(true);
     try {
-      const payload = { email };
-      // allow username change; remove if you want username locked
-      if (username) payload.username = username;
+      const payload = { email, username };
       const { user } = await api('/api/me', {
         method: 'PATCH',
         body: JSON.stringify(payload),
@@ -95,75 +94,101 @@ export default function UserSettings() {
     }
   }
 
-  if (loading) return <div className="auth-card"><h2>Settings</h2><p>Loading…</p></div>;
+  if (loading) {
+    return (
+      <div className="settings-wrap">
+        <div className="settings-header">
+          <h2 className="font-echo text-vein text-2xl">Settings</h2>
+          <p className="text-muted">Loading your profile…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: 24, display: 'grid', gap: 16 }}>
-      <h2 style={{ marginTop: 0 }}>User Settings</h2>
-
-      {/* Profile */}
-      <div className="card" style={{ padding: 16 }}>
-        <h3 style={{ marginTop: 0 }}>Profile</h3>
-        <form onSubmit={saveProfile} style={{ display: 'grid', gap: 8, maxWidth: 520 }}>
-          <label>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>Username</div>
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="username"
-              required
-              autoComplete="username"
-            />
-          </label>
-          <label>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>Email (for password resets)</div>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@email.com"
-              autoComplete="email"
-            />
-          </label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
-            {msg && <span style={{ alignSelf: 'center' }}>{msg}</span>}
-          </div>
-        </form>
+    <div className="settings-wrap">
+      <div className="settings-header">
+        <h2 className="font-echo text-vein text-2xl sm:text-3xl">User Settings</h2>
+        <p className="text-muted">Keep your account info tidy and your password spicy.</p>
       </div>
 
-      {/* Password */}
-      <div className="card" style={{ padding: 16 }}>
-        <h3 style={{ marginTop: 0 }}>Change Password</h3>
-        <form onSubmit={changePassword} style={{ display: 'grid', gap: 8, maxWidth: 520 }}>
-          <label>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>Current password</div>
-            <input
-              type="password"
-              value={oldPassword}
-              onChange={(e) => setOld(e.target.value)}
-              placeholder="current password"
-              autoComplete="current-password"
-              required
-            />
-          </label>
-          <label>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>New password (min 6)</div>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNew(e.target.value)}
-              placeholder="new password"
-              autoComplete="new-password"
-              required
-              minLength={6}
-            />
-          </label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="submit" disabled={pwBusy}>{pwBusy ? 'Updating…' : 'Update password'}</button>
-            {pwMsg && <span style={{ alignSelf: 'center' }}>{pwMsg}</span>}
-          </div>
-        </form>
+      <div className="settings-grid">
+        {/* Profile card */}
+        <section className="settings-card">
+          <h3 className="section-title">⚙️ Profile</h3>
+          <form onSubmit={saveProfile} className="form-grid" noValidate>
+            <label className="field">
+              <span className="field-label">Username</span>
+              <input
+                className="input"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="username"
+                required
+                autoComplete="username"
+              />
+            </label>
+
+            <label className="field">
+              <span className="field-label">Email (for password resets)</span>
+              <input
+                className="input"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@domain.com"
+                autoComplete="email"
+              />
+            </label>
+
+            <div className="button-row">
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving ? 'Saving…' : 'Save changes'}
+              </button>
+              {msg && <span className="note note-success">{msg}</span>}
+            </div>
+          </form>
+        </section>
+
+        {/* Password card */}
+        <section className="settings-card">
+          <h3 className="section-title">🔐 Change Password</h3>
+          <form onSubmit={changePassword} className="form-grid" noValidate>
+            <label className="field">
+              <span className="field-label">Current password</span>
+              <input
+                className="input"
+                type="password"
+                value={oldPassword}
+                onChange={(e) => setOld(e.target.value)}
+                placeholder="current password"
+                autoComplete="current-password"
+                required
+              />
+            </label>
+
+            <label className="field">
+              <span className="field-label">New password (min 6)</span>
+              <input
+                className="input"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNew(e.target.value)}
+                placeholder="new password"
+                autoComplete="new-password"
+                required
+                minLength={6}
+              />
+            </label>
+
+            <div className="button-row">
+              <button type="submit" className="btn btn-primary" disabled={pwBusy}>
+                {pwBusy ? 'Updating…' : 'Update password'}
+              </button>
+              {pwMsg && <span className="note note-success">{pwMsg}</span>}
+            </div>
+          </form>
+        </section>
       </div>
     </div>
   );

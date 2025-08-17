@@ -1,0 +1,115 @@
+/* Settings layout */
+.settings-wrap {
+  padding: 16px 20px;
+}
+@media (min-width: 768px) {
+  .settings-wrap { padding: 24px 28px; }
+}
+
+.settings-header {
+  margin-bottom: 16px;
+}
+.settings-header .text-muted {
+  color: var(--color-muted, #9aa0a6);
+  margin-top: 4px;
+}
+
+/* Grid of cards */
+.settings-grid {
+  display: grid;
+  gap: 16px;
+}
+@media (min-width: 900px) {
+  .settings-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+}
+
+/* Card */
+.settings-card {
+  background: var(--color-surface, #0f0f10);
+  border: 1px solid var(--color-border, #2b2b2d);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+}
+.section-title {
+  margin: 0 0 12px 0;
+  font-family: var(--font-echo, inherit);
+  color: var(--color-vein, #f3f3f4);
+  font-size: 18px;
+}
+
+/* Form */
+.form-grid {
+  display: grid;
+  gap: 12px;
+  max-width: 560px;
+}
+.field {
+  display: grid;
+  gap: 6px;
+}
+.field-label {
+  font-size: 12px;
+  letter-spacing: .01em;
+  color: var(--color-muted, #9aa0a6);
+}
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border, #2b2b2d);
+  background: var(--color-surface-2, #a5a5bd);
+  color: var(--color-ink, #e6e6e6);
+  outline: none;
+  transition: box-shadow .15s ease, border-color .15s ease, transform .02s ease;
+}
+.input::placeholder { color: color-mix(in srgb, var(--color-ink, #e6e6e6) 50%, transparent); }
+.input:focus {
+  border-color: var(--color-plum, #8d6cff);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-plum, #8d6cff) 30%, transparent);
+  transform: translateY(-0.5px);
+}
+
+/* Buttons (reusing your rounded-button vibe) */
+.btn {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-family: var(--font-thread, inherit);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .02s ease, color .15s ease;
+}
+.btn:disabled { opacity: .6; cursor: not-allowed; }
+.btn-primary {
+  background: var(--color-plum, #8d6cff);
+  color: var(--color-mist, #f5f5f7);
+  box-shadow: var(--shadow-soft, 0 4px 12px rgba(0,0,0,.25));
+}
+.btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-plum, #8d6cff) 90%, #000 10%);
+  transform: translateY(-0.5px);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--color-ink, #e6e6e6);
+  border-color: var(--color-border, #2b2b2d);
+}
+.btn-ghost:hover { background: var(--color-surface-2, #121214); }
+
+/* Inline notes */
+.note {
+  font-size: 13px;
+  margin-left: 8px;
+}
+.note-success { color: var(--color-vein, #c8f5c2); }
+.note-error   { color: #ff8080; }
+
+/* Optional divider if you add more sections later */
+.settings-divider {
+  height: 1px;
+  background: var(--color-border, #2b2b2d);
+  margin: 8px 0;
+}
