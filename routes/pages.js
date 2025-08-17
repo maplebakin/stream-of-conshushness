@@ -1,5 +1,5 @@
 import express from 'express';
-import SectionPage from '../models/SectionPage.js';
+
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();

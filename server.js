@@ -21,7 +21,7 @@ import taskRoutes           from './routes/tasks.js';
 import goalRoutes           from './routes/goals.js';
 import gameRoutes           from './routes/games.js';
 import pageRoutes           from './routes/pages.js';
-import sectionPagesRouter   from './routes/sectionPages.js';
+
 import sectionRoutes        from './routes/sections.js';
 import entryRoutes          from './routes/entries.js';
 import appointmentsRouter   from './routes/appointments.js';
@@ -31,7 +31,7 @@ import scheduleRoutes       from './routes/schedule.js';
 import calendarRoutes       from './routes/calendar.js';
 import ripplesRouter from './routes/ripples.js';
 import suggestedTaskRoutes  from './routes/suggestedTasks.js';
-import clusterRoutes        from './routes/clusters.js';
+import clustersRouter from './routes/clusters.js';
 import uploadRouter         from './utils/upload.js';
 import importantEventsRouter   from './routes/important-events.js';
 import adminRoutes from './routes/admin.js';
@@ -70,7 +70,7 @@ app.use('/api/tasks',           auth, taskRoutes);
 app.use('/api/goals',           auth, goalRoutes);
 app.use('/api/games',           auth, gameRoutes);
 app.use('/api/pages',           auth, pageRoutes);
-app.use('/api/section-pages',   auth, sectionPagesRouter);
+
 app.use('/api/sections',        auth, sectionRoutes);
 app.use('/api/entries',         auth, entryRoutes);
 app.use('/api/appointments',    auth, appointmentsRouter);
@@ -79,7 +79,7 @@ app.use('/api/events',          auth, eventsRouter);
 app.use('/api/calendar',        auth, calendarRoutes);
 app.use('/api', auth, ripplesRouter);
 app.use('/api/suggested-tasks', auth, suggestedTaskRoutes);
-app.use('/api/clusters',        auth, clusterRoutes);
+app.use('/api/clusters',        auth, clustersRouter);
 app.use('/api/upload',          auth, uploadRouter);
 app.use('/api/important-events', auth, importantEventsRouter);
 /* uploads (static) */

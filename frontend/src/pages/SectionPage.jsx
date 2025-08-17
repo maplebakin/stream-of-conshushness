@@ -1,16 +1,15 @@
-// frontend/src/pages/ClusterPage.jsx
+// frontend/src/pages/SectionPage.jsx
 import React, { useEffect, useMemo, useState, useContext } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AuthContext } from '../AuthContext.jsx';
 import { makeApi } from '../utils/api.js';
-import CreateClusterModal from '../components/CreateClusterModal.jsx';
-import './ClusterPage.css';
+import CreateSectionModal from '../components/CreateSectionModal.jsx';
+import './SectionPage.css';
 
-// Toronto date helpers
+/* Toronto date helpers */
 function todayISOInToronto(d = new Date()) {
   const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Toronto',
-    year: 'numeric', month: '2-digit', day: '2-digit'
+    timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit'
   });
   const parts = fmt.formatToParts(d);
   const y = parts.find(p => p.type === 'year').value;
@@ -30,81 +29,68 @@ function humanDate(iso) {
   return dt.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
-// Tiny UI atoms
-function Spinner() {
-  return <div className="spin" aria-label="Loading" />;
-}
-function Empty({children}) {
-  return <div className="empty">{children}</div>;
-}
-function Section({title, children, right}) {
-  return (
-    <section className="section">
-      <div className="section-head">
-        <h3>{title}</h3>
-        {right}
-      </div>
-      {children}
-    </section>
-  );
-}
+/* Tiny atoms */
+const Spinner = () => <div className="spin" aria-label="Loading" />;
+const Empty = ({children}) => <div className="empty">{children}</div>;
+const SectionCard = ({title, children, right}) => (
+  <section className="section">
+    <div className="section-head">
+      <h3>{title}</h3>
+      {right}
+    </div>
+    {children}
+  </section>
+);
 
-export default function ClusterPage() {
+export default function SectionPage() {
   const { token } = useContext(AuthContext);
   const api = useMemo(() => makeApi(token), [token]);
   const navigate = useNavigate();
   const { key: routeKey } = useParams();
 
-  const [clusters, setClusters] = useState([]);
+  const [sections, setSections] = useState([]);
   const [activeKey, setActiveKey] = useState(routeKey || '');
   const [dateISO, setDateISO] = useState(todayISOInToronto());
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [opMsg, setOpMsg] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [quickTitle, setQuickTitle] = useState('');
 
-  // load clusters
+  // load sections
   useEffect(() => {
     let ignore = false;
     (async () => {
       try {
-        const res = await api.get('/api/clusters');
+        const res = await api.get('/api/sections');
         if (ignore) return;
         const list = (res?.data || []).sort((a, b) => {
           if (a.pinned !== b.pinned) return b.pinned - a.pinned;
           if (a.order !== b.order) return a.order - b.order;
           return (a.label || a.key).localeCompare(b.label || b.key);
         });
-        setClusters(list);
-
-        // choose active: routeKey wins; else keep existing; else first
+        setSections(list);
         if (routeKey) setActiveKey(routeKey);
         else if (!activeKey && list.length) {
           setActiveKey(list[0].key);
-          navigate(`/clusters/${encodeURIComponent(list[0].key)}`, { replace: true });
+          navigate(`/sections/${encodeURIComponent(list[0].key)}`, { replace: true });
         }
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) { console.error(e); }
     })();
     return () => { ignore = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, routeKey]);
 
-  // update active when routeKey changes
-  useEffect(() => {
-    if (routeKey && routeKey !== activeKey) setActiveKey(routeKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routeKey]);
+  useEffect(() => { if (routeKey && routeKey !== activeKey) setActiveKey(routeKey); }, [routeKey]); // eslint-disable-line
 
-  // load dashboard
+  // load dashboard data
   useEffect(() => {
     if (!activeKey) return;
     let ignore = false;
     (async () => {
       setLoading(true);
       try {
-        const res = await api.get(`/api/clusters/${encodeURIComponent(activeKey)}/dashboard?date=${dateISO}`);
+        const res = await api.get(`/api/sections/${encodeURIComponent(activeKey)}/dashboard?date=${dateISO}`);
         if (ignore) return;
         setData(res?.data || null);
       } catch (e) {
@@ -117,51 +103,49 @@ export default function ClusterPage() {
     return () => { ignore = true; };
   }, [activeKey, dateISO, api]);
 
-  function note(msg) {
-    setOpMsg(msg);
-    setTimeout(() => setOpMsg(''), 1800);
-  }
+  function note(msg) { setOpMsg(msg); setTimeout(() => setOpMsg(''), 1800); }
 
   async function carryOver() {
     try {
-      await api.post(`/api/clusters/${encodeURIComponent(activeKey)}/tasks/carryover?date=${dateISO}`);
+      await api.post(`/api/sections/${encodeURIComponent(activeKey)}/tasks/carryover?date=${dateISO}`);
       note('Carried over unfinished tasks from yesterday.');
-      const res = await api.get(`/api/clusters/${encodeURIComponent(activeKey)}/dashboard?date=${dateISO}`);
+      const res = await api.get(`/api/sections/${encodeURIComponent(activeKey)}/dashboard?date=${dateISO}`);
       setData(res?.data || null);
-    } catch (e) {
-      note('Carryover failed.');
-      console.error(e);
-    }
+    } catch (e) { note('Carryover failed.'); console.error(e); }
   }
-
   async function addToDate(taskId) {
     try {
-      await api.post(`/api/clusters/${encodeURIComponent(activeKey)}/tasks/${taskId}/add-to-date?date=${dateISO}`);
-      note('Added to today.');
-      const res = await api.get(`/api/clusters/${encodeURIComponent(activeKey)}/dashboard?date=${dateISO}`);
+      await api.post(`/api/sections/${encodeURIComponent(activeKey)}/tasks/${taskId}/add-to-date?date=${dateISO}`);
+      const res = await api.get(`/api/sections/${encodeURIComponent(activeKey)}/dashboard?date=${dateISO}`);
       setData(res?.data || null);
-    } catch (e) {
-      note('Failed to add.');
-      console.error(e);
-    }
+    } catch (e) { console.error(e); note('Failed to add.'); }
   }
-
   async function toggleComplete(task) {
     try {
       await api.put(`/api/tasks/${task._id}`, { completed: !task.completed });
-      const res = await api.get(`/api/clusters/${encodeURIComponent(activeKey)}/dashboard?date=${dateISO}`);
+      const res = await api.get(`/api/sections/${encodeURIComponent(activeKey)}/dashboard?date=${dateISO}`);
       setData(res?.data || null);
-    } catch (e) {
-      console.error(e);
-      note('Update failed');
-    }
+    } catch (e) { console.error(e); note('Update failed'); }
   }
 
-  function onCreatedCluster(newCluster) {
-    setClusters(prev => {
-      const exists = prev.some(c => c.key === newCluster.key);
-      const next = exists ? prev : [...prev, newCluster];
-      // keep sidebar sorted-ish
+  // Quick add a task into this section
+  async function quickAddTask(e) {
+    e?.preventDefault?.();
+    const title = (quickTitle || '').trim();
+    if (!title) return;
+    try {
+      await api.post('/api/tasks', { title, sections: [activeKey] });
+      setQuickTitle('');
+      const res = await api.get(`/api/sections/${encodeURIComponent(activeKey)}/dashboard?date=${dateISO}`);
+      setData(res?.data || null);
+      note('Task added.');
+    } catch (err) { console.error(err); note('Could not add task'); }
+  }
+
+  function onCreatedSection(newSection) {
+    setSections(prev => {
+      const exists = prev.some(c => c.key === newSection.key);
+      const next = exists ? prev : [...prev, newSection];
       next.sort((a, b) => {
         if (a.pinned !== b.pinned) return b.pinned - a.pinned;
         if (a.order !== b.order) return a.order - b.order;
@@ -169,48 +153,43 @@ export default function ClusterPage() {
       });
       return next;
     });
-    setActiveKey(newCluster.key);
-    navigate(`/clusters/${encodeURIComponent(newCluster.key)}`);
+    setActiveKey(newSection.key);
+    navigate(`/sections/${encodeURIComponent(newSection.key)}`);
   }
 
-  const activeCluster = clusters.find(c => c.key === activeKey) || null;
+  const activeSection = sections.find(s => s.key === activeKey) || null;
 
   return (
-    <div className="clusters-page">
-      <aside className="clusters-sidebar">
+    <div className="sections-page">
+      <aside className="sections-sidebar">
         <div className="sidebar-head">
-          <h2>Clusters</h2>
+          <h2>Sections</h2>
           <button className="btn ghost sm" onClick={() => setShowCreate(true)}>+ New</button>
         </div>
 
-        {clusters.length === 0 && (
-          <Empty>No clusters yet.<br/>Create your first one.</Empty>
-        )}
+        {sections.length === 0 && <Empty>No sections yet. Create one.</Empty>}
 
-        <ul className="cluster-list">
-          {clusters.map(c => (
-            <li
-              key={c._id}
-              className={`cluster-item ${activeKey === c.key ? 'active' : ''}`}
-            >
+        <ul className="section-list">
+          {sections.map(s => (
+            <li key={s._id} className={`section-item ${activeKey === s.key ? 'active' : ''}`}>
               <Link
-                to={`/clusters/${encodeURIComponent(c.key)}`}
-                className="cluster-link"
-                onClick={() => setActiveKey(c.key)}
+                to={`/sections/${encodeURIComponent(s.key)}`}
+                className="section-link"
+                onClick={() => setActiveKey(s.key)}
               >
-                <span className="color-dot" style={{ background: c.color }} />
-                <span className="icon">{c.icon || '🗂️'}</span>
-                <span className="label">{c.label}</span>
+                <span className="color-dot" style={{ background: s.color }} />
+                <span className="icon">{s.icon || '📚'}</span>
+                <span className="label">{s.label}</span>
               </Link>
             </li>
           ))}
         </ul>
       </aside>
 
-      <main className="clusters-main">
-        <header className="clusters-header">
+      <main className="sections-main">
+        <header className="sections-header">
           <div className="title">
-            <h1>{activeCluster ? `${activeCluster.icon || '🗂️'} ${activeCluster.label}` : 'Clusters'}</h1>
+            <h1>{activeSection ? `${activeSection.icon || '📚'} ${activeSection.label}` : 'Sections'}</h1>
             <div className="subtitle">{humanDate(dateISO)} · {dateISO}</div>
           </div>
 
@@ -218,37 +197,46 @@ export default function ClusterPage() {
             <button className="btn" onClick={() => setDateISO(shiftISO(dateISO, -1))} aria-label="Previous day">‹</button>
             <button className="btn" onClick={() => setDateISO(todayISOInToronto())}>Today</button>
             <button className="btn" onClick={() => setDateISO(shiftISO(dateISO, +1))} aria-label="Next day">›</button>
-            <button className="btn ghost" onClick={carryOver} title="Move yesterday's unfinished tasks to today">Carry over yesterday</button>
+            <button className="btn ghost" onClick={carryOver} title="Move yesterday's unfinished tasks here to today">Carry over yesterday</button>
           </div>
         </header>
 
         {opMsg && <div className="toast">{opMsg}</div>}
-
         {loading && <div className="loading"><Spinner /></div>}
 
         {!loading && !activeKey && (
           <div className="hero">
-            <h2>Make your first cluster</h2>
-            <p>Clusters are cozy rooms for your life areas. They get their own dashboards and task queues.</p>
-            <button className="btn" onClick={() => setShowCreate(true)}>Create cluster</button>
+            <h2>Create your first section</h2>
+            <p>Sections are dashboards for areas like Inbox, Projects, or Learning.</p>
+            <button className="btn" onClick={() => setShowCreate(true)}>Create section</button>
           </div>
         )}
 
         {!loading && data && activeKey && (
           <div className="grid">
-            <Section title="Today">
+            <SectionCard
+              title="Today"
+              right={
+                <form onSubmit={quickAddTask} className="quick-add">
+                  <input
+                    type="text"
+                    placeholder={`Quick add task to ${activeKey}…`}
+                    value={quickTitle}
+                    onChange={e => setQuickTitle(e.target.value)}
+                    aria-label="Quick add task"
+                  />
+                  <button className="btn sm" type="submit">Add</button>
+                </form>
+              }
+            >
               {data.tasks.today.length === 0 ? (
-                <Empty>Nothing scheduled today for this cluster.</Empty>
+                <Empty>Nothing scheduled today in this section.</Empty>
               ) : (
                 <ul className="task-list">
                   {data.tasks.today.map(t => (
                     <li key={t._id} className={`task ${t.completed ? 'done' : ''}`}>
                       <label className="chk">
-                        <input
-                          type="checkbox"
-                          checked={!!t.completed}
-                          onChange={() => toggleComplete(t)}
-                        />
+                        <input type="checkbox" checked={!!t.completed} onChange={() => toggleComplete(t)} />
                         <span className="checkmark" />
                       </label>
                       <div className="task-main">
@@ -256,29 +244,25 @@ export default function ClusterPage() {
                         {t.notes && <div className="task-notes">{t.notes}</div>}
                       </div>
                       <div className="task-meta">
-                        {Array.isArray(t.clusters) && t.clusters.length > 1 && (
-                          <span className="pill">{t.clusters.join(' • ')}</span>
+                        {Array.isArray(t.sections) && t.sections.length > 1 && (
+                          <span className="pill">{t.sections.join(' • ')}</span>
                         )}
                       </div>
                     </li>
                   ))}
                 </ul>
               )}
-            </Section>
+            </SectionCard>
 
-            <Section title="Overdue">
+            <SectionCard title="Overdue">
               {data.tasks.overdue.length === 0 ? (
-                <Empty>Clean slate behind you.</Empty>
+                <Empty>Nothing overdue. Chef’s kiss.</Empty>
               ) : (
                 <ul className="task-list">
                   {data.tasks.overdue.map(t => (
                     <li key={t._id} className="task overdue">
                       <label className="chk">
-                        <input
-                          type="checkbox"
-                          checked={!!t.completed}
-                          onChange={() => toggleComplete(t)}
-                        />
+                        <input type="checkbox" checked={!!t.completed} onChange={() => toggleComplete(t)} />
                         <span className="checkmark" />
                       </label>
                       <div className="task-main">
@@ -292,11 +276,11 @@ export default function ClusterPage() {
                   ))}
                 </ul>
               )}
-            </Section>
+            </SectionCard>
 
-            <Section title="Upcoming">
+            <SectionCard title="Upcoming">
               {data.tasks.upcoming.length === 0 ? (
-                <Empty>Nothing queued. Future you is free.</Empty>
+                <Empty>Future is wide open.</Empty>
               ) : (
                 <ul className="task-list">
                   {data.tasks.upcoming.map(t => (
@@ -312,11 +296,11 @@ export default function ClusterPage() {
                   ))}
                 </ul>
               )}
-            </Section>
+            </SectionCard>
 
-            <Section title="Unscheduled" right={<span className="hint">Click “Add to {dateISO}” to pin it.</span>}>
+            <SectionCard title="Unscheduled" right={<span className="hint">Click “Add to {dateISO}”.</span>}>
               {data.tasks.unscheduled.length === 0 ? (
-                <Empty>No unscheduled tasks in this cluster.</Empty>
+                <Empty>No unscheduled tasks here.</Empty>
               ) : (
                 <ul className="task-list">
                   {data.tasks.unscheduled.map(t => (
@@ -332,11 +316,11 @@ export default function ClusterPage() {
                   ))}
                 </ul>
               )}
-            </Section>
+            </SectionCard>
 
-            <Section title="Recent entries">
+            <SectionCard title="Recent entries">
               {data.recentEntries.length === 0 ? (
-                <Empty>No entries yet for this cluster.</Empty>
+                <Empty>No entries yet for this section.</Empty>
               ) : (
                 <ul className="entry-list">
                   {data.recentEntries.map(e => (
@@ -349,16 +333,13 @@ export default function ClusterPage() {
                   ))}
                 </ul>
               )}
-            </Section>
+            </SectionCard>
           </div>
         )}
       </main>
 
       {showCreate && (
-        <CreateClusterModal
-          onClose={() => setShowCreate(false)}
-          onCreated={onCreatedCluster}
-        />
+        <CreateSectionModal onClose={() => setShowCreate(false)} onCreated={onCreatedSection} />
       )}
     </div>
   );

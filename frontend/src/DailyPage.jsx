@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import TaskList from './adapters/TaskList.default.jsx';
-import DailyRipples from './DailyRipples.jsx'
+import DailyRipples from './DailyRipples.jsx';
 import EntryQuickAssign from './adapters/EntryQuickAssign.default.jsx';
 import AnalyzeEntryButton from './adapters/AnalyzeEntryButton.default.jsx';
 import EntryModal from './adapters/EntryModal.default.jsx';
@@ -14,8 +14,6 @@ import { toDisplayDate } from './utils/date.js';
 import { toDisplay } from './utils/display.js'; // ← render-safe guard
 import './Main.css';
 import './dailypage.css';
-
-console.log('DailyRipples import is', DailyRipples);
 
 function todayISOInToronto() {
   const fmt = new Intl.DateTimeFormat('en-CA', {
@@ -216,16 +214,15 @@ export default function DailyPage() {
                   <div className="entry-text">{safeText}</div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                     {renderSafe(EntryQuickAssign, {
-  entry: en,
-  onUpdated: handleEntryUpdated,
-  onTaskCreated: handleTaskCreated
-}, 'EntryQuickAssign')}
+                      entry: en,
+                      onUpdated: handleEntryUpdated,
+                      onTaskCreated: handleTaskCreated
+                    }, 'EntryQuickAssign')}
 
-{renderSafe(AnalyzeEntryButton, {
-  entryText: typeof en?.text === 'string' ? en.text : '',
-  entryDateISO: en.date || en.dateISO || dateISO
-}, 'AnalyzeEntryButton')}
-
+                    {renderSafe(AnalyzeEntryButton, {
+                      entryText: typeof en?.text === 'string' ? en.text : '',
+                      entryDateISO: en.date || en.dateISO || dateISO
+                    }, 'AnalyzeEntryButton')}
                   </div>
                 </div>
               );
@@ -250,22 +247,19 @@ export default function DailyPage() {
       </section>
 
       {showEntryModal &&
-  renderSafe(EntryModal, {
-    defaultDate: dateISO,
-    onClose: () => setShowEntryModal(false),
-    onSaved: () => { setTaskListKey(k => k + 1); loadEntries(); }
-  }, 'EntryModal')
-}
+        renderSafe(EntryModal, {
+          defaultDate: dateISO,
+          onClose: () => setShowEntryModal(false),
+          onSaved: () => { setTaskListKey(k => k + 1); loadEntries(); }
+        }, 'EntryModal')
+      }
 
-{showApptModal &&
-  renderSafe(AppointmentModal, {
-    defaultDate: dateISO,
-    onClose: () => setShowApptModal(false)
-  }, 'AppointmentModal')
-}
-
-        
-      
+      {showApptModal &&
+        renderSafe(AppointmentModal, {
+          defaultDate: dateISO,
+          onClose: () => setShowApptModal(false)
+        }, 'AppointmentModal')
+      }
     </main>
   );
 }
