@@ -18,6 +18,7 @@ import SectionPageView from './SectionPageView.jsx';
 import RippleReviewUI from './RippleReviewUI';
 import Layout from './Layout.jsx';
 import SuggestedTasksInbox from './SuggestedTasksInbox.jsx';
+import InboxTasksPage from './pages/InboxTasksPage.jsx';
 
 // Auth / Search Contexts
 import { AuthProvider, AuthContext } from './AuthContext.jsx';
@@ -69,7 +70,8 @@ function AppRoutes() {
 
           {/* Utilities */}
           <Route path="/ripples" element={<RippleReviewUI />} />
-          <Route path="/inbox/tasks" element={<SuggestedTasksInbox />} />
+          <Route path="/inbox/tasks" element={<InboxTasksPage />} />
+          <Route path="/inbox/tasks/:date" element={<InboxTasksPage />} />
 
           {/* 404 inside authed shell */}
           <Route path="*" element={<div style={{ padding: 32 }}>Not found.</div>} />

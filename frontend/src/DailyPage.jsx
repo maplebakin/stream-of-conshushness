@@ -1,15 +1,21 @@
+// frontend/src/DailyPage.jsx
 import React, { useEffect, useMemo, useState, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
-import EntryModal from './EntryModal.jsx';
-import TaskList from './TaskList.jsx';
-import DailyRipples from './DailyRipples.jsx';
-import AppointmentModal from './AppointmentModal.jsx';
-import EntryQuickAssign from './components/EntryQuickAssign.jsx';
+import TaskList from './adapters/TaskList.default.jsx';
+import DailyRipples from './DailyRipples.jsx'
+import EntryQuickAssign from './adapters/EntryQuickAssign.default.jsx';
+import AnalyzeEntryButton from './adapters/AnalyzeEntryButton.default.jsx';
+import EntryModal from './adapters/EntryModal.default.jsx';
+import AppointmentModal from './adapters/AppointmentModal.default.jsx';
+import { renderSafe } from './utils/safeRender.js';
 import { toDisplayDate } from './utils/date.js';
+import { toDisplay } from './utils/display.js'; // ← render-safe guard
 import './Main.css';
 import './dailypage.css';
+
+console.log('DailyRipples import is', DailyRipples);
 
 function todayISOInToronto() {
   const fmt = new Intl.DateTimeFormat('en-CA', {
@@ -99,7 +105,7 @@ export default function DailyPage() {
       const res = await axios.get(`/api/entries?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setEntries(res.data || []);
+      setEntries(Array.isArray(res.data) ? res.data : []);
     } catch {
       setEntries([]);
     } finally {
@@ -170,12 +176,12 @@ export default function DailyPage() {
       <section className="daily-layout">
         <div className="daily-main">
           <div className="panel">
-            <TaskList key={taskListKey} date={dateISO} header="Today’s Tasks" />
+            {renderSafe(TaskList, { key: taskListKey, date: dateISO, header: "Today’s Tasks" }, 'TaskList')}
           </div>
 
-            {/* MOVED: Ripples ABOVE entries */}
+          {/* Ripples ABOVE entries */}
           <div className="panel">
-            <DailyRipples date={dateISO} />
+            {renderSafe(DailyRipples, { date: dateISO }, 'DailyRipples')}
           </div>
 
           {/* Today’s Entries Panel */}
@@ -200,16 +206,30 @@ export default function DailyPage() {
               <p className="muted">{unassignedOnly ? 'No unassigned entries 🎉' : 'No entries yet.'}</p>
             )}
 
-            {entries.map(en => (
-              <div key={en._id} className="entry-card">
-                <div className="entry-text">{en.text || <span className="muted">(no text)</span>}</div>
-                <EntryQuickAssign
-                  entry={en}
-                  onUpdated={handleEntryUpdated}
-                  onTaskCreated={handleTaskCreated}
-                />
-              </div>
-            ))}
+            {entries.map(en => {
+              // Render-safe entry text: tolerate strings, numbers, booleans; stringify arrays/objects.
+              const safeText =
+                toDisplay(en?.text ?? en?.content ?? '') || <span className="muted">(no text)</span>;
+
+              return (
+                <div key={en._id} className="entry-card">
+                  <div className="entry-text">{safeText}</div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {renderSafe(EntryQuickAssign, {
+  entry: en,
+  onUpdated: handleEntryUpdated,
+  onTaskCreated: handleTaskCreated
+}, 'EntryQuickAssign')}
+
+{renderSafe(AnalyzeEntryButton, {
+  entryText: typeof en?.text === 'string' ? en.text : '',
+  entryDateISO: en.date || en.dateISO || dateISO
+}, 'AnalyzeEntryButton')}
+
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -229,23 +249,23 @@ export default function DailyPage() {
         </aside>
       </section>
 
-      {showEntryModal && (
-        <EntryModal
-          defaultDate={dateISO}
-          onClose={() => setShowEntryModal(false)}
-          onSaved={() => {
-            setTaskListKey(k => k + 1);
-            loadEntries();
-          }}
-        />
-      )}
+      {showEntryModal &&
+  renderSafe(EntryModal, {
+    defaultDate: dateISO,
+    onClose: () => setShowEntryModal(false),
+    onSaved: () => { setTaskListKey(k => k + 1); loadEntries(); }
+  }, 'EntryModal')
+}
 
-      {showApptModal && (
-        <AppointmentModal
-          date={dateISO}
-          onClose={() => setShowApptModal(false)}
-        />
-      )}
+{showApptModal &&
+  renderSafe(AppointmentModal, {
+    defaultDate: dateISO,
+    onClose: () => setShowApptModal(false)
+  }, 'AppointmentModal')
+}
+
+        
+      
     </main>
   );
 }

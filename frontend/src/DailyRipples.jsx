@@ -1,76 +1,76 @@
-// src/DailyRipples.jsx
+// frontend/src/DailyRipples.jsx
 import React, { useContext, useEffect, useState } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
-import './Main.css';
+import { toDisplay, formatRecurrence } from './utils/display.js';
+
+function todayISOInToronto() {
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' });
+  const p = fmt.formatToParts(new Date());
+  return `${p.find(x=>x.type==='year').value}-${p.find(x=>x.type==='month').value}-${p.find(x=>x.type==='day').value}`;
+}
 
 export default function DailyRipples({ date }) {
   const { token } = useContext(AuthContext);
   const [ripples, setRipples] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const d = date || todayISOInToronto();
+        const { data } = await axios.get(`/api/ripples/${d}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (!cancelled) setRipples(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error('Fetch ripples failed', e);
+        if (!cancelled) setRipples([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [date, token]);
 
-  async function fetchRipples() {
-    setLoading(true);
+  async function act(ripple, action, body = {}) {
     try {
-      const { data } = await axios.get(`/api/ripples/${date}`, { headers: authHeaders });
-      setRipples(Array.isArray(data) ? data : []);
-    } finally {
-      setLoading(false);
+      await axios.put(`/api/ripples/${ripple._id}/${action}`, body, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      setRipples(prev => prev.filter(r => r._id !== ripple._id));
+    } catch (e) {
+      console.error(`Ripple ${action} failed`, e);
     }
   }
 
-  useEffect(() => {
-    if (date) fetchRipples();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date]);
-
-  async function approve(ripple) {
-    const { data } = await axios.put(`/api/ripples/${ripple._id}/approve`, {}, { headers: authHeaders });
-    // remove from list after approval
-    setRipples(prev => prev.filter(r => r._id !== ripple._id));
-    // you can also emit an event or callback to refresh tasks if desired
-  }
-
-  async function dismiss(ripple) {
-    await axios.put(`/api/ripples/${ripple._id}/dismiss`, {}, { headers: authHeaders });
-    setRipples(prev => prev.filter(r => r._id !== ripple._id));
-  }
+  if (loading) return <div className="muted">Loading…</div>;
+  if (!ripples.length) return <div className="muted">No pending ripples for this day.</div>;
 
   return (
-    <div>
-      <h3 className="font-thread text-vein">Ripples to Review</h3>
-      {loading ? (
-        <div className="muted">Loading…</div>
-      ) : ripples.length === 0 ? (
-        <div className="muted">No pending ripples for this day.</div>
-      ) : (
-        <ul className="tasks" style={{ listStyle: 'none', padding: 0, margin: '8px 0', display: 'grid', gap: 8 }}>
-          {ripples.map(r => (
-            <li key={r._id} className="task" style={{ background: 'var(--card, #fff)', borderRadius: 12, padding: '10px 12px', boxShadow: '0 1px 4px rgba(0,0,0,.06)', display: 'grid', gap: 8 }}>
-              <div className="title">{r.extractedText || '(no text)'}</div>
-              <div className="muted" style={{ fontSize: '0.85rem' }}>{r.originalContext}</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  className="button chip"
-                  onClick={() => approve(r)}
-                  title="Turn into a task"
-                >
-                  Approve → Task
-                </button>
-                <button
-                  className="button chip"
-                  onClick={() => dismiss(r)}
-                  title="Dismiss this ripple"
-                >
-                  Dismiss
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0', display: 'grid', gap: 8 }}>
+      {ripples.map(r => (
+        <li key={r._id ?? r.id} style={{ background: 'var(--card-bg)', padding: 12, borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
+          <div style={{ fontWeight: 600 }}>{toDisplay(r.extractedText)}</div>
+          {typeof r.originalContext === 'string' && r.originalContext.trim() && (
+            <div className="muted" style={{ fontSize: 12 }}>from: {r.originalContext}</div>
+          )}
+          {r.recurrence && (
+            <div className="muted" style={{ fontSize: 12 }}>
+              repeat: {formatRecurrence(r.recurrence)}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button onClick={() => act(r, 'approve', { dueDate: (date || todayISOInToronto()) })}>
+  Approve → Task
+</button>
+
+            <button onClick={() => act(r, 'dismiss')}>Dismiss</button>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
