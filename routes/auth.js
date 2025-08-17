@@ -266,5 +266,128 @@ router.post('/admin/reset-password', async (req, res) => {
     return fail(res, 500, 'admin reset failed');
   }
 });
+/* ───────────────── Email: add & verify (logged-in) ───────────────── */
+
+/** WHOAMI (simple profile)
+ * GET /api/me
+ * Header: Authorization: Bearer <jwt>
+ */
+router.get('/me', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) return fail(res, 401, 'not authorized');
+    return ok(res, {
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email || '',
+        pendingEmail: user.pendingEmail || '',
+        emailVerified: !!user.emailVerifiedAt,
+      },
+    });
+  } catch (e) {
+    console.error(e);
+    return fail(res, 500, 'me failed');
+  }
+});
+
+/** START EMAIL VERIFY
+ * POST /api/email/start-verify  { email }
+ * Header: Authorization: Bearer <jwt>
+ * Sends a 6-digit code to the provided email and stores it as pendingEmail.
+ */
+router.post('/email/start-verify', auth, async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+      return fail(res, 400, 'valid email required');
+
+    const user = await User.findById(req.user.userId);
+    if (!user) return fail(res, 401, 'not authorized');
+
+    // Optional uniqueness check (case-insensitive)
+    const clash = await User.findOne({
+      _id: { $ne: user._id },
+      email: { $regex: new RegExp(`^${email}$`, 'i') },
+    });
+    if (clash) return fail(res, 409, 'email already in use');
+
+    const rawCode = String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0');
+    const codeHash = await bcrypt.hash(rawCode, 10);
+
+    user.pendingEmail = email;
+    user.emailVerifyCodeHash = codeHash;
+    user.emailVerifyCodeExpiry = nowPlus(30); // 30 minutes
+    await user.save();
+
+    // Send the code
+    if (transporter) {
+      try {
+        await transporter.sendMail({
+          from: SMTP_FROM || 'no-reply@stream.app',
+          to: email,
+          subject: 'Verify your email',
+          text: `Your verification code is: ${rawCode}\n\nThis code expires in 30 minutes.`,
+          html: `<p>Your verification code is:</p><p style="font-size:20px"><b>${rawCode}</b></p><p>This code expires in 30 minutes.</p>`,
+        });
+      } catch (mailErr) {
+        console.error('[auth] email send failed:', mailErr?.message || mailErr);
+      }
+    } else {
+      devLog(`Email verify requested for @${user.username} → ${email}`);
+      devLog(`  Code: ${rawCode} (valid 30m)`);
+    }
+
+    const payload = {};
+    if (!isProd) payload.dev = { code: rawCode, email };
+    return ok(res, payload);
+  } catch (e) {
+    console.error(e);
+    return fail(res, 500, 'email start-verify failed');
+  }
+});
+
+/** CONFIRM EMAIL VERIFY
+ * POST /api/email/verify  { code }
+ * Header: Authorization: Bearer <jwt>
+ * Confirms the pendingEmail using the 6-digit code.
+ */
+router.post('/email/verify', auth, async (req, res) => {
+  try {
+    const { code } = req.body || {};
+    if (!code) return fail(res, 400, 'code required');
+
+    const user = await User.findById(req.user.userId);
+    if (!user) return fail(res, 401, 'not authorized');
+    if (!user.pendingEmail || !user.emailVerifyCodeHash || !user.emailVerifyCodeExpiry)
+      return fail(res, 400, 'no pending verification');
+
+    if (new Date() > new Date(user.emailVerifyCodeExpiry))
+      return fail(res, 400, 'code expired');
+
+    const okCode = await bcrypt.compare(String(code), user.emailVerifyCodeHash || '');
+    if (!okCode) return fail(res, 400, 'invalid code');
+
+    // Commit pending → email
+    user.email = user.pendingEmail;
+    user.emailVerifiedAt = new Date();
+    user.pendingEmail = '';
+    user.emailVerifyCodeHash = null;
+    user.emailVerifyCodeExpiry = null;
+    await user.save();
+
+    return ok(res, {
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        emailVerified: !!user.emailVerifiedAt,
+      },
+    });
+  } catch (e) {
+    console.error(e);
+    return fail(res, 500, 'email verify failed');
+  }
+});
 
 export default router;
