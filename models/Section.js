@@ -1,15 +1,20 @@
 // models/Section.js
 import mongoose from 'mongoose';
 
-const SectionSchema = new mongoose.Schema(
+const sectionSchema = new mongoose.Schema(
   {
-    name:       { type: String, required: true, trim: true },
-    slug:       { type: String, required: true, trim: true, unique: true },
-    icon:       { type: String, default: '' },   // e.g. lucide icon name
-    color:      { type: String, default: '#aaaaaa' },
-    owner:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
+    userId    : { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    key       : { type: String, required: true },  // slug-ish, unique per user
+    label     : { type: String, required: true },  // display name
+    color     : { type: String, default: '#5cc2ff' },
+    icon      : { type: String, default: '📚' },
+    description: { type: String, default: '' },
+    pinned    : { type: Boolean, default: false },
+    order     : { type: Number, default: 0 },
   },
   { timestamps: true }
 );
 
-export default mongoose.model('Section', SectionSchema);
+sectionSchema.index({ userId: 1, key: 1 }, { unique: true });
+
+export default mongoose.model('Section', sectionSchema);

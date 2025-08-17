@@ -12,9 +12,8 @@ import Login from './Login.jsx';
 import RegisterPage from './RegisterPage.jsx';
 import GameList from './GameList.jsx';
 import GamePage from './GamePage.jsx';
-import SectionPage from './SectionPage.jsx';
-import SectionsPage from './SectionsPage.jsx';
-import SectionPageView from './SectionPageView.jsx';
+// ✅ use the new Sections dashboard page
+import SectionPage from './pages/SectionPage.jsx';
 import RippleReviewUI from './RippleReviewUI';
 import Layout from './Layout.jsx';
 import SuggestedTasksInbox from './SuggestedTasksInbox.jsx';
@@ -63,19 +62,22 @@ function AppRoutes() {
           <Route path="/today" element={<TodayRedirect />} />
           <Route path="/day/:date" element={<DailyPage />} />
 
-          {/* Sections / Games */}
-          <Route path="/sections" element={<SectionsPage />} />
-          <Route path="/section/:sectionName" element={<SectionPage />} />
-          <Route path="/section/:sectionName/:pageSlug" element={<SectionPageView />} />
+          {/* ✅ Sections (new) */}
+          <Route path="/sections" element={<SectionPage />} />
+          <Route path="/sections/:key" element={<SectionPage />} />
+
+          {/* Games (keep as-is) */}
           <Route path="/section/games" element={<GameList />} />
           <Route path="/section/games/:slug" element={<GamePage />} />
-          <Route path="/admin" element={<AdminPanel />} />
 
           {/* Utilities */}
           <Route path="/ripples" element={<RippleReviewUI />} />
           <Route path="/inbox/tasks" element={<InboxTasksPage />} />
           <Route path="/inbox/tasks/:date" element={<InboxTasksPage />} />
-          <Route path="/cluster/:id" element={<ClusterPage />} /> 
+          <Route path="/clusters" element={<ClusterPage />} />
+          <Route path="/clusters/:key" element={<ClusterPage />} />
+          <Route path="/admin" element={<AdminPanel />} />
+
           <Route path="/account" element={<Account />} />
           <Route path="/settings" element={<UserSettings />} />
           {/* 404 inside authed shell */}
