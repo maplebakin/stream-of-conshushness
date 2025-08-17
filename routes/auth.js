@@ -268,28 +268,51 @@ router.post('/admin/reset-password', async (req, res) => {
 });
 /* ───────────────── Email: add & verify (logged-in) ───────────────── */
 
-/** WHOAMI (simple profile)
- * GET /api/me
- * Header: Authorization: Bearer <jwt>
- */
+// Profile: who am I?
+// GET /api/me
 router.get('/me', auth, async (req, res) => {
   try {
+    const user = await User.findById(req.user.userId)
+      .select('_id username email isAdmin createdAt updatedAt');
+    if (!user) return res.status(404).json({ error: 'user not found' });
+    res.json({ ok: true, user });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'me failed' });
+  }
+});
+
+// Update profile (email and/or username)
+// PATCH /api/me   { email?, username? }
+router.patch('/me', auth, async (req, res) => {
+  try {
+    const { email, username } = req.body || {};
     const user = await User.findById(req.user.userId);
-    if (!user) return fail(res, 401, 'not authorized');
-    return ok(res, {
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email || '',
-        pendingEmail: user.pendingEmail || '',
-        emailVerified: !!user.emailVerifiedAt,
-      },
+    if (!user) return res.status(404).json({ error: 'user not found' });
+
+    // Update email
+    if (typeof email === 'string') {
+      user.email = email.trim();
+    }
+
+    // Optional: allow username change (unique)
+    if (typeof username === 'string' && username.trim() && username.trim() !== user.username) {
+      const exists = await User.findOne({ username: username.trim() });
+      if (exists) return res.status(409).json({ error: 'username already taken' });
+      user.username = username.trim();
+    }
+
+    await user.save();
+    res.json({
+      ok: true,
+      user: { id: user._id, username: user.username, email: user.email, isAdmin: user.isAdmin },
     });
   } catch (e) {
     console.error(e);
-    return fail(res, 500, 'me failed');
+    res.status(500).json({ error: 'update profile failed' });
   }
 });
+
 
 /** START EMAIL VERIFY
  * POST /api/email/start-verify  { email }

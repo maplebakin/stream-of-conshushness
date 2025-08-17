@@ -24,14 +24,20 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 border-b border-border bg-surface shadow-md">
-      <h1 className="font-echo text-vein text-2xl sm:text-3xl tracking-tight">
-        Stream of Conshushness
-      </h1>
+      {/* LEFT: Settings + Title */}
+      
+        <h1 className="font-echo text-vein text-2xl sm:text-3xl tracking-tight">
+          Stream of Conshushness
+        </h1>
+     
+
+      {/* RIGHT: Main Nav */}
       <nav className="flex gap-2 items-center">
-        {navLink("/", "🌊 Stream")}
-        {navLink("/today", "📍 Today")}
-        {navLink("/calendar", "📆 Calendar")}
-        {navLink("/sections", "🎛️ Sections")}
+        {navLink('/', '🌊 Stream')}
+        {navLink('/today', '📍 Today')}
+        {navLink('/calendar', '📆 Calendar')}
+        {navLink('/sections', '🎛️ Sections')}
+        {isAuthenticated && navLink('/settings', '⚙️ User Settings')}
         {isAuthenticated && (
           <button
             onClick={logout}

@@ -21,6 +21,7 @@ import SuggestedTasksInbox from './SuggestedTasksInbox.jsx';
 import InboxTasksPage from './pages/InboxTasksPage.jsx';
 import Account from './pages/Account.jsx';
 import ClusterPage from './pages/ClusterPage.jsx';
+import UserSettings from './pages/UserSettings.jsx';
 
 // Auth / Search Contexts
 import { AuthProvider, AuthContext } from './AuthContext.jsx';
@@ -76,7 +77,7 @@ function AppRoutes() {
           <Route path="/inbox/tasks/:date" element={<InboxTasksPage />} />
           <Route path="/cluster/:id" element={<ClusterPage />} /> 
           <Route path="/account" element={<Account />} />
-
+          <Route path="/settings" element={<UserSettings />} />
           {/* 404 inside authed shell */}
           <Route path="*" element={<div style={{ padding: 32 }}>Not found.</div>} />
         </Route>
