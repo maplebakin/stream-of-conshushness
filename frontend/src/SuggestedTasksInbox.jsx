@@ -1,35 +1,102 @@
-import React, { useEffect, useState, useContext } from 'react';
-import axios           from './api/axiosInstance';
+// frontend/src/SuggestedTasksInbox.jsx
+import React, { useEffect, useState, useContext, useMemo } from 'react';
+import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 
-export default function SuggestedTasksInbox() {
+// Toronto-safe YYYY-MM-DD
+function todayISOInToronto() {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Toronto',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  });
+  const p = fmt.formatToParts(new Date());
+  return `${p.find(x=>x.type==='year').value}-${p.find(x=>x.type==='month').value}-${p.find(x=>x.type==='day').value}`;
+}
+
+/**
+ * SuggestedTasksInbox
+ * Props:
+ *   - dateISO?: string  → tasks approved here get this due date (defaults to Toronto-today)
+ *   - onAccepted?: fn(task)  → callback after accept
+ *   - onRejected?: fn(item)  → callback after reject
+ */
+export default function SuggestedTasksInbox({ dateISO, onAccepted, onRejected }) {
   const { token } = useContext(AuthContext);
+  const auth = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
+  const dayISO = useMemo(() => dateISO || todayISOInToronto(), [dateISO]);
+
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState({}); // { id: true } to disable buttons per-row
+  const [err, setErr] = useState('');
 
-  const fetchList = () => {
-    axios.get('/api/suggested-tasks', { headers:{ Authorization:`Bearer ${token}` } })
-         .then(r => setList(r.data)).finally(() => setLoading(false));
+  const fetchList = async () => {
+    if (!token) return;
+    setLoading(true);
+    setErr('');
+    try {
+      const r = await axios.get('/api/suggested-tasks', { headers: auth });
+      setList(Array.isArray(r.data) ? r.data : []);
+    } catch (e) {
+      console.error('Failed to fetch suggestions:', e);
+      setErr('Failed to load suggestions');
+      setList([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(fetchList, [token]);
+  useEffect(() => { fetchList(); /* eslint-disable-next-line */ }, [token]);
 
-  const act = (id, action) => {
-    axios.put(`/api/suggested-tasks/${id}/${action}`, {}, { headers:{ Authorization:`Bearer ${token}` } })
-         .then(fetchList);
+  const act = async (id, action) => {
+    if (!token) return;
+    setBusy(prev => ({ ...prev, [id]: true }));
+    // optimistic remove on success
+    try {
+      const body = action === 'accept' ? { dueDate: dayISO } : {};
+      const r = await axios.put(`/api/suggested-tasks/${id}/${action}`, body, { headers: auth });
+      setList(prev => prev.filter(t => t._id !== id));
+      if (action === 'accept' && typeof onAccepted === 'function') onAccepted(r.data?.task || r.data);
+      if (action === 'reject' && typeof onRejected === 'function') onRejected({ _id: id });
+    } catch (e) {
+      console.error(`Error ${action}ing suggested task:`, e);
+      alert(`Could not ${action} this item. Check console for details.`);
+    } finally {
+      setBusy(prev => ({ ...prev, [id]: false }));
+    }
   };
 
+  if (!token) return <p className="p-4 text-gray-400">Sign in to see suggestions.</p>;
   if (loading) return <p className="p-4 text-gray-400">Loading suggestions…</p>;
+  if (err) return <p className="p-4 text-red-400">{err}</p>;
   if (!list.length) return <p className="p-4 text-gray-400">No suggested tasks 🎉</p>;
 
   return (
     <div className="p-4 space-y-3">
       {list.map(t => (
         <div key={t._id} className="border p-3 rounded flex items-center justify-between">
-          <span>{t.title}</span>
+          <div className="flex-1 pr-3">
+            <div className="font-medium">{t.title || t.extractedText || '(untitled)'}</div>
+            {t.originalContext && (
+              <div className="text-xs text-gray-500 italic mt-1">from: {t.originalContext}</div>
+            )}
+          </div>
           <div className="space-x-2">
-            <button className="approve-btn" onClick={() => act(t._id,'accept')}>Accept</button>
-            <button className="dismiss-btn" onClick={() => act(t._id,'reject')}>Reject</button>
+            <button
+              className="approve-btn px-3 py-1 rounded bg-green-100 hover:bg-green-200 text-green-900 text-sm font-medium disabled:opacity-50"
+              onClick={() => act(t._id, 'accept')}
+              disabled={!!busy[t._id]}
+              title={`Accept to ${dayISO}`}
+            >
+              Accept → {dayISO}
+            </button>
+            <button
+              className="dismiss-btn px-3 py-1 rounded bg-red-100 hover:bg-red-200 text-red-900 text-sm font-medium disabled:opacity-50"
+              onClick={() => act(t._id, 'reject')}
+              disabled={!!busy[t._id]}
+            >
+              Reject
+            </button>
           </div>
         </div>
       ))}
