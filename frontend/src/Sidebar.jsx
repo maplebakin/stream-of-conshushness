@@ -1,44 +1,77 @@
 // src/Sidebar.jsx
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useMemo, useState, useContext } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import './Sidebar.css';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
-import { useSearch } from "./SearchContext.jsx";
+import { useSearch } from './SearchContext.jsx';
+
+function normalizeSections(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((s) => {
+      // Back-compat: server returned just strings
+      if (typeof s === 'string') {
+        return { key: s, label: s, emoji: '', pinned: false, order: 0 };
+      }
+      // New API (routes/sections.js) returns { key,label,icon,pinned,order }
+      const key =
+        s.key ||
+        s.slug ||
+        (s.name ? String(s.name).toLowerCase().replace(/\s+/g, '-') : '');
+      const label = s.label || s.name || s.key || s.slug || 'Untitled';
+      const emoji = s.icon || s.emoji || '';
+      const pinned = !!s.pinned;
+      const order = Number.isFinite(s.order) ? s.order : 0;
+      return { key, label, emoji, pinned, order };
+    })
+    .filter((s) => s.key) // drop invalid
+    // Sort: pinned first, then by order, then A→Z
+    .sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      if (a.order !== b.order) return a.order - b.order;
+      return a.label.localeCompare(b.label);
+    });
+}
 
 export default function Sidebar() {
   const { token } = useContext(AuthContext);
   const location = useLocation();
+  const { search, setSearch } = useSearch();
+
   const [sections, setSections] = useState([]);
   const [sectionSearchTerm, setSectionSearchTerm] = useState('');
   const [error, setError] = useState(false);
-  const { search, setSearch } = useSearch();
 
   useEffect(() => {
     if (!token) return;
-
     axios
-      .get('/api/sections', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      .get('/api/sections') // Authorization header comes from the interceptor
       .then((res) => {
-        if (Array.isArray(res.data)) {
-          setSections(res.data);
-          setError(false);
-        } else {
-          setError(true);
-          setSections([]);
-        }
+        const list = normalizeSections(res.data);
+        setSections(list);
+        setError(false);
       })
       .catch((err) => {
         console.error('⚠️ Error fetching sections:', err);
-        setError(true);
         setSections([]);
+        setError(true);
       });
   }, [token]);
 
+  const term = sectionSearchTerm.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    if (!term) return sections;
+    return sections.filter(
+      (s) =>
+        s.label.toLowerCase().includes(term) ||
+        s.key.toLowerCase().includes(term)
+    );
+  }, [sections, term]);
+
   const isActive = (path) =>
-    decodeURIComponent(location.pathname).toLowerCase() === path.toLowerCase();
+    decodeURIComponent(location.pathname).toLowerCase() ===
+    path.toLowerCase();
 
   return (
     <aside className="sidebar">
@@ -62,9 +95,9 @@ export default function Sidebar() {
       <div className="search-block">
         <input
           type="text"
-          placeholder="Search sections..."
+          placeholder="Search sections…"
           value={sectionSearchTerm}
-          onChange={e => setSectionSearchTerm(e.target.value)}
+          onChange={(e) => setSectionSearchTerm(e.target.value)}
           className="section-search"
           aria-label="Search sections"
         />
@@ -72,7 +105,7 @@ export default function Sidebar() {
           type="text"
           placeholder="Search everywhere…"
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           className="section-search"
           aria-label="Search everything"
         />
@@ -84,23 +117,26 @@ export default function Sidebar() {
           <div className="sidebar-error">Couldn’t load sections.</div>
         ) : (
           <ul className="section-list">
-            {sections
-              .filter(name => name.toLowerCase().includes(sectionSearchTerm.toLowerCase()))
-              .map(name => {
-                const path = `/section/${encodeURIComponent(name)}`;
-                return (
-                  <li key={name}>
-                    <Link
-                      to={path}
-                      className={isActive(path) ? 'nav-link active' : 'nav-link'}
-                      aria-current={isActive(path) ? 'page' : undefined}
-                    >
-                      {name}
-                    </Link>
-                  </li>
-                );
-              })}
-            {sections.length === 0 && !error && (
+            {filtered.map((s) => {
+              const path = `/sections/${encodeURIComponent(s.key)}`;
+              const active = isActive(path);
+              return (
+                <li key={s.key}>
+                  <Link
+                    to={path}
+                    className={active ? 'nav-link active' : 'nav-link'}
+                    aria-current={active ? 'page' : undefined}
+                    title={s.label}
+                  >
+                    <span style={{ marginRight: 6 }}>
+                      {s.emoji || '📚'}
+                    </span>
+                    <span>{s.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+            {filtered.length === 0 && !error && (
               <li className="sidebar-empty">No sections found.</li>
             )}
           </ul>

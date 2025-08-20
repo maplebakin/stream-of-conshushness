@@ -1,7 +1,7 @@
 import React, { useContext, useState } from 'react';
 import axios from './api/axiosInstance.js';
 import { AuthContext } from './AuthContext.jsx';
-import './EntryModal.css';
+import './modal.css';   
 
 export default function AppointmentModal({ date, onClose, onSaved }) {
   const { token } = useContext(AuthContext);

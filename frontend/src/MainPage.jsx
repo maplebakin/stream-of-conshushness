@@ -1,5 +1,5 @@
-// src/MainPage.jsx
-import { useEffect, useState, useContext, useMemo, useCallback } from 'react';
+// frontend/src/MainPage.jsx
+import React, { useEffect, useState, useContext, useMemo, useCallback, Suspense } from 'react';
 import EntryModal from './EntryModal.jsx';
 import axios from './api/axiosInstance';
 import './Main.css';
@@ -82,16 +82,13 @@ export default function MainPage() {
     }
     setLoading(true);
     try {
-      const res = await axios.get('/api/entries', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await axios.get('/api/entries');
       const list = Array.isArray(res.data) ? res.data : [];
       const normalized = list.map(normalizeEntry);
       setEntries(stableSortEntriesDesc(normalized));
     } catch (err) {
       console.error('⚠️ Error fetching entries:', err);
       if (err?.response?.status === 401) {
-        // token expired or invalid
         toast.error('Session expired. Please log in again.');
         logout?.();
       } else {
@@ -108,9 +105,7 @@ export default function MainPage() {
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`/api/entries/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axios.delete(`/api/entries/${id}`);
       setEntries((prev) => prev.filter((e) => e._id !== id));
       toast.success('Entry deleted');
     } catch (err) {
@@ -128,7 +123,6 @@ export default function MainPage() {
   const clusters = useMemo(() => {
     const setVals = new Set();
     entries.forEach((e) => e.cluster && setVals.add(e.cluster));
-    // sort A→Z but keep 'all' first
     const rest = Array.from(setVals).sort((a, b) => a.localeCompare(b));
     return ['all', ...rest];
   }, [entries]);
@@ -183,6 +177,7 @@ export default function MainPage() {
           </select>
 
           <button
+            type="button"
             className="add-entry-btn bg-lantern text-ink rounded-button px-4 py-2 font-thread shadow-soft hover:bg-plum hover:text-mist transition-all"
             onClick={() => setShowModal(true)}
             disabled={!isAuthenticated}
@@ -205,6 +200,7 @@ export default function MainPage() {
                 : 'No entries yet. Wanna start a ripple?'}
             </p>
             <button
+              type="button"
               className="add-entry-btn bg-plum text-mist rounded-button px-4 py-2 font-thread shadow-soft hover:bg-lantern hover:text-ink transition-all"
               onClick={() => setShowModal(true)}
               disabled={!isAuthenticated}
@@ -236,7 +232,6 @@ export default function MainPage() {
 
               <div
                 className="entry-text"
-                // Render priority: html → legacy content (if html-like) → plain text
                 dangerouslySetInnerHTML={{
                   __html:
                     (entry.html && entry.html.length)
@@ -249,6 +244,7 @@ export default function MainPage() {
 
               <div className="entry-actions">
                 <button
+                  type="button"
                   className="icon-btn"
                   onClick={() => handleDelete(entry._id)}
                   title="Delete"
@@ -261,14 +257,16 @@ export default function MainPage() {
       </section>
 
       {/* Modal */}
-      {showModal && (
-        <EntryModal
-          onClose={() => setShowModal(false)}
-          onSaved={handleSaved}
-          defaultCluster={clusterFilter !== 'all' ? clusterFilter : ''}
-          defaultTags={[]}
-        />
-      )}
+      <Suspense fallback={null}>
+        {showModal && (
+          <EntryModal
+            onClose={() => setShowModal(false)}
+            onSaved={handleSaved}
+            defaultCluster={clusterFilter !== 'all' ? clusterFilter : ''}
+            defaultTags={[]}
+          />
+        )}
+      </Suspense>
     </main>
   );
 }

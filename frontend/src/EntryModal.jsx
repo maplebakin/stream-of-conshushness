@@ -1,19 +1,19 @@
-import React, { useState, useContext, useEffect, useCallback } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import { AuthContext } from './AuthContext.jsx';
+// frontend/src/EntryModal.jsx
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import axios from './api/axiosInstance';
+import toast from 'react-hot-toast';
+import './modal.css';
 
-// Get YYYY-MM-DD in America/Toronto
-function todayISOInToronto() {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Toronto',
-    year: 'numeric', month: '2-digit', day: '2-digit'
-  });
-  const parts = fmt.formatToParts(new Date());
-  const y = parts.find(p => p.type === 'year')?.value ?? '0000';
-  const m = parts.find(p => p.type === 'month')?.value ?? '01';
-  const d = parts.find(p => p.type === 'day')?.value ?? '01';
-  return `${y}-${m}-${d}`;
+/** Ensure a portal root exists (safe on hard refresh) */
+function ensurePortalRoot(id = 'modal-root') {
+  let el = document.getElementById(id);
+  if (!el) {
+    el = document.createElement('div');
+    el.id = id;
+    document.body.appendChild(el);
+  }
+  return el;
 }
 
 export default function EntryModal({
@@ -21,157 +21,132 @@ export default function EntryModal({
   onSaved,
   defaultCluster = '',
   defaultTags = [],
-  defaultDate // ← key: Daily page can set this
 }) {
-  const { token } = useContext(AuthContext);
-
-  const [mood, setMood] = useState('');
-  const [cluster, setCluster] = useState(defaultCluster || '');
-  const [tagsInput, setTagsInput] = useState(Array.isArray(defaultTags) ? defaultTags.join(', ') : '');
+  const root = ensurePortalRoot();
+  const textareaRef = useRef(null);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [textLen, setTextLen] = useState(0); // drives canSave
 
-  // keep inputs in sync if props change
-  useEffect(() => setCluster(defaultCluster || ''), [defaultCluster]);
-  useEffect(() => setTagsInput(Array.isArray(defaultTags) ? defaultTags.join(', ') : ''), [defaultTags]);
+  // form state
+  const [text, setText] = useState('');
+  const [mood, setMood] = useState('');
+  const [tags, setTags] = useState(defaultTags.join(', '));
 
-  const editor = useEditor({
-    extensions: [StarterKit],
-    content: '',
-    editorProps: { attributes: { class: 'tiptap' } },
-    onUpdate: ({ editor }) => {
-      const len = editor.getText().replace(/\s+/g, ' ').trim().length;
-      setTextLen(len);
-    },
-    onCreate: ({ editor }) => {
-      const len = editor.getText().replace(/\s+/g, ' ').trim().length;
-      setTextLen(len);
+  // Lock page scroll while open
+  useEffect(() => {
+    const prev = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    return () => { document.documentElement.style.overflow = prev; };
+  }, []);
+
+  // Focus textarea after mount
+  useEffect(() => {
+    const id = requestAnimationFrame(() => textareaRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  // Close on Esc
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  async function handleSave(e) {
+    e?.preventDefault?.();
+    if (!text.trim()) {
+      toast('Write a little something first?', { icon: '✍️' });
+      return;
     }
-  });
-
-  const canSave = !saving && textLen > 0;
-
-  const handleSave = useCallback(async () => {
-    setError('');
-    if (!editor) return;
-
-    const text = editor.getText().replace(/\s+/g, ' ').trim();
-    if (!text) { setError('Please type something first.'); return; }
-
     setSaving(true);
     try {
-      const html = editor.getHTML();
-
-      const tagsArr = tagsInput
-        ? tagsInput.split(',').map(s => s.trim()).filter(Boolean)
-        : [];
-
-      const payload = {
-        date: defaultDate || todayISOInToronto(), // ← honor Daily page
-        text,            // required plain text
-        html,            // rich content
-        content: html,   // legacy/analysis compatibility
-        mood: mood || undefined,
-        cluster: cluster || undefined,
-        ...(tagsArr.length ? { tags: tagsArr } : {})
+      const cleanTags = tags.split(',').map(t => t.trim()).filter(Boolean);
+      const body = {
+        text,
+        mood: mood.trim(),
+        cluster: defaultCluster || '',
+        tags: cleanTags,
       };
-
-      const res = await fetch('/api/entries', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Failed to save entry');
-
-      onSaved?.(data);
-      onClose?.();
-    } catch (e) {
-      setError(e.message || 'Something went wrong.');
-    } finally {
+      const res = await axios.post('/api/entries', body);
+      onSaved?.(res.data);
+      toast.success('Entry saved');
+    } catch (err) {
+      console.error('save entry failed:', err?.response?.data || err.message);
+      toast.error('Could not save entry');
       setSaving(false);
     }
-  }, [editor, token, tagsInput, mood, cluster, defaultDate, onSaved, onClose]);
+  }
 
-  // Cmd/Ctrl+Enter to save; Esc to close
-  useEffect(() => {
-    const handler = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
-        if (canSave) handleSave();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose?.();
-      }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [canSave, handleSave, onClose]);
-
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3>New Entry</h3>
-
-        {/* Horizontal meta row */}
+  const node = (
+    <>
+      <div className="sc-modal-backdrop" onClick={onClose} />
+      <div className="sc-modal-shell" aria-hidden="true" onClick={onClose}>
         <div
-          className="entry-meta-row"
-          style={{ display: 'flex', gap: '8px', marginTop: '8px', alignItems: 'center' }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="new-entry-title"
+          className="sc-modal-card"
+          onClick={(e) => e.stopPropagation()}
         >
-          <input
-            type="text"
-            placeholder="Mood (optional)"
-            value={mood}
-            onChange={e => setMood(e.target.value)}
-            style={{ flex: 1, minWidth: 0 }}
-          />
-          <input
-            type="text"
-            placeholder="Tags, comma-separated"
-            value={tagsInput}
-            onChange={e => setTagsInput(e.target.value)}
-            style={{ flex: 2, minWidth: 0 }}
-          />
-          <input
-            type="text"
-            placeholder="Cluster (optional)"
-            value={cluster}
-            onChange={e => setCluster(e.target.value)}
-            style={{ flex: 1, minWidth: 0 }}
-          />
-        </div>
-
-        {/* Editor gets most of the visual space */}
-        <div className="editor-wrap" style={{ marginTop: 12 }}>
-          <EditorContent editor={editor} />
-        </div>
-
-        {/* tiny status row */}
-        <div style={{ display:'flex', justifyContent:'space-between', marginTop:6 }}>
-          <span className="muted" style={{ fontSize:12 }}>
-            {defaultDate ? `Saving to: ${defaultDate}` : `Saving to: ${todayISOInToronto()}`}
-          </span>
-          <span className="muted" style={{ fontSize:12 }}>{textLen} chars</span>
-        </div>
-
-        {error && (
-          <div className="error" style={{ color: 'crimson', marginTop: 8 }}>
-            {error}
+          <div className="sc-modal-header">
+            <h3 id="new-entry-title" className="sc-modal-title">New Entry</h3>
+            <button className="sc-modal-close" onClick={onClose} aria-label="Close">×</button>
           </div>
-        )}
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
-          <button onClick={onClose} disabled={saving}>Cancel</button>
-          <button onClick={handleSave} disabled={!canSave}>
-            {saving ? 'Saving…' : 'Save Entry'}
-          </button>
+          <form onSubmit={handleSave} className="sc-modal-body">
+            <div className="sc-field">
+              <label className="sc-label">Text</label>
+              <textarea
+                ref={textareaRef}
+                className="sc-textarea"
+                placeholder={defaultCluster ? `In ${defaultCluster}…` : 'Type here…'}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+              />
+            </div>
+
+            <div className="sc-grid">
+              <div className="sc-field">
+                <label className="sc-label">Mood (optional)</label>
+                <input
+                  className="sc-input"
+                  type="text"
+                  value={mood}
+                  onChange={(e) => setMood(e.target.value)}
+                  placeholder="e.g., cozy, focused, crispy"
+                />
+              </div>
+
+              <div className="sc-field">
+                <label className="sc-label">Tags (comma separated)</label>
+                <input
+                  className="sc-input"
+                  type="text"
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
+                  placeholder="e.g., morning pages, #ideas"
+                />
+              </div>
+            </div>
+
+            {defaultCluster && (
+              <div className="sc-inline-note">
+                Cluster: <span className="pill">{defaultCluster}</span>
+              </div>
+            )}
+
+            <div className="sc-modal-actions">
+              <button type="button" className="sc-btn" onClick={onClose}>
+                Cancel
+              </button>
+              <button type="submit" className="sc-btn sc-btn-primary" disabled={saving || !text.trim()}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
-    </div>
+    </>
   );
+
+  return createPortal(node, root);
 }
