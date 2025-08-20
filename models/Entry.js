@@ -14,16 +14,29 @@ const SuggestedTaskSchema = new Schema({
 const EntrySchema = new Schema({
   userId : { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   date   : { type: String, required: true }, // YYYY-MM-DD
+
+  // Content
   text   : { type: String, default: '', trim: true },
   html   : { type: String, default: '' },
   content: { type: String, default: '' },
+
+  // Metadata
   mood   : { type: String, default: '' },
-  cluster: { type: String, default: '' },
-  section: { type: String, default: '' }, // legacy / optional
   tags   : { type: [String], default: [] },
+  cluster: { type: String, default: '' },       // cluster scoping
+  section: { type: String, default: '' },       // legacy / optional
+
+  // NEW: page scoping (SectionPage room)
+  sectionPageId: { type: Schema.Types.ObjectId, ref: 'SectionPage', default: null, index: true },
+
   linkedGoal: { type: Schema.Types.ObjectId, ref: 'Goal', default: null },
 
+  // Ripple/task suggestions extracted from content
   suggestedTasks: { type: [SuggestedTaskSchema], default: [] }
 }, { timestamps: true });
+
+// Helpful compound index for fast room queries (cluster OR page) by user
+EntrySchema.index({ userId: 1, cluster: 1, date: -1 });
+EntrySchema.index({ userId: 1, sectionPageId: 1, date: -1 });
 
 export default mongoose.model('Entry', EntrySchema);

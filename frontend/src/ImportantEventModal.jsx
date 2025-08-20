@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
-import './EntryModal.css';
+import './modal.css';   
 
 export default function ImportantEventModal({ date, onClose, onSaved }) {
   const { token } = useContext(AuthContext);

@@ -12,20 +12,22 @@ import Login from './Login.jsx';
 import RegisterPage from './RegisterPage.jsx';
 import GameList from './GameList.jsx';
 import GamePage from './GamePage.jsx';
-// ✅ use the new Sections dashboard page
-import SectionPage from './pages/SectionPage.jsx';
+
+import SectionPage from './pages/SectionPage.jsx';     // ✅ sections landing + detail (fixed below)
+import ClustersIndex from './pages/ClustersIndex.jsx'; // ✅ NEW: clusters index
+import ClusterRoom from './pages/ClusterRoom.jsx';     // ✅ room view per cluster
+
 import RippleReviewUI from './RippleReviewUI';
 import Layout from './Layout.jsx';
 import SuggestedTasksInbox from './SuggestedTasksInbox.jsx';
 import InboxTasksPage from './pages/InboxTasksPage.jsx';
 import Account from './pages/Account.jsx';
-import ClusterPage from './pages/ClusterPage.jsx';
 import UserSettings from './pages/UserSettings.jsx';
+import AdminPanel from './pages/AdminPanel.jsx';
 
 // Auth / Search Contexts
 import { AuthProvider, AuthContext } from './AuthContext.jsx';
 import { SearchProvider } from './SearchContext.jsx';
-import AdminPanel from './pages/AdminPanel.jsx';
 
 // Password reset pages
 import ForgotPassword from './pages/ForgotPassword.jsx';
@@ -62,9 +64,13 @@ function AppRoutes() {
           <Route path="/today" element={<TodayRedirect />} />
           <Route path="/day/:date" element={<DailyPage />} />
 
-          {/* ✅ Sections (new) */}
-          <Route path="/sections" element={<SectionPage />} />
-          <Route path="/sections/:key" element={<SectionPage />} />
+          {/* ✅ Sections */}
+          <Route path="/sections" element={<SectionPage />} />          {/* landing */}
+          <Route path="/sections/:key" element={<SectionPage />} />     {/* detail; accepts :key */}
+
+          {/* ✅ Clusters */}
+          <Route path="/clusters" element={<ClustersIndex />} />        {/* index page */}
+          <Route path="/clusters/:slug" element={<ClusterRoom />} />    {/* room */}
 
           {/* Games (keep as-is) */}
           <Route path="/section/games" element={<GameList />} />
@@ -74,17 +80,15 @@ function AppRoutes() {
           <Route path="/ripples" element={<RippleReviewUI />} />
           <Route path="/inbox/tasks" element={<InboxTasksPage />} />
           <Route path="/inbox/tasks/:date" element={<InboxTasksPage />} />
-          <Route path="/clusters" element={<ClusterPage />} />
-          <Route path="/clusters/:key" element={<ClusterPage />} />
           <Route path="/admin" element={<AdminPanel />} />
 
           <Route path="/account" element={<Account />} />
           <Route path="/settings" element={<UserSettings />} />
+
           {/* 404 inside authed shell */}
           <Route path="*" element={<div style={{ padding: 32 }}>Not found.</div>} />
         </Route>
       ) : (
-        /* Anything else when not authed goes to login */
         <Route path="*" element={<Navigate to="/login" replace />} />
       )}
     </Routes>

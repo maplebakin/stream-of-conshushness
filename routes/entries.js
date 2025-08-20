@@ -3,7 +3,7 @@ import express from 'express';
 import Entry from '../models/Entry.js';
 import Ripple from '../models/Ripple.js';
 import auth from '../middleware/auth.js';
-import { analyzeEntry } from '../utils/analyzeEntry.js'; // ← NEW
+import { analyzeEntry } from '../utils/analyzeEntry.js'; // ← existing
 
 const router = express.Router();
 router.use(auth);
@@ -30,22 +30,41 @@ function getUserId(req) {
    Query (all optional):
      - ?date=YYYY-MM-DD
      - ?cluster=Home
-     - ?section=Games
-     - ?unassignedCluster=true   (only entries with no cluster)
+     - ?section=Games                  (legacy string)
+     - ?sectionPageId=<ObjectId>       (NEW: page-scoped room)
+     - ?unassignedCluster=true         (only entries with no cluster)
+     - ?limit=50&offset=0              (optional paging)
 --------------------------------------------------------------------------------------- */
 router.get('/', async (req, res) => {
   try {
-    const { date, cluster, section, unassignedCluster } = req.query;
+    const {
+      date,
+      cluster,
+      section,
+      sectionPageId,       // NEW
+      unassignedCluster,
+      limit,
+      offset
+    } = req.query;
 
     const q = { userId: getUserId(req) };
     if (date) q.date = String(date);
     if (cluster) q.cluster = String(cluster);
     if (section) q.section = String(section);
+    if (sectionPageId) q.sectionPageId = String(sectionPageId);
     if (unassignedCluster === 'true') {
       q.$or = [{ cluster: '' }, { cluster: null }, { cluster: { $exists: false } }];
     }
 
-    const entries = await Entry.find(q).sort({ date: -1, createdAt: -1 });
+    let query = Entry.find(q).sort({ date: -1, createdAt: -1 });
+
+    // Optional pagination (non-breaking)
+    const lim = Number.isFinite(Number(limit)) ? Math.max(1, parseInt(limit, 10)) : null;
+    const off = Number.isFinite(Number(offset)) ? Math.max(0, parseInt(offset, 10)) : null;
+    if (off !== null) query = query.skip(off);
+    if (lim !== null) query = query.limit(lim);
+
+    const entries = await query.exec();
     res.json(entries);
   } catch (err) {
     console.error('GET /api/entries error:', err);
@@ -72,7 +91,8 @@ router.get('/:date', async (req, res) => {
 
 /* ───────────────────────── POST /api/entries ─────────────────────────
    Create an entry, then analyze it to insert pending Ripples.
-   Body accepts: { date?, text?, html?, content?, mood?, cluster?, section?, tags?, linkedGoal? }
+   Body accepts:
+     { date?, text?, html?, content?, mood?, cluster?, section?, sectionPageId?, tags?, linkedGoal? }
 --------------------------------------------------------------------------- */
 router.post('/', async (req, res) => {
   try {
@@ -91,6 +111,7 @@ router.post('/', async (req, res) => {
     const mood = String(req.body?.mood || '');
     const cluster = String(req.body?.cluster || '');
     const section = String(req.body?.section || '');
+    const sectionPageId = req.body?.sectionPageId ? String(req.body.sectionPageId) : null; // NEW
     const tags = Array.isArray(req.body?.tags) ? req.body.tags : [];
     const linkedGoal = req.body?.linkedGoal ?? null;
 
@@ -103,11 +124,12 @@ router.post('/', async (req, res) => {
       mood,
       cluster,
       section,
+      sectionPageId, // NEW
       tags,
       linkedGoal
     });
 
-    // 2) Analyze + extract ripple drafts (NEW)
+    // 2) Analyze + extract ripple drafts (existing)
     const { ripples } = analyzeEntry({
       text: textField,
       html,
@@ -153,7 +175,7 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   try {
     const update = {};
-    ['text','html','mood','cluster','section','tags','linkedGoal','date'].forEach(k => {
+    ['text','html','mood','cluster','section','sectionPageId','tags','linkedGoal','date'].forEach(k => {
       if (k in req.body) update[k] = req.body[k];
     });
 
