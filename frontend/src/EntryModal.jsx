@@ -1,8 +1,9 @@
 // frontend/src/EntryModal.jsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import axios from './api/axiosInstance';
 import toast from 'react-hot-toast';
+import { AuthContext } from './AuthContext.jsx';
 import './modal.css';
 
 /** Ensure a portal root exists (safe on hard refresh) */
@@ -21,15 +22,21 @@ export default function EntryModal({
   onSaved,
   defaultCluster = '',
   defaultTags = [],
+  defaultDate,          // ← added (preferred)
+  date,                 // ← legacy prop, still supported
 }) {
   const root = ensurePortalRoot();
+  const { token } = useContext(AuthContext);
   const textareaRef = useRef(null);
   const [saving, setSaving] = useState(false);
 
   // form state
-  const [text, setText] = useState('');
-  const [mood, setMood] = useState('');
-  const [tags, setTags] = useState(defaultTags.join(', '));
+  const [text, setText]   = useState('');
+  const [mood, setMood]   = useState('');
+  const [tags, setTags]   = useState(defaultTags.join(', '));
+
+  // target date (ISO)
+  const dateISO = date || defaultDate || new Date().toISOString().slice(0,10);
 
   // Lock page scroll while open
   useEffect(() => {
@@ -61,17 +68,24 @@ export default function EntryModal({
     try {
       const cleanTags = tags.split(',').map(t => t.trim()).filter(Boolean);
       const body = {
+        date: dateISO,                 // ← ensure entry lands on selected day
         text,
-        mood: mood.trim(),
+        mood: mood.trim() || null,
         cluster: defaultCluster || '',
         tags: cleanTags,
       };
-      const res = await axios.post('/api/entries', body);
-      onSaved?.(res.data);
+
+      const res = await axios.post('/api/entries', body, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+
       toast.success('Entry saved');
+      onSaved?.(res.data);
+      onClose?.();
     } catch (err) {
       console.error('save entry failed:', err?.response?.data || err.message);
-      toast.error('Could not save entry');
+      toast.error(err?.response?.data?.error || 'Could not save entry');
+    } finally {
       setSaving(false);
     }
   }
@@ -88,7 +102,7 @@ export default function EntryModal({
           onClick={(e) => e.stopPropagation()}
         >
           <div className="sc-modal-header">
-            <h3 id="new-entry-title" className="sc-modal-title">New Entry</h3>
+            <h3 id="new-entry-title" className="sc-modal-title">New Entry — {dateISO}</h3>
             <button className="sc-modal-close" onClick={onClose} aria-label="Close">×</button>
           </div>
 

@@ -1,146 +1,168 @@
 // ─── Load Env ─────────────────────────────
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
 dotenv.config();
 
 /* ───────────── Core ───────────── */
-import express           from 'express';
-import path, { dirname } from 'path';
-import { fileURLToPath } from 'url';
-import mongoose          from 'mongoose';
-import jwt               from 'jsonwebtoken';
+import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
+import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
 
 /* ───────────── Utils & Middleware ───────────── */
-import cors     from 'cors';
-import helmet   from 'helmet';
-import auth     from './middleware/auth.js';
-import authRoutes from './routes/auth.js';
+import cors from "cors";
+import helmet from "helmet";
+import auth from "./middleware/auth.js";
 
-/* ───────────── Route Handlers ───────────── */
-import habitRoutes          from './routes/habits.js';
-import taskRoutes           from './routes/tasks.js';
-import goalRoutes           from './routes/goals.js';
-import gameRoutes           from './routes/games.js';
-import pageRoutes           from './routes/pages.js';
+/* ───────────── Route Handlers (ESM) ───────────── */
+import authRoutes from "./routes/auth.js";
+import habitRoutes from "./routes/habits.js";
+import taskRoutes from "./routes/tasks.js";
+import goalRoutes from "./routes/goals.js";
+import gameRoutes from "./routes/games.js";
+import pageRoutes from "./routes/pages.js";
+import sectionRoutes from "./routes/sections.js";
+import entryRoutes from "./routes/entries.js";
+import appointmentsRouter from "./routes/appointments.js";
+import noteRoutes from "./routes/notes.js";
+import eventsRouter from "./routes/events.js";
+import scheduleRoutes from "./routes/schedule.js";
+import calendarRoutes from "./routes/calendar.js";
+import ripplesRouter from "./routes/ripples.js";
+import suggestedTaskRoutes from "./routes/suggestedTasks.js";
+import clustersRouter from "./routes/clusters.js";
+import uploadRouter from "./utils/upload.js";
+import adminRoutes from "./routes/admin.js";
+import sectionPagesRouter from "./routes/sectionPages.js";
 
-import sectionRoutes        from './routes/sections.js';
-import entryRoutes          from './routes/entries.js';
-import appointmentsRouter   from './routes/appointments.js';
-import noteRoutes           from './routes/notes.js';
-import eventsRouter         from './routes/events.js';
-import scheduleRoutes       from './routes/schedule.js';
-import calendarRoutes       from './routes/calendar.js';
-import ripplesRouter from './routes/ripples.js';
-import suggestedTaskRoutes  from './routes/suggestedTasks.js';
-import clustersRouter from './routes/clusters.js';
-import uploadRouter         from './utils/upload.js';
-import importantEventsRouter   from './routes/important-events.js';
-import adminRoutes from './routes/admin.js';
-import sectionsRouter from './routes/sections.js';
-import sectionPagesRouter from './routes/sectionPages.js';
+/* ───────────── Compat (ESM) ───────────── */
+import compatRouter from "./routes/compat.js";
 
 /* ───────────── GraphQL ───────────── */
-import { createHandler } from 'graphql-http/lib/use/express';
-import schema from './graphql/schema.js';
-import root   from './graphql/resolvers.js';
+import { createHandler } from "graphql-http/lib/use/express";
+import schema from "./graphql/schema.js";
+import root from "./graphql/resolvers.js";
 
 /* ───────────── App Setup ───────────── */
 const __filename = fileURLToPath(import.meta.url);
-const __dirname  = dirname(__filename);
-const app  = express();
+const __dirname = path.dirname(__filename);
+
+const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.set('trust proxy', true);           // Render/Netlify proxy aware
-app.disable('x-powered-by');
+app.set("trust proxy", true);
+app.disable("x-powered-by");
 
 /* ───────────── Global Middleware ───────────── */
-app.use(cors({
-  origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
-  credentials: false, // using Authorization header, not cookies
-}));
+app.use(
+  cors({
+    origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+    credentials: false, // using Authorization header, not cookies
+  })
+);
 
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: 'cross-origin' }, // allow images/icons if hosted elsewhere
-}));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 
-app.use(express.json({ limit: '2mb' })); // TipTap HTML can be chunky
+app.use(express.json({ limit: "2mb" })); // TipTap HTML can be chunky
+
+/* ───────────── Static: uploads (once) ───────────── */
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 /* ───────────── REST Routes ───────────── */
-app.use('/api',                 authRoutes);                 // login / register
+/** Auth: exposes /api/auth/* (and flat /api/* via compat) */
+app.use("/api", authRoutes);
 
-app.use('/api/habits',          auth, habitRoutes);
-app.use('/api/tasks',           auth, taskRoutes);
-app.use('/api/goals',           auth, goalRoutes);
-app.use('/api/games',           auth, gameRoutes);
-app.use('/api/pages',           auth, pageRoutes);
+/** Protected APIs */
+app.use("/api/habits", auth, habitRoutes);
+app.use("/api/tasks", auth, taskRoutes);
+app.use("/api/goals", auth, goalRoutes);
+app.use("/api/games", auth, gameRoutes);
+app.use("/api/pages", auth, pageRoutes);
 
-app.use('/api/sections',        auth, sectionRoutes);
-app.use('/api/entries',         auth, entryRoutes);
-app.use('/api/appointments',    auth, appointmentsRouter);
-app.use('/api/notes',           auth, noteRoutes);
-app.use('/api/events',          auth, eventsRouter);
-app.use('/api/calendar',        auth, calendarRoutes);
-app.use('/api', auth, ripplesRouter);
-app.use('/api/suggested-tasks', auth, suggestedTaskRoutes);
-app.use('/api/clusters',        auth, clustersRouter);
-app.use('/api/upload',          auth, uploadRouter);
-app.use('/api/important-events', auth, importantEventsRouter);
-/* uploads (static) */
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-app.use('/api/admin',           auth, adminRoutes);
-app.use('/api/sections', sectionsRouter);
-app.use('/api/section-pages', sectionPagesRouter);
+app.use("/api/sections", auth, sectionRoutes);
+app.use("/api/section-pages", auth, sectionPagesRouter);
+
+app.use("/api/entries", auth, entryRoutes);
+app.use("/api/appointments", auth, appointmentsRouter);
+app.use("/api/notes", auth, noteRoutes);
+app.use("/api/events", auth, eventsRouter);
+app.use("/api/schedule", auth, scheduleRoutes);
+app.use("/api/calendar", auth, calendarRoutes);
+
+/** Mount ripples ONCE at /api so /api/ripples/:date works (no double "ripples") */
+app.use("/api", auth, ripplesRouter);
+
+/** Other feature routers */
+app.use("/api/suggested-tasks", auth, suggestedTaskRoutes);
+app.use("/api/clusters", auth, clustersRouter);
+app.use("/api/upload", auth, uploadRouter);
+app.use("/api/admin", auth, adminRoutes);
+
+/** Compat LAST: public auth aliases + protected alias bridges */
+app.use("/api", compatRouter);
 
 /* ───────────── GraphQL Endpoint ───────────── */
-app.use('/graphql', createHandler({
-  schema,
-  rootValue: root,
-  context: (req) => {
-    const authHeader = req.headers?.authorization || '';
-    const token      = authHeader.split(' ')[1];
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      return { user: decoded };
-    } catch {
-      return { user: null };
-    }
-  }
-}));
+app.use(
+  "/graphql",
+  createHandler({
+    schema,
+    rootValue: root,
+    context: (req) => {
+      const authHeader = req.headers?.authorization || "";
+      const token = authHeader.split(" ")[1];
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        return { user: decoded };
+      } catch {
+        return { user: null };
+      }
+    },
+  })
+);
 
 /* ───────────── Health Check ───────────── */
-app.get('/health', (_, res) => res.send('OK'));
+app.get("/health", (_, res) => res.send("OK"));
 
 /* ───────────── 404 & Error Handling ───────────── */
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api')) {
-    return res.status(404).json({ error: 'Not found' });
+  if (req.path.startsWith("/api")) {
+    return res.status(404).json({ error: "Not found" });
   }
   next();
 });
 
 app.use((err, req, res, next) => {
-  console.error('💥 Uncaught error:', err);
-  res.status(err.status || 500).json({ error: err.message || 'Server error' });
+  console.error("💥 Uncaught error:", err);
+  res.status(err.status || 500).json({ error: err.message || "Server error" });
 });
 
 /* ───────────── Serve Front-End ───────────── */
-const CLIENT_BUILD_PATH = path.join(__dirname, 'frontend', 'dist');
+const CLIENT_BUILD_PATH = path.join(__dirname, "frontend", "dist");
 app.use(express.static(CLIENT_BUILD_PATH));
 
-app.get('*', (req, res, next) => {
+app.get("*", (req, res, next) => {
   // don’t hijack API/GraphQL/uploads/file requests
-  if (req.path.startsWith('/api') || req.path.startsWith('/graphql') || req.path.startsWith('/uploads')) {
+  if (
+    req.path.startsWith("/api") ||
+    req.path.startsWith("/graphql") ||
+    req.path.startsWith("/uploads")
+  ) {
     return next();
   }
-  res.sendFile(path.join(CLIENT_BUILD_PATH, 'index.html'));
+  res.sendFile(path.join(CLIENT_BUILD_PATH, "index.html"));
 });
 
 /* ───────────── MongoDB Connection ───────────── */
 (async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
-    console.log('✅ Connected to MongoDB Atlas');
+    console.log("✅ Connected to MongoDB Atlas");
   } catch (err) {
-    console.error('❌ MongoDB connection error:', err);
+    console.error("❌ MongoDB connection error:", err);
   }
 })();
 

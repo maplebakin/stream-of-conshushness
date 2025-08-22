@@ -93,18 +93,36 @@ export default function TaskList({ date, header = 'Tasks' }) {
     setTasks(prev => prev.map(t => (t._id === task._id ? updated : t)));
   }
 
+  // --- helper: link a task to the day's journal entry (create entry if missing)
+  async function linkEntryForDate(taskId, dayISO) {
+    if (!taskId || !dayISO) return;
+    try {
+      await axios.post(
+        `/api/tasks/${encodeURIComponent(taskId)}/link-entry`,
+        { date: dayISO, autoCreate: true, title: `Journal for ${dayISO}` },
+        { headers: authHeaders }
+      );
+    } catch (e) {
+      // Non-fatal; task is created/moved even if link fails
+      // console.warn('Link-to-entry failed:', e?.response?.data || e.message);
+    }
+  }
+
   async function addInboxTaskToDay(task) {
     const { data: updated } = await axios.patch(
       `/api/tasks/${task._id}`,
       { dueDate: date },
       { headers: authHeaders }
     );
+    // Optimistic UI first
     setInbox(prev => prev.filter(x => x._id !== task._id));
     setInboxCount(c => Math.max(0, c - 1));
     setTasks(prev => [updated, ...prev]);
+    // Then try to link to journal entry for that date
+    linkEntryForDate(updated._id, date);
   }
 
-  // NEW: create task directly from header composer
+  // NEW: create task directly from header composer (and link it to the day)
   async function createTask() {
     const title = (newTitle || '').trim();
     if (!title) return;
@@ -118,6 +136,8 @@ export default function TaskList({ date, header = 'Tasks' }) {
       setTasks(prev => [data, ...prev]);
       setNewTitle('');
       setShowComposer(false);
+      // Link the freshly created task to this day's journal
+      linkEntryForDate(data._id || data.id, date);
     } catch (e) {
       console.error('Failed to create task', e);
       // optional: toast

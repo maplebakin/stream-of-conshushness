@@ -541,16 +541,44 @@ export default function TaskModal({
     setSaving(true);
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
       if (isEdit) {
+        // Edit existing task
         await axios.patch(`/api/tasks/${task._id}`, body, { headers });
+
+        // Optional: if you want edits in journal view to (re)link too, uncomment:
+        // if (journalMode && (journalDate || body.dueDate)) {
+        //   const linkDate = journalDate || body.dueDate;
+        //   await axios.post(`/api/tasks/${task._id}/link-entry`, { date: linkDate, autoCreate: true }, { headers });
+        // }
       } else {
-        await axios.post('/api/tasks', body, { headers });
+        // Create new task
+        const resp = await axios.post('/api/tasks', body, { headers });
+        const created = resp?.data || {};
+        const newId = created._id || created.id;
+
+        // Auto-link to the journal entry when in journal mode.
+        // Falls back to dueDate if journalDate isn't provided.
+        if (newId && journalMode && (journalDate || body.dueDate)) {
+          const linkDate = journalDate || body.dueDate;
+          try {
+            await axios.post(
+              `/api/tasks/${newId}/link-entry`,
+              { date: linkDate, autoCreate: true, title: `Journal for ${linkDate}` },
+              { headers }
+            );
+          } catch (e) {
+            // non-fatal: task created successfully even if link fails
+            console.warn('Task created, but linking to entry failed:', e?.response?.data || e.message);
+          }
+        }
       }
+
       onSaved?.();
       onClose?.();
     } catch (e) {
       console.error('Task save failed', e);
-      setErr('Could not save task.');
+      setErr(e?.response?.data?.error || 'Could not save task.');
     } finally {
       setSaving(false);
     }

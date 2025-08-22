@@ -1,206 +1,230 @@
 // routes/entries.js
-import express from 'express';
-import Entry from '../models/Entry.js';
-import Ripple from '../models/Ripple.js';
-import auth from '../middleware/auth.js';
-import { analyzeEntry } from '../utils/analyzeEntry.js'; // ← existing
+// ESM version — auto-creates ImportantEvents (date-only) and Appointments (date+time)
+// Fallback: if NLP returns an appointment with no time, create an Important Event instead.
+
+import express from "express";
+import Entry from "../models/Entry.js";
+import ImportantEvent from "../models/ImportantEvent.js";
+import Appointment from "../models/Appointment.js";
+import auth from "../middleware/auth.js";
+import { analyzeEntry } from "../utils/analyzeEntry.js";
 
 const router = express.Router();
 router.use(auth);
 
-/* YYYY-MM-DD in America/Toronto */
-function todayISOInToronto() {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Toronto',
-    year: 'numeric', month: '2-digit', day: '2-digit'
-  });
-  const p = fmt.formatToParts(new Date());
-  const y = p.find(x => x.type === 'year').value;
-  const m = p.find(x => x.type === 'month').value;
-  const d = p.find(x => x.type === 'day').value;
-  return `${y}-${m}-${d}`;
-}
-
-/* Normalize user id from JWT */
 function getUserId(req) {
   return req.user?.userId || req.user?._id || req.user?.id;
 }
 
-/* ───────────────────────── GET /api/entries (optional filters) ─────────────────────────
-   Query (all optional):
-     - ?date=YYYY-MM-DD
-     - ?cluster=Home
-     - ?section=Games                  (legacy string)
-     - ?sectionPageId=<ObjectId>       (NEW: page-scoped room)
-     - ?unassignedCluster=true         (only entries with no cluster)
-     - ?limit=50&offset=0              (optional paging)
---------------------------------------------------------------------------------------- */
-router.get('/', async (req, res) => {
-  try {
-    const {
-      date,
-      cluster,
-      section,
-      sectionPageId,       // NEW
-      unassignedCluster,
-      limit,
-      offset
-    } = req.query;
-
-    const q = { userId: getUserId(req) };
-    if (date) q.date = String(date);
-    if (cluster) q.cluster = String(cluster);
-    if (section) q.section = String(section);
-    if (sectionPageId) q.sectionPageId = String(sectionPageId);
-    if (unassignedCluster === 'true') {
-      q.$or = [{ cluster: '' }, { cluster: null }, { cluster: { $exists: false } }];
-    }
-
-    let query = Entry.find(q).sort({ date: -1, createdAt: -1 });
-
-    // Optional pagination (non-breaking)
-    const lim = Number.isFinite(Number(limit)) ? Math.max(1, parseInt(limit, 10)) : null;
-    const off = Number.isFinite(Number(offset)) ? Math.max(0, parseInt(offset, 10)) : null;
-    if (off !== null) query = query.skip(off);
-    if (lim !== null) query = query.limit(lim);
-
-    const entries = await query.exec();
-    res.json(entries);
-  } catch (err) {
-    console.error('GET /api/entries error:', err);
-    res.status(500).json({ error: 'Failed to fetch entries' });
+// Normalize date (expects YYYY-MM-DD in body; fallback: today)
+function normalizeDate(d) {
+  if (!d) {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
   }
-});
+  return d;
+}
 
-/* ───────────────────────── GET /api/entries/:date ─────────────────────────
-   Return entries for a specific day (YYYY-MM-DD)
-   (Kept for backward compatibility; prefer GET /api/entries?date=YYYY-MM-DD)
---------------------------------------------------------------------------- */
-router.get('/:date', async (req, res) => {
-  try {
-    const entries = await Entry.find({
-      userId: getUserId(req),
-      date: req.params.date
-    }).sort({ createdAt: -1 });
-    res.json(entries);
-  } catch (err) {
-    console.error('GET /api/entries/:date error:', err);
-    res.status(500).json({ error: 'Failed to fetch entries by date' });
-  }
-});
+// HH:MM normalizer (accepts "9:5" → "09:05"; invalid → null)
+function normalizeHHMM(v) {
+  if (!v) return null;
+  const [h = "", m = ""] = String(v).split(":");
+  const hh = String(h).padStart(2, "0");
+  const mm = String(m).padStart(2, "0");
+  const out = `${hh}:${mm}`;
+  return /^\d{2}:\d{2}$/.test(out) ? out : null;
+}
 
-/* ───────────────────────── POST /api/entries ─────────────────────────
-   Create an entry, then analyze it to insert pending Ripples.
-   Body accepts:
-     { date?, text?, html?, content?, mood?, cluster?, section?, sectionPageId?, tags?, linkedGoal? }
---------------------------------------------------------------------------- */
-router.post('/', async (req, res) => {
+/* -------- upserts used by NLP auto-creation -------- */
+async function upsertImportantEvent({ userId, title, date, details = "", cluster = null }) {
+  if (!userId || !title || !date) return;
+  const dup = await ImportantEvent.findOne({ userId, title, date });
+  if (dup) return dup;
+
+  return ImportantEvent.create({
+    userId,
+    title: String(title).trim(),
+    date,
+    description: details || "",
+    cluster: cluster || null,
+    createdAt: new Date(),
+  });
+}
+
+async function upsertAppointment({
+  userId,
+  title,
+  date,
+  timeStart,     // normalized "HH:MM" or null
+  timeEnd = null,
+  location = "",
+  details = "",
+  cluster = null,
+  entryId = null,
+}) {
+  if (!userId || !title || !date || !timeStart) return null;
+
+  const dup = await Appointment.findOne({ userId, title, date, timeStart });
+  if (dup) return dup;
+
+  return Appointment.create({
+    userId,
+    title: String(title).trim(),
+    date,
+    timeStart,
+    timeEnd: timeEnd || null,
+    location: location || "",
+    details: details || "",
+    // keep these extra fields only if your Appointment schema supports them
+    ...(cluster ? { cluster } : {}),
+    ...(entryId ? { entryId } : {}),
+    createdAt: new Date(),
+  });
+}
+
+/* --------------------------- Routes --------------------------- */
+
+// List: /api/entries?section=Games
+router.get("/", async (req, res) => {
   try {
     const userId = getUserId(req);
+    const q = { userId };
+    if (req.query.section) q.section = req.query.section;
+    const rows = await Entry.find(q).sort({ date: -1, createdAt: -1 });
+    res.json(rows);
+  } catch (e) {
+    console.error("GET /entries error", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
-    // accept explicit date or default to "today" in Toronto
-    const entryDate = (req.body?.date && String(req.body.date)) || todayISOInToronto();
+// Get by date
+router.get("/:date", async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const rows = await Entry.find({ userId, date: req.params.date }).sort({ createdAt: -1 });
+    res.json(rows);
+  } catch (e) {
+    console.error("GET /entries/:date error", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
-    // support legacy "content" and prefer "text" if present
-    const textField =
-      (typeof req.body?.text === 'string' && req.body.text) ||
-      (typeof req.body?.content === 'string' && req.body.content) ||
-      '';
+// Create
+router.post("/", async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const { text, html, mood, cluster, tags, linkedGoal, date } = req.body;
 
-    const html = String(req.body?.html || '');
-    const mood = String(req.body?.mood || '');
-    const cluster = String(req.body?.cluster || '');
-    const section = String(req.body?.section || '');
-    const sectionPageId = req.body?.sectionPageId ? String(req.body.sectionPageId) : null; // NEW
-    const tags = Array.isArray(req.body?.tags) ? req.body.tags : [];
-    const linkedGoal = req.body?.linkedGoal ?? null;
-
-    // 1) Create the entry
-    const doc = await Entry.create({
+    const entry = await Entry.create({
       userId,
-      date: entryDate,
-      text: textField,
-      html,
-      mood,
-      cluster,
-      section,
-      sectionPageId, // NEW
-      tags,
-      linkedGoal
+      date: normalizeDate(date),
+      text: text || null,
+      html: html || null,
+      mood: mood || null,
+      cluster: cluster || null,
+      tags: Array.isArray(tags) ? tags : [],
+      linkedGoal: linkedGoal || null,
+      createdAt: new Date(),
     });
 
-    // 2) Analyze + extract ripple drafts (existing)
-    const { ripples } = analyzeEntry({
-      text: textField,
-      html,
-      entryDate,
-      userId,
-      sourceEntryId: doc._id
-    });
+    // Analyze content → auto-create ImportantEvents / Appointments
+    try {
+      const analysis = analyzeEntry({ text, html }) || {};
 
-    // 3) Insert pending ripples (if any)
-    if (Array.isArray(ripples) && ripples.length) {
-      const drafts = ripples.map(r => {
-        // default cluster from the entry if extractor didn't assign any
-        const assigned = Array.isArray(r.assignedClusters) ? r.assignedClusters : [];
-        const finalClusters = assigned.length ? assigned : (cluster ? [cluster] : []);
-        return {
-          userId,
-          sourceEntryId: doc._id,
-          entryDate,
-          extractedText: r.extractedText,
-          originalContext: r.originalContext || textField || '',
-          type: r.type || 'suggestedTask',
-          priority: r.priority || 'low',
-          assignedClusters: finalClusters,
-          assignedCluster: finalClusters[0] || null,
-          dueDate: r.dueDate ?? null,
-          recurrence: r.recurrence || r.repeat || null,
-          status: 'pending'
-        };
-      });
-      await Ripple.insertMany(drafts);
+      // 1) ImportantEvents (date-only)
+      if (Array.isArray(analysis.importantEvents)) {
+        for (const ev of analysis.importantEvents) {
+          const title = (ev?.title || "").trim();
+          const dateISO = ev?.date;
+          if (!title || !dateISO) continue;
+          await upsertImportantEvent({
+            userId,
+            title,
+            date: dateISO,
+            details: ev?.details || ev?.description || "",
+            cluster,
+          });
+        }
+      }
+
+      // 2) Appointments (date + timeStart). Fallback to ImportantEvent if no/invalid time.
+      if (Array.isArray(analysis.appointments)) {
+        for (const ap of analysis.appointments) {
+          const title = (ap?.title || "").trim();
+          const dateISO = ap?.date;
+          const timeNorm = normalizeHHMM(ap?.timeStart || ap?.time); // accept either field
+          if (!title || !dateISO) continue;
+
+          if (timeNorm) {
+            await upsertAppointment({
+              userId,
+              title,
+              date: dateISO,
+              timeStart: timeNorm,
+              timeEnd: normalizeHHMM(ap?.timeEnd) || null,
+              location: ap?.location || "",
+              details: ap?.details || ap?.notes || "",
+              cluster,
+              entryId: entry._id,
+            });
+          } else {
+            // No time → store as Important Event (all-day)
+            await upsertImportantEvent({
+              userId,
+              title,
+              date: dateISO,
+              details: ap?.details || ap?.notes || "",
+              cluster,
+            });
+          }
+        }
+      }
+    } catch (nlpErr) {
+      console.warn("Entry NLP extraction failed (non-fatal):", nlpErr?.message || nlpErr);
     }
 
-    res.status(201).json(doc);
-  } catch (err) {
-    console.error('❌ Entry create failed:', err);
-    res.status(500).json({ error: 'Failed to create entry' });
+    res.status(201).json(entry);
+  } catch (e) {
+    console.error("POST /entries error", e);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-/* ───────────────────────── PATCH /api/entries/:id ─────────────────────────
-   Update entry fields (does not re-run analysis by default)
---------------------------------------------------------------------------- */
-router.patch('/:id', async (req, res) => {
+// Update
+router.patch("/:id", async (req, res) => {
   try {
-    const update = {};
-    ['text','html','mood','cluster','section','sectionPageId','tags','linkedGoal','date'].forEach(k => {
-      if (k in req.body) update[k] = req.body[k];
+    const userId = getUserId(req);
+    const payload = {};
+    ["text", "html", "mood", "cluster", "tags", "linkedGoal", "date"].forEach((k) => {
+      if (k in req.body) payload[k] = req.body[k];
     });
-
     const doc = await Entry.findOneAndUpdate(
-      { _id: req.params.id, userId: getUserId(req) },
-      update,
+      { _id: req.params.id, userId },
+      { $set: payload },
       { new: true }
     );
-    if (!doc) return res.status(404).json({ error: 'Entry not found' });
+    if (!doc) return res.status(404).json({ error: "Not found" });
     res.json(doc);
-  } catch (err) {
-    console.error('PATCH /api/entries/:id error:', err);
-    res.status(500).json({ error: 'Failed to update entry' });
+  } catch (e) {
+    console.error("PATCH /entries/:id error", e);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-/* ───────────────────────── DELETE /api/entries/:id ───────────────────────── */
-router.delete('/:id', async (req, res) => {
+// Delete
+router.delete("/:id", async (req, res) => {
   try {
-    const out = await Entry.deleteOne({ _id: req.params.id, userId: getUserId(req) });
-    if (out.deletedCount === 0) return res.status(404).json({ error: 'Entry not found' });
-    res.sendStatus(204);
-  } catch (err) {
-    console.error('DELETE /api/entries/:id error:', err);
-    res.status(500).json({ error: 'Failed to delete entry' });
+    const userId = getUserId(req);
+    const r = await Entry.findOneAndDelete({ _id: req.params.id, userId });
+    if (!r) return res.status(404).json({ error: "Not found" });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("DELETE /entries/:id error", e);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
