@@ -1,7 +1,9 @@
 // ─────────────────────────────────────────────
 //  suggestMetadata.js  —  refined August 2025
-//  Conservative, thresholded extraction.
+//  Conservative, thresholded extraction + chrono date parsing.
 // ─────────────────────────────────────────────
+
+import * as chrono from "chrono-node";
 
 /* ---------------- mini utils ---------------- */
 const toStr = (v) => (typeof v === 'string' ? v : String(v ?? ''));
@@ -11,6 +13,15 @@ const uniq = (arr) => [...new Set(arr)];
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const tokens = (s) => lower(stripHTML(s)).match(/[a-z0-9#@]+(?:'[a-z]+)?/g) || [];
 const includesWord = (s, w) => new RegExp(`\\b${w}\\b`, 'i').test(s);
+
+// date/time helpers
+const ymd = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+const hhmm = (d) => `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
 
 /* ---------------- lexicons ---------------- */
 // Keep these small + targeted to avoid overfiring.
@@ -182,16 +193,62 @@ function guessClusters(text) {
   return hits;
 }
 
+/* ---------------- chrono integration ---------------- */
+/**
+ * extractWhen(text, baseDate)
+ * Returns array of { title, date, timeStart? } using chrono-node.
+ * We derive "title" as the text before the date phrase; fallback to whole text if needed.
+ */
+function extractWhen(text, baseDate = new Date()) {
+  const clean = stripHTML(toStr(text));
+  const parsed = chrono.parse(clean, baseDate);
+  if (!parsed.length) return [];
+
+  const out = [];
+  for (const p of parsed) {
+    const start = p.start?.date?.();
+    if (!start) continue;
+    const title = (clean.slice(0, p.index).trim() || clean.trim()).replace(/\s+/g, " ");
+    const item = { title, date: ymd(start) };
+    const hour = p.start.get("hour");
+    if (typeof hour === "number") item.timeStart = hhmm(start);
+    out.push(item);
+  }
+
+  // de-dup by title|date
+  const uniqMap = new Map();
+  for (const ev of out) {
+    const key = `${ev.title.toLowerCase()}|${ev.date}`;
+    if (!uniqMap.has(key)) uniqMap.set(key, ev);
+  }
+  return [...uniqMap.values()];
+}
+
 /* ---------------- default export ---------------- */
 /**
- * suggestMetadata(text) ->
- *   { tags: string[], moods: string[], clusters: string[],
- *     context: object, confidence: number }
+ * suggestMetadata(content, baseDate?) ->
+ *   {
+ *     tags: string[],
+ *     moods: string[],
+ *     clusters: string[],
+ *     context: object | null,
+ *     confidence: number,         // 0..1
+ *     timeSensitivity: 'immediate'|'short_term'|'long_term'|'unspecified',
+ *     when: Array<{ title, date, timeStart? }>
+ *   }
  */
-export default function suggestMetadata(content) {
+export default function suggestMetadata(content, baseDate = new Date()) {
   const raw = toStr(content);
   if (!raw.trim()) {
-    return { tags: [], moods: [], clusters: [], context: null, confidence: 0 };
+    return {
+      tags: [],
+      moods: [],
+      clusters: [],
+      context: null,
+      confidence: 0,
+      timeSensitivity: 'unspecified',
+      when: []
+    };
   }
 
   const clean = stripHTML(raw);
@@ -213,7 +270,13 @@ export default function suggestMetadata(content) {
   // 4) Context object
   const context = analyzeContext(clean);
 
-  // 5) Overall confidence (soft heuristic)
+  // 5) Time sensitivity (your existing lexicon heuristic)
+  const timeSensitivity = analyzeTimeSensitivity(clean);
+
+  // 6) Chrono-driven "when" candidates
+  const when = extractWhen(clean, baseDate);
+
+  // 7) Overall confidence (soft heuristic)
   let conf = 0;
   if (tagsExplicit.length) conf += 0.3;
   if (moods.length)        conf += 0.2;
@@ -228,5 +291,5 @@ export default function suggestMetadata(content) {
 
   const confidence = clamp01(conf);
 
-  return { tags, moods, clusters, context, confidence };
+  return { tags, moods, clusters, context, confidence, timeSensitivity, when };
 }

@@ -1,42 +1,74 @@
 // utils/analyzeEntry.js
-// Thin analyzer that delegates to the calmer ripple extractor.
-// Returns shape that entries route already expects (mood/tags optional, ripples present).
+// Centralized analyzer for new/edited entries.
+// Uses suggestMetadata (which includes chrono-node parsing) to derive
+// tags, moods, clusters, context, timeSensitivity, and date/time "when".
+// Returns ImportantEvent candidates (date only) and Appointment candidates (date+time).
 
-import { extractRipplesFromEntry } from './rippleExtractor.js';
+import suggestMetadata from "./suggestMetadata.js";
 
-// Super-light mood/tags placeholders (kept minimal to avoid overreach)
-function quickMood(text) {
-  if (!text) return '';
-  if (/\b(grateful|thankful|joy|happy|win|yay)\b/i.test(text)) return 'up';
-  if (/\b(tired|sad|overwhelmed|anxious|angry)\b/i.test(text)) return 'down';
-  return '';
-}
+/* local helpers */
+const stripHtml = (s) =>
+  String(s || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 
-function quickTags(text) {
-  const tags = new Set();
-  if (/\bcolton\b/i.test(text)) tags.add('Colton');
-  if (/\bcrochet\b/i.test(text)) tags.add('Crochet');
-  if (/\bgame|gaming|steam|switch\b/i.test(text)) tags.add('Games');
-  return Array.from(tags);
+const uniq = (arr) => [...new Set(arr)];
+
+/** very small keyword tagger to keep your legacy behavior */
+function quickTags(s) {
+  const out = new Set();
+  const t = String(s || "").toLowerCase();
+  if (/\bschool\b/.test(t)) out.add("school");
+  if (/\bdoctor|dentist|clinic|appointment\b/.test(t)) out.add("appointment");
+  if (/\bbirthday\b/.test(t)) out.add("birthday");
+  return Array.from(out);
 }
 
 /**
- * analyzeEntry({ text, html, date })
- * - date: 'YYYY-MM-DD' (America/Toronto normalized) – optional
- * - returns: { mood, tags, ripples }
+ * analyzeEntry({ text, html, baseDate }) ->
+ * {
+ *   tags: string[],
+ *   moods: string[],
+ *   clusters: string[],
+ *   context: object|null,
+ *   timeSensitivity: 'immediate'|'short_term'|'long_term'|'unspecified',
+ *   confidence: number,      // 0..1
+ *   importantEvents: [{ title, date }],
+ *   appointments: [{ title, date, timeStart }]
+ * }
  */
-export function analyzeEntry({ text = '', html = '', date = null } = {}) {
-  const body = text || (html ? html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '');
-  const mood = quickMood(body);
-  const tags = quickTags(body);
+export function analyzeEntry({ text = "", html = "", baseDate = new Date() } = {}) {
+  const content = (text || "").trim() || stripHtml(html || "");
 
-  const { ripples } = extractRipplesFromEntry({
-    text: body,
-    entryDate: date || null,
-    originalContext: text || html || ''
-  });
+  // Pull full metadata (uses chrono inside suggestMetadata)
+  const md = suggestMetadata(content, baseDate);
 
-  return { mood, tags, ripples };
+  // Keep your old lightweight tags but merge with md.tags
+  const tags = uniq([...(md.tags || []), ...quickTags(content)]).slice(0, 12);
+
+  // Split chrono results into event vs appointment candidates
+  const when = Array.isArray(md.when) ? md.when : [];
+  const importantEvents = [];
+  const appointments = [];
+  for (const w of when) {
+    if (!w) continue;
+    const { title, date, timeStart } = w;
+    if (!title || !date) continue;
+    if (timeStart) {
+      appointments.push({ title, date, timeStart });
+    } else {
+      importantEvents.push({ title, date });
+    }
+  }
+
+  return {
+    tags,
+    moods: md.moods || [],
+    clusters: md.clusters || [],
+    context: md.context ?? null,
+    timeSensitivity: md.timeSensitivity || "unspecified",
+    confidence: typeof md.confidence === "number" ? md.confidence : 0,
+    importantEvents,
+    appointments,
+  };
 }
 
 export default analyzeEntry;

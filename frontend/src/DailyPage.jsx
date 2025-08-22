@@ -1,5 +1,5 @@
 // frontend/src/DailyPage.jsx
-import React, { useEffect, useMemo, useState, useContext } from 'react';
+import React, { useEffect, useMemo, useState, useContext, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
@@ -11,10 +11,11 @@ import EntryModal from './adapters/EntryModal.default.jsx';
 import AppointmentModal from './adapters/AppointmentModal.default.jsx';
 import { renderSafe } from './utils/safeRender.js';
 import { toDisplayDate } from './utils/date.js';
-import { toDisplay } from './utils/display.js'; // ← render-safe guard
+import { toDisplay } from './utils/display.js';
 import './Main.css';
 import './dailypage.css';
 
+/* ---------- Toronto-safe date helpers ---------- */
 function todayISOInToronto() {
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Toronto',
@@ -29,7 +30,42 @@ function toISO(d) {
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
+function formatHM(hhmm) {
+  if (!hhmm) return null;
+  const [hStr, mStr] = hhmm.split(':');
+  if (hStr == null || mStr == null) return hhmm;
+  const h = Number(hStr), m = Number(mStr);
+  const ampm = h < 12 ? 'AM' : 'PM';
+  const hour12 = ((h % 12) || 12);
+  return `${hour12}:${String(m).padStart(2,'0')} ${ampm}`;
+}
 
+/* ---------- entry filtering helpers ---------- */
+function isoFromDateLike(val) {
+  if (!val) return '';
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+}
+function entryDateISO(en) {
+  return en?.date || en?.dateISO || isoFromDateLike(en?.createdAt) || '';
+}
+function stripHtml(html) {
+  if (typeof html !== 'string') return '';
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .trim();
+}
+function entryHasMeaningfulText(en) {
+  const t = typeof en?.text === 'string' ? en.text : '';
+  const c = typeof en?.content === 'string' ? en.content : '';
+  const plain = (t || stripHtml(c)).replace(/\s+/g, ' ').trim();
+  return plain.length > 0;
+}
+
+/* ===================================================== */
 export default function DailyPage() {
   const { date: routeDate } = useParams();
   const navigate = useNavigate();
@@ -46,10 +82,17 @@ export default function DailyPage() {
   // ENTRIES
   const [entries, setEntries] = useState([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
-  const [unassignedOnly, setUnassignedOnly] = useState(() =>
-    localStorage.getItem('entries_unassigned_only') === '1'
+  const [unassignedOnly, setUnassignedOnly] = useState(
+    () => localStorage.getItem('entries_unassigned_only') === '1'
   );
 
+  // AGENDA: appointments + events (+ important-events)
+  const [appointments, setAppointments] = useState([]);
+  const [events,       setEvents]       = useState([]);
+  const [important,    setImportant]    = useState([]); // NEW: important-events
+  const [loadingAgenda, setLoadingAgenda] = useState(false);
+
+  /* ---------- route sync ---------- */
   useEffect(() => {
     if (!routeDate) {
       navigate(`/day/${dateISO}`, { replace: true });
@@ -59,6 +102,7 @@ export default function DailyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeDate]);
 
+  /* ---------- carry-forward ---------- */
   useEffect(() => {
     if (!autoCarry) return;
     if (dateISO !== todayISO) return;
@@ -92,29 +136,36 @@ export default function DailyPage() {
     }
   }
 
-  // Load entries for the day
-  async function loadEntries() {
-    if (!token) return;
+  /* ---------- load entries (FILTERED) ---------- */
+  const loadEntries = useCallback(async () => {
+    if (!token || !dateISO) return;
     setLoadingEntries(true);
     try {
-      const params = new URLSearchParams({ date: dateISO });
-      if (unassignedOnly) params.set('unassignedCluster', 'true');
-
-      const res = await axios.get(`/api/entries?${params.toString()}`, {
+      const res = await axios.get(`/api/entries/${dateISO}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setEntries(Array.isArray(res.data) ? res.data : []);
-    } catch {
+      let list = Array.isArray(res.data) ? res.data : [];
+      list = list.filter(e => entryDateISO(e) === dateISO);      // date match
+      list = list.filter(entryHasMeaningfulText);                 // non-empty
+      if (unassignedOnly) list = list.filter(e => !e?.cluster || e.cluster === '');
+      setEntries(list);
+    } catch (err) {
+      console.error('loadEntries error', err?.message || err);
       setEntries([]);
     } finally {
       setLoadingEntries(false);
     }
-  }
-  useEffect(() => { loadEntries(); }, [dateISO, token, unassignedOnly]);
+  }, [token, dateISO, unassignedOnly]);
+
+  useEffect(() => { loadEntries(); }, [loadEntries]);
 
   function handleEntryUpdated(updated) {
-    setEntries(prev => prev.map(e => e._id === updated._id ? updated : e));
-    if (unassignedOnly && updated.cluster && updated.cluster !== '') {
+    const stillToday = entryDateISO(updated) === dateISO && entryHasMeaningfulText(updated);
+    setEntries(prev => {
+      const next = prev.map(e => e._id === updated._id ? updated : e);
+      return stillToday ? next : next.filter(e => e._id !== updated._id);
+    });
+    if (stillToday && unassignedOnly && updated.cluster && updated.cluster !== '') {
       setEntries(prev => prev.filter(e => e._id !== updated._id));
     }
   }
@@ -122,6 +173,69 @@ export default function DailyPage() {
     setTaskListKey(k => k + 1);
   }
 
+  /* ---------- load agenda (appointments + events + important) ---------- */
+  const loadAgenda = useCallback(async () => {
+    if (!token || !dateISO) return;
+    setLoadingAgenda(true);
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      const qs = `from=${dateISO}&to=${dateISO}`;
+      const [apptRes, evtRes, impRes] = await Promise.all([
+        axios.get(`/api/appointments?${qs}`,      { headers }),
+        axios.get(`/api/events?${qs}`,            { headers }),
+        axios.get(`/api/important-events?${qs}`,  { headers }).catch(() => ({ data: [] })), // NEW: tolerate old servers
+      ]);
+      setAppointments(Array.isArray(apptRes.data) ? apptRes.data : []);
+      setEvents(Array.isArray(evtRes.data) ? evtRes.data : []);
+      setImportant(Array.isArray(impRes.data) ? impRes.data : []);
+    } catch (err) {
+      console.error('loadAgenda error', err?.message || err);
+      setAppointments([]); setEvents([]); setImportant([]);
+    } finally {
+      setLoadingAgenda(false);
+    }
+  }, [token, dateISO]);
+
+  useEffect(() => { loadAgenda(); }, [loadAgenda]);
+
+  /* ---------- timeline compute ---------- */
+  const timeline = useMemo(() => {
+    const appts = (appointments || []).map(a => ({
+      _id: a._id,
+      type: 'appointment',
+      title: a.title || '(untitled)',
+      date: a.date,
+      time: a.timeStart || null,
+      location: a.location || '',
+    }));
+    const evs = (events || []).map(e => ({
+      _id: e._id,
+      type: 'event',
+      title: e.title || '(untitled)',
+      date: e.date,
+      time: null,
+      pinned: !!e.pinned,
+    }));
+    const imps = (important || []).map(e => ({ // NEW
+      _id: e._id,
+      type: 'important',
+      title: e.title || '(untitled)',
+      date: e.date,
+      time: null,
+      note: e.details || e.description || '',
+    }));
+    const all = [...appts, ...imps, ...evs];
+    all.sort((a, b) => {
+      const ta = a.time ? a.time : '24:00';
+      const tb = b.time ? b.time : '24:00';
+      if (ta < tb) return -1;
+      if (ta > tb) return 1;
+      return (a.title || '').localeCompare(b.title || '');
+    });
+    return all;
+  }, [appointments, events, important]);
+
+  /* ---------- render ---------- */
   return (
     <main className="daily-page">
       <header className="daily-header">
@@ -162,10 +276,16 @@ export default function DailyPage() {
               </button>
             </>
           )}
-          <button className="button bg-lantern text-ink rounded-button px-4 py-2 font-thread shadow-soft hover:bg-plum hover:text-mist transition-all" onClick={() => setShowEntryModal(true)}>
+          <button
+            className="button bg-lantern text-ink rounded-button px-4 py-2 font-thread shadow-soft hover:bg-plum hover:text-mist transition-all"
+            onClick={() => setShowEntryModal(true)}
+          >
             + New Entry
           </button>
-          <button className="button bg-spool text-ink rounded-button px-4 py-2 font-thread shadow-soft hover:bg-plum hover:text-mist transition-all" onClick={() => setShowApptModal(true)}>
+          <button
+            className="button bg-spool text-ink rounded-button px-4 py-2 font-thread shadow-soft hover:bg-plum hover:text-mist transition-all"
+            onClick={() => setShowApptModal(true)}
+          >
             + Add appointment
           </button>
         </div>
@@ -192,6 +312,10 @@ export default function DailyPage() {
                   const next = !unassignedOnly;
                   setUnassignedOnly(next);
                   localStorage.setItem('entries_unassigned_only', next ? '1' : '0');
+                  setEntries(prev => next
+                    ? prev.filter(e => !e?.cluster || e.cluster === '')
+                    : prev
+                  );
                 }}
                 title="Show only entries without a cluster"
               >
@@ -205,10 +329,8 @@ export default function DailyPage() {
             )}
 
             {entries.map(en => {
-              // Render-safe entry text: tolerate strings, numbers, booleans; stringify arrays/objects.
               const safeText =
                 toDisplay(en?.text ?? en?.content ?? '') || <span className="muted">(no text)</span>;
-
               return (
                 <div key={en._id} className="entry-card">
                   <div className="entry-text">{safeText}</div>
@@ -232,13 +354,52 @@ export default function DailyPage() {
 
         <aside className="daily-side">
           <div className="panel">
-            <h3 className="font-thread text-vein">Appointments & Events</h3>
-            <p className="muted font-glow">Appointments you add show here.</p>
+            <div className="side-header">
+              <h3 className="font-thread text-vein">Appointments & Events</h3>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="button chip" onClick={loadAgenda} title="Refresh agenda">Refresh</button>
+              </div>
+            </div>
+
+            {loadingAgenda && <p className="muted">Loading…</p>}
+            {!loadingAgenda && timeline.length === 0 && (
+              <p className="muted">Nothing scheduled or logged for this day.</p>
+            )}
+
+            {!loadingAgenda && timeline.length > 0 && (
+              <ul className="agenda-list">
+                {timeline.map(item => (
+                  <li key={`${item.type}-${item._id}`} className="agenda-item">
+                    <span className="agenda-bullet" aria-hidden="true">
+                      {item.type === 'appointment' ? '🗓️' : item.type === 'important' ? '⭐' : '📌'}
+                    </span>
+                    <div className="agenda-main">
+                      <div className="agenda-title">
+                        {item.title}
+                        {item.type === 'important' && <span className="muted" style={{ marginLeft: 8 }}>(Important)</span>}
+                      </div>
+                      <div className="agenda-meta muted">
+                        {item.type === 'appointment' ? (
+                          <>
+                            {item.time ? formatHM(item.time) : 'All day'}
+                            {item.location ? ` · ${item.location}` : ''}
+                          </>
+                        ) : (
+                          <>All day</>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
+
           <div className="panel">
             <h3 className="font-thread text-vein">Habits</h3>
             <p className="muted font-glow">Coming in Phase 4.</p>
           </div>
+
           <div className="panel">
             <h3 className="font-thread text-vein">Hourly Schedule</h3>
             <p className="muted font-glow">Collapsible block coming in Phase 5.</p>
@@ -250,14 +411,21 @@ export default function DailyPage() {
         renderSafe(EntryModal, {
           defaultDate: dateISO,
           onClose: () => setShowEntryModal(false),
-          onSaved: () => { setTaskListKey(k => k + 1); loadEntries(); }
+          onSaved: () => {
+            setTaskListKey(k => k + 1);
+            loadEntries();
+            loadAgenda();
+          }
         }, 'EntryModal')
       }
 
       {showApptModal &&
         renderSafe(AppointmentModal, {
           defaultDate: dateISO,
-          onClose: () => setShowApptModal(false)
+          onClose: () => {
+            setShowApptModal(false);
+            loadAgenda();
+          }
         }, 'AppointmentModal')
       }
     </main>

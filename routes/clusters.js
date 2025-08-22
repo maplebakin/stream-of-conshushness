@@ -197,5 +197,14 @@ router.get('/:key/dashboard', async (req, res) => {
     res.status(500).json({ error: 'Failed to load cluster dashboard' });
   }
 });
+// Alias: /api/sections/rename  (temporary stub so UI doesn't 404 during wiring)
+router.post("/sections/rename", auth, (req, res) => {
+  res.status(501).json({
+    note: "Alias present but not implemented",
+    expectedBody: { id: "<sectionId>", name: "<newName>" },
+    hint: "Either implement a rename handler in routes/sections.js or do a PUT /api/sections/:id with { name }.",
+    path: req.originalUrl,
+  });
+});
 
 export default router;
