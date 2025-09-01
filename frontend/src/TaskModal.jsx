@@ -23,9 +23,7 @@ function addDays(iso, n) {
   return `${y}-${m}-${day}`;
 }
 
-function addWeeks(iso, n) {
-  return addDays(iso, 7 * n);
-}
+function addWeeks(iso, n) { return addDays(iso, 7 * n); }
 
 function nextWeekdayFrom(todayISO, targetDow /* 0=Sun..6=Sat */) {
   const d = new Date(`${todayISO}T12:00:00Z`);
@@ -89,7 +87,6 @@ function extractContextualDate(text, journalDate, todayISO) {
   const todayObj = new Date(`${todayISO}T12:00:00Z`);
   const isHistoricalJournal = journalDateObj < todayObj;
 
-  // journal-relative tokens
   if (isHistoricalJournal) {
     if (/\btomorrow\b/i.test(text)) return addDays(journalDateISO, 1);
 
@@ -103,7 +100,6 @@ function extractContextualDate(text, journalDate, todayISO) {
     if (mNextDow) return nextWeekdayFrom(journalDateISO, DOW[mNextDow[1]]);
   }
 
-  // fall back to standard
   return extractDateTokenFromText(text, todayISO);
 }
 
@@ -114,20 +110,12 @@ function extractTaskRelationships(text) {
   const afterPattern = /after\s+(?:I\s+)?(finish|complete|do)\s+([^,]+),?\s*(?:I\s+)?(need to|should|will|plan to)\s+(.+?)(?:[.!?]|$)/gi;
   let match;
   while ((match = afterPattern.exec(text)) !== null) {
-    dependencies.push({
-      type: 'after',
-      prerequisite: match[2].trim(),
-      action: match[4].trim()
-    });
+    dependencies.push({ type: 'after', prerequisite: match[2].trim(), action: match[4].trim() });
   }
 
   const beforePattern = /(?:before|prior to)\s+([^,]+),?\s*(?:remember to|need to|should|must|plan to)\s+(.+?)(?:[.!?]|$)/gi;
   while ((match = beforePattern.exec(text)) !== null) {
-    triggers.push({
-      type: 'before',
-      trigger: match[1].trim(),
-      action: match[2].trim()
-    });
+    triggers.push({ type: 'before', trigger: match[1].trim(), action: match[2].trim() });
   }
 
   return { dependencies, triggers };
@@ -166,43 +154,29 @@ function inferTaskProperties(text) {
 function shouldExtractAsTask(text) {
   if (/\b(felt|feeling|feel|thought|thinking|remember when|missed|loved|hated)\b/gi.test(text)) {
     const actionableWords = /\b(need to|should|must|have to|gonna|will|plan to)\b/gi;
-    if (!(actionableWords.test(text))) {
-      return { extract: false, reason: 'emotional_processing' };
-    }
+    if (!(actionableWords.test(text))) return { extract: false, reason: 'emotional_processing' };
   }
-
   if (/\b(finished|completed|did|went|had)\b/gi.test(text) &&
       !/\b(need to|should|next time|again|remember to|plan to)\b/gi.test(text)) {
     return { extract: false, reason: 'past_action' };
   }
-
-  if (/\b(need to|should|must|have to|gonna|will|plan to)\b/gi.test(text)) {
-    return { extract: true, confidence: 0.9 };
-  }
-
-  if (/\b(should I|when should|how do I|what if I)\b/gi.test(text)) {
-    return { extract: true, confidence: 0.6, reason: 'questioning' };
-  }
-
+  if (/\b(need to|should|must|have to|gonna|will|plan to)\b/gi.test(text)) return { extract: true, confidence: 0.9 };
+  if (/\b(should I|when should|how do I|what if I)\b/gi.test(text)) return { extract: true, confidence: 0.6, reason: 'questioning' };
   return { extract: true, confidence: 0.5 };
 }
 
-/* ───────────────────────── Original parsing functions (kept for compatibility) ───────────────────────── */
+/* ───────────────────────── Original parsing helpers ───────────────────────── */
 function parseAbsoluteOrKeywordDate(token, todayISO) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(token)) return token;
   const t = token.toLowerCase();
   if (t === 'today') return todayISO;
   if (t === 'tomorrow' || t === 'tmrw' || t === 'tmmrw') return addDays(todayISO, 1);
   if (t === 'yesterday') return addDays(todayISO, -1);
-
-  // weeks
   if (t === 'next week') return addWeeks(todayISO, 1);
   const w1 = t.match(/^in\s+(\d+)\s+weeks?$/);
   if (w1) return addWeeks(todayISO, Number(w1[1] || '0'));
-
   const m1 = t.match(/^next\s+(sun|mon|tue|tues|wed|thu|thurs|fri|sat|sunday|monday|tuesday|wednesday|thursday|friday|saturday)$/i);
   if (m1) return nextWeekdayFrom(todayISO, DOW[m1[1]]);
-
   const m2 = t.match(/^(sun|mon|tue|tues|wed|thu|thurs|fri|sat|sunday|monday|tuesday|wednesday|thursday|friday|saturday)$/i);
   if (m2) {
     const target = DOW[m2[1]];
@@ -210,13 +184,10 @@ function parseAbsoluteOrKeywordDate(token, todayISO) {
     if (d.getUTCDay() === target) return todayISO;
     return nextWeekdayFrom(todayISO, target);
   }
-
   const m3 = t.match(/^in\s+(\d+)\s+days?$/);
   if (m3) return addDays(todayISO, Number(m3[1] || '0'));
-
   const m4 = t.match(/^(\d+)\s+days?\s*(from\s*)?now$/);
   if (m4) return addDays(todayISO, Number(m4[1] || '0'));
-
   return '';
 }
 
@@ -224,22 +195,16 @@ function parseRRuleFromText(text) {
   const s = text.toLowerCase();
   if (/\bweekdays?\b/.test(s)) return 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR';
   if (/\bweekends?\b/.test(s)) return 'FREQ=WEEKLY;BYDAY=SA,SU';
-
-  let m = s.match(/\bevery\s+(\d+)\s+days?\b/);
-  if (m) return `FREQ=DAILY;INTERVAL=${m[1]}`;
-
+  let m = s.match(/\bevery\s+(\d+)\s+days?\b/); if (m) return `FREQ=DAILY;INTERVAL=${m[1]}`;
   if (/\bevery\s+other\s+day\b/.test(s)) return 'FREQ=DAILY;INTERVAL=2';
-
   m = s.match(/\bevery\s+((?:sun|mon|tue|tues|wed|thu|thurs|fri|sat)(?:\s*,\s*(?:sun|mon|tue|tues|wed|thu|thurs|fri|sat))*)\b/);
   if (m) {
     const days = m[1].split(/\s*,\s*/).map(d => BYDAY[DOW[d]]);
     if (days.length) return `FREQ=WEEKLY;BYDAY=${Array.from(new Set(days)).join(',')}`;
   }
-
   m = s.match(/\bevery\s+(sun|mon|tue|tues|wed|thu|thurs|fri|sat|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
   if (m) return `FREQ=WEEKLY;BYDAY=${BYDAY[DOW[m[1]]]}`;
-
-  if (/\bevery\s+month\b/.test(s) || /\bmonthly\b/.test(s)) {
+  if (/\bmonthly\b/.test(s) || /\bevery\s+month\b/.test(s)) {
     const mday = s.match(/\bon\s+the?\s+(\d{1,2})(?:st|nd|rd|th)?\b/);
     if (mday) {
       const n = Math.max(1, Math.min(31, Number(mday[1])));
@@ -255,28 +220,17 @@ function parseRRuleFromText(text) {
     }
     return 'FREQ=MONTHLY';
   }
-  if (/\bevery\s+year\b/.test(s) || /\byearly\b/.test(s) || /\bannually\b/.test(s)) {
-    return 'FREQ=YEARLY';
-  }
-
-  if (/\bevery\s+week\b/.test(s) || /\bweekly\b/.test(s)) {
-    return 'FREQ=WEEKLY';
-  }
-
-  if (/\bevery\s+day\b/.test(s) || /\bdaily\b/.test(s)) {
-    return 'FREQ=DAILY';
-  }
-
+  if (/\byearly\b|\bannually\b/.test(s)) return 'FREQ=YEARLY';
+  if (/\bweekly\b|\bevery\s+week\b/.test(s)) return 'FREQ=WEEKLY';
+  if (/\bdaily\b|\bevery\s+day\b/.test(s)) return 'FREQ=DAILY';
   return '';
 }
 
 function extractClusterFromText(text) {
   let m = text.match(/#([A-Za-z0-9][\w-]{0,40})/);
   if (m) return m[1];
-
   m = text.match(/\bcluster:(\S+)/i);
   if (m) return m[1].replace(/[^\w-]/g, '');
-
   return '';
 }
 
@@ -286,7 +240,6 @@ function extractDateTokenFromText(text, todayISO) {
     const d = parseAbsoluteOrKeywordDate(atTok[1], todayISO);
     if (d) return d;
   }
-
   const candidates = ['today','tomorrow','tmrw','yesterday','next week', ...Object.keys(DOW)];
   for (const cand of candidates) {
     const rx = new RegExp(`\\b${cand.replace(' ', '\\s+')}\\b`, 'i');
@@ -295,22 +248,16 @@ function extractDateTokenFromText(text, todayISO) {
       if (d) return d;
     }
   }
-
   const m1 = text.match(/\bnext\s+(sun|mon|tue|tues|wed|thu|thurs|fri|sat|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i);
   if (m1) return parseAbsoluteOrKeywordDate(`next ${m1[1]}`, todayISO);
-
   const mWeeks = text.match(/\bin\s+(\d+)\s+weeks?\b/i);
   if (mWeeks) return parseAbsoluteOrKeywordDate(`in ${mWeeks[1]} weeks`, todayISO);
-
   const m2 = text.match(/\bin\s+(\d+)\s+days?\b/i);
   if (m2) return parseAbsoluteOrKeywordDate(`in ${m2[1]} days`, todayISO);
-
   const m3 = text.match(/\b(\d+)\s+days?\s*(from\s*)?now\b/i);
   if (m3) return parseAbsoluteOrKeywordDate(`${m3[1]} days from now`, todayISO);
-
   const m4 = text.match(/\b(\d{4}-\d{2}-\d{2})\b/);
   if (m4) return m4[1];
-
   return '';
 }
 
@@ -331,7 +278,6 @@ function stripSyntaxFromTitle(raw) {
     .replace(/\bon\s+the?\s+(first|second|third|fourth|last)\s+(sun|mon|tue|tues|wed|thu|thurs|fri|sat)\b/gi, '')
     .replace(/\b(next\s+(sun|mon|tue|tues|wed|thu|thurs|fri|sat)(?:day)?)\b/gi, '')
     .replace(/\b(today|tomorrow|tmrw|yesterday|next week)\b/gi, '');
-
   out = out.replace(/\s+/g, ' ').trim();
   return out;
 }
@@ -429,28 +375,13 @@ function TaskSuggestion({ task, onAccept, onModify, onReject }) {
       </div>
 
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-        <button
-          type="button"
-          className="chip"
-          onClick={() => onReject(task)}
-          style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}
-        >
+        <button type="button" className="chip" onClick={() => onReject(task)} style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}>
           Ignore
         </button>
-        <button
-          type="button"
-          className="chip"
-          onClick={() => onModify(task)}
-          style={{ backgroundColor: '#fef3c7', color: '#d97706' }}
-        >
+        <button type="button" className="chip" onClick={() => onModify(task)} style={{ backgroundColor: '#fef3c7', color: '#d97706' }}>
           Modify
         </button>
-        <button
-          type="button"
-          className="chip"
-          onClick={() => onAccept(task)}
-          style={{ backgroundColor: '#dcfce7', color: '#16a34a' }}
-        >
+        <button type="button" className="chip" onClick={() => onAccept(task)} style={{ backgroundColor: '#dcfce7', color: '#16a34a' }}>
           Add Task
         </button>
       </div>
@@ -475,7 +406,6 @@ export default function TaskModal({
   onSaved,
   defaultCluster = '',
   defaultDate = '',
-  // New journal mode props
   journalMode = false,
   journalText = '',
   journalDate = ''
@@ -489,10 +419,13 @@ export default function TaskModal({
   const [selectedTask, setSelectedTask] = useState(null);
 
   // Regular task state
+  const initialCluster =
+    (task && (task.cluster ?? (Array.isArray(task.clusters) ? task.clusters[0] : ''))) || defaultCluster;
+
   const [smart, setSmart] = useState('');
   const [title, setTitle] = useState(task?.title || '');
   const [notes, setNotes] = useState(task?.notes || '');
-  const [cluster, setCluster] = useState(task?.cluster || defaultCluster);
+  const [cluster, setCluster] = useState(initialCluster);
   const [dueDate, setDueDate] = useState(task?.dueDate || defaultDate || '');
   const [rrule, setRRule] = useState(task?.rrule || '');
   const [saving, setSaving] = useState(false);
@@ -526,39 +459,45 @@ export default function TaskModal({
   useEffect(() => setErr(''), [title, dueDate, rrule, cluster, smart]);
 
   async function handleSave() {
+    const normalizedTitle = (title || '').trim() || stripSyntaxFromTitle(smart);
+    if (!normalizedTitle) { setErr('Please add a title.'); return; }
+
+    // match backend model:
+    // - dueDate: string 'YYYY-MM-DD' or null
+    // - clusters: string[]
+    // - sections: string[] (we’ll keep empty unless you add a field)
+    const normalizedDue = (dueDate && dueDate.trim()) ? dueDate : null;
+    const normalizedCluster = (cluster && cluster.trim()) ? cluster.trim() : '';
     const body = {
-      title: (title || '').trim() || stripSyntaxFromTitle(smart),
+      title: normalizedTitle,
       notes: (notes || '').trim(),
-      cluster: cluster || '',
-      dueDate: dueDate || '',
-      rrule: rrule || ''
+      dueDate: normalizedDue,
+      rrule: rrule || '',
+      clusters: normalizedCluster ? [normalizedCluster] : [],
+      sections: [],
+
+      // back-compat for old handlers that read singulars or have virtual setters:
+      cluster: normalizedCluster || undefined,
+      section: undefined,
     };
-    if (!body.title) {
-      setErr('Please add a title.');
-      return;
-    }
 
     setSaving(true);
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
       if (isEdit) {
-        // Edit existing task
         await axios.patch(`/api/tasks/${task._id}`, body, { headers });
 
-        // Optional: if you want edits in journal view to (re)link too, uncomment:
+        // Optional: keep (re)link behavior for journal mode
         // if (journalMode && (journalDate || body.dueDate)) {
         //   const linkDate = journalDate || body.dueDate;
         //   await axios.post(`/api/tasks/${task._id}/link-entry`, { date: linkDate, autoCreate: true }, { headers });
         // }
       } else {
-        // Create new task
         const resp = await axios.post('/api/tasks', body, { headers });
         const created = resp?.data || {};
         const newId = created._id || created.id;
 
-        // Auto-link to the journal entry when in journal mode.
-        // Falls back to dueDate if journalDate isn't provided.
         if (newId && journalMode && (journalDate || body.dueDate)) {
           const linkDate = journalDate || body.dueDate;
           try {
@@ -568,7 +507,6 @@ export default function TaskModal({
               { headers }
             );
           } catch (e) {
-            // non-fatal: task created successfully even if link fails
             console.warn('Task created, but linking to entry failed:', e?.response?.data || e.message);
           }
         }
@@ -693,43 +631,24 @@ export default function TaskModal({
 
               <label className="field">
                 <span>Title</span>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="What needs doing?"
-                />
+                <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What needs doing?" />
               </label>
 
               <label className="field">
                 <span>Notes</span>
-                <textarea
-                  rows={3}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Optional details"
-                />
+                <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional details" />
               </label>
 
               <div className="field-grid">
                 <label className="field">
                   <span>Cluster</span>
-                  <input
-                    type="text"
-                    value={cluster}
-                    onChange={(e) => setCluster(e.target.value)}
-                    placeholder="e.g., Home, Work"
-                  />
+                  <input type="text" value={cluster} onChange={(e) => setCluster(e.target.value)} placeholder="e.g., Home, Work" />
                 </label>
 
                 <label className="field">
                   <span>Due date</span>
                   <div style={{display:'flex', gap:8}}>
-                    <input
-                      type="date"
-                      value={dueDate}
-                      onChange={(e) => setDueDate(e.target.value)}
-                    />
+                    <input type="date" value={dueDate || ''} onChange={(e) => setDueDate(e.target.value)} />
                     <div className="chip-row" style={{display:'flex', gap:6}}>
                       <button type="button" className="chip" onClick={()=> setDueDate(today)}>Today</button>
                       <button type="button" className="chip" onClick={()=> setDueDate(addDays(today, 1))}>Tomorrow</button>
@@ -784,7 +703,7 @@ export default function TaskModal({
     );
   }
 
-  // Regular Task Modal (original functionality)
+  // Regular Task Modal
   return (
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && !saving && onClose?.()}>
       <div className="modal-card" onKeyDown={(e)=> { if (e.key === 'Escape' && !saving) onClose?.(); }}>
@@ -821,59 +740,34 @@ export default function TaskModal({
                   Repeat: {smartPreview.iRRule}
                 </button>
               )}
-              <button
-                type="button"
-                className="chip"
-                onClick={() => { setSmart(stripSyntaxFromTitle(smart)); }}
-              >
+              <button type="button" className="chip" onClick={() => { setSmart(stripSyntaxFromTitle(smart)); }}>
                 Clear syntax from title
               </button>
             </div>
           )}
         </label>
 
-        {/* Manual fields (always available) */}
+        {/* Manual fields */}
         <label className="field">
           <span>Title</span>
-          <input
-            autoFocus
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="What needs doing?"
-          />
+          <input autoFocus type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What needs doing?" />
         </label>
 
         <label className="field">
           <span>Notes</span>
-          <textarea
-            rows={3}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Optional details"
-          />
+          <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional details" />
         </label>
 
         <div className="field-grid">
           <label className="field">
             <span>Cluster</span>
-            <input
-              type="text"
-              value={cluster}
-              onChange={(e) => setCluster(e.target.value)}
-              placeholder="e.g., Home, Colton"
-            />
+            <input type="text" value={cluster} onChange={(e) => setCluster(e.target.value)} placeholder="e.g., Home, Colton" />
           </label>
 
           <label className="field">
             <span>Due date</span>
             <div style={{display:'flex', gap:8}}>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-              />
-              {/* Quick date helpers */}
+              <input type="date" value={dueDate || ''} onChange={(e) => setDueDate(e.target.value)} />
               <div className="chip-row" style={{display:'flex', gap:6}}>
                 <button type="button" className="chip" onClick={()=> setDueDate(today)}>Today</button>
                 <button type="button" className="chip" onClick={()=> setDueDate(addDays(today, 1))}>Tomorrow</button>

@@ -3,6 +3,7 @@ import { useEffect, useState, useContext } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import Header from './Header.jsx';
+import SafeHTML from './components/SafeHTML.jsx'; // (top of file)
 
 export default function GamePage() {
   const { slug } = useParams();
@@ -74,7 +75,18 @@ export default function GamePage() {
             entries.map(entry => (
               <div className="entry-card" key={entry._id}>
                 <h4>{entry.date}</h4>
-                <div dangerouslySetInnerHTML={{ __html: entry.content }} />
+                
+
+<SafeHTML
+  className="entry-text"
+  html={
+    (entry?.html && entry.html.length)
+      ? entry.html
+      : (typeof entry?.content === 'string' && /<[^>]+>/.test(entry.content))
+        ? entry.content
+        : (entry?.text ?? '').replaceAll('\n', '<br/>')
+  }
+/>
                 {entry.tags && (
                   <div className="tags">
                     {(Array.isArray(entry.tags) ? entry.tags : (entry.tags || '').split(','))

@@ -1,7 +1,8 @@
-// frontend/src/components/DailyRipples.jsx
+// src/DailyRipples.jsx
 import React, { useContext, useEffect, useMemo, useState } from 'react';
+import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
-import { makeApi } from './utils/api.js';
+import './DailyRipples.css';
 
 // Toronto day helpers
 function todayISOInToronto(d = new Date()) {
@@ -15,17 +16,9 @@ function todayISOInToronto(d = new Date()) {
   const dd = parts.find(p => p.type === 'day')?.value;
   return `${y}-${m}-${dd}`;
 }
-
 function pickDateProp(props) {
-  // Accept: date, dateISO, day
   return props?.date || props?.dateISO || props?.day || todayISOInToronto();
 }
-
-function pickClusterProp(props) {
-  // Accept: cluster, clusterKey
-  return props?.cluster || props?.clusterKey || '';
-}
-
 function normalizeRipples(payload) {
   if (Array.isArray(payload)) return payload;
   if (payload && Array.isArray(payload.data)) return payload.data;
@@ -36,25 +29,37 @@ function normalizeRipples(payload) {
 
 export default function DailyRipples(props) {
   const { token } = useContext(AuthContext);
-  const api = useMemo(() => makeApi(token), [token]);
+  const authHeaders = useMemo(
+    () => (token ? { Authorization: `Bearer ${token}` } : {}),
+    [token]
+  );
+
+  const day = pickDateProp(props);
 
   const [ripples, setRipples] = useState([]);
+  const [clusters, setClusters] = useState([]);
+  const [clusterSel, setClusterSel] = useState({}); // { rippleId: 'Home' }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const day = pickDateProp(props);
-  const cluster = pickClusterProp(props);
-
+  // load clusters (optional assignment)
   useEffect(() => {
+    if (!token) return;
+    axios.get('/api/clusters', { headers: authHeaders })
+      .then(res => setClusters(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setClusters([]));
+  }, [token, authHeaders]);
+
+  // load ripples; force scan on first load to derive suggestions from entries
+  useEffect(() => {
+    if (!token) return;
     let ignore = false;
     (async () => {
       setLoading(true);
       setError('');
       try {
-        const qs = cluster ? `?cluster=${encodeURIComponent(cluster)}` : '';
-        const res = await api.get(`/api/ripples/${day}${qs}`);
-        if (ignore) return;
-        setRipples(normalizeRipples(res));
+        const res = await axios.get(`/api/ripples/${day}?scan=1`, { headers: authHeaders });
+        if (!ignore) setRipples(normalizeRipples(res));
       } catch (e) {
         if (!ignore) {
           console.error('[DailyRipples] load failed', e);
@@ -66,56 +71,76 @@ export default function DailyRipples(props) {
       }
     })();
     return () => { ignore = true; };
-  }, [api, day, cluster]);
+  }, [token, authHeaders, day]);
+
+  async function approve(id) {
+    try {
+      const cluster = clusterSel[id] || '';
+      const body = { assignedClusters: cluster ? [cluster] : [], dueDate: day };
+      await axios.put(`/api/ripples/${id}/approve`, body, { headers: authHeaders });
+      setRipples(prev => prev.filter(r => (r._id || r.id) !== id));
+    } catch (e) {
+      console.error('approve ripple error', e);
+      alert('Could not approve ripple.');
+    }
+  }
+  async function dismiss(id) {
+    try {
+      await axios.put(`/api/ripples/${id}/dismiss`, {}, { headers: authHeaders });
+      setRipples(prev => prev.filter(r => (r._id || r.id) !== id));
+    } catch (e) {
+      console.error('dismiss ripple error', e);
+      alert('Could not dismiss ripple.');
+    }
+  }
 
   return (
-    <div className="daily-ripples">
-      <div className="head">
-        <h3>Ripples for {day}{cluster ? ` • ${cluster}` : ''}</h3>
-      </div>
+    <div className="ripple-box">
+      <h3>Ripples for {day}</h3>
 
-      {loading && <div className="loading" aria-live="polite">Loading…</div>}
-      {!loading && error && <div className="error" role="alert">{error}</div>}
+      {loading && <div className="ripple-empty">Loading…</div>}
+      {!loading && error && <div className="ripple-empty">{error}</div>}
       {!loading && !error && ripples.length === 0 && (
-        <div className="empty">No ripples today. Serene surface.</div>
+        <div className="ripple-empty">No ripples today. Serene surface.</div>
       )}
 
       {!loading && !error && ripples.length > 0 && (
-        <ul className="ripple-list">
-          {ripples.map(r => (
-            <li key={r._id || r.id || `${r.entryDate}-${(r.extractedText||'').slice(0,20)}`} className="ripple">
-              <div className="ripple-type">{r.type || r.reason || 'suggestedTask'}</div>
-              <div className="ripple-text">{r.extractedText || r.text || '(no text)'}</div>
-              <div className="ripple-meta">
-                {r.meta?.dueDate ? <span className="pill">due {r.meta.dueDate}</span> : null}
-                {r.meta?.recurrenceLabel ? <span className="pill">{r.meta.recurrenceLabel}</span> : null}
-                {r.confidence != null ? <span className="pill">conf {(r.confidence*100|0)}%</span> : null}
-              </div>
-            </li>
-          ))}
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '0.5rem' }}>
+          {ripples.map(r => {
+            const id = r._id || r.id;
+            const conf = r.confidence != null ? Math.round(Number(r.confidence) * 100) : null;
+            return (
+              <li key={id} className="ripple-item">
+                <div className="ripple-text">
+                  {r.extractedText || r.text || '(no text)'}
+                </div>
+
+                <div className="ripple-actions">
+                  {/* meta pills */}
+                  {r.rrule ? <span className="chip">repeat</span> : null}
+                  {conf != null ? <span className="chip">conf {conf}%</span> : null}
+
+                  {/* optional cluster selection */}
+                  <select
+                    className="chip-input"
+                    value={clusterSel[id] || ''}
+                    onChange={e => setClusterSel(prev => ({ ...prev, [id]: e.target.value }))}
+                  >
+                    <option value="">Cluster (optional)</option>
+                    {clusters.map(c => (
+                      <option key={c._id} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+
+                  {/* actions */}
+                  <button className="chip chip--active" onClick={() => approve(id)}>Approve</button>
+                  <button className="chip" onClick={() => dismiss(id)}>Dismiss</button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
-
-      <style>{`
-        .daily-ripples .head h3 { margin: 0 0 .5rem 0; font-size: 1rem; }
-        .loading, .empty, .error { padding: .5rem .75rem; font-size: .95rem; }
-        .error { color: #ff9191; }
-        .ripple-list { list-style: none; padding: 0; margin: 0; display: grid; gap: .5rem; }
-        .ripple {
-          display: grid; gap: .25rem;
-          padding: .5rem .6rem; border-radius: 10px;
-          border: 1px solid var(--color-border, #2a2a32);
-          background: rgba(255,255,255,.02);
-        }
-        .ripple-type { font-size: .8rem; color: var(--color-muted, #9aa0aa); }
-        .ripple-text { font-weight: 600; }
-        .ripple-meta { display: flex; gap: .35rem; flex-wrap: wrap; margin-top: .15rem; }
-        .pill {
-          display: inline-block; font-size: .75rem;
-          padding: .05rem .4rem; border: 1px solid var(--color-border, #2a2a32);
-          border-radius: 999px; color: var(--color-muted, #9aa0aa);
-        }
-      `}</style>
     </div>
   );
 }

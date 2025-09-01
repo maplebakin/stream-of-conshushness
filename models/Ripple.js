@@ -1,55 +1,26 @@
 // models/Ripple.js
 import mongoose from 'mongoose';
 
-const rippleSchema = new mongoose.Schema(
+const RippleSchema = new mongoose.Schema(
   {
-    /* Who + where */
-    userId       : { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    sourceEntryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Entry', required: true, index: true },
-    entryDate    : { type: String, required: true },   // 'YYYY-MM-DD'
-
-    /* Core text */
-    extractedText  : { type: String, required: true },
-    originalContext: { type: String, required: true },
-
-    /* Classification */
-    type: {
-      type: String,
-      enum: [
-        'urgentTask','suggestedTask','procrastinatedTask','recurringTask',
-        'appointment','deadline','goal','wishlistItem','decision','concern',
-        'gratitude','learning','habitForming','habitBreaking','moodIndicator',
-        'importantEvent','yearlyEvent'
-      ],
-      default: 'suggestedTask'
-    },
-    priority: {
-      type: String,
-      enum: ['low','normal','high','urgent'],
-      default: 'low'
-    },
-
-    /* Assignment (clusters) */
-    assignedCluster : { type: String, default: null },
-    assignedClusters: { type: [String], default: [] },
-
-    /* Optional context tags */
-    contexts: { type: [String], default: [] },
-
-    /* Scheduling hints */
-    dueDate   : { type: String, default: null },                  // 'YYYY-MM-DD' or null
-    recurrence: { type: mongoose.Schema.Types.Mixed, default: null }, // e.g., { unit:'day', interval:2 }
-
-    /* Workflow */
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true, required: true },
+    entryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Entry' },
+    dateKey: { type: String, index: true }, // 'YYYY-MM-DD' for easy daily querying
+    text: { type: String, required: true },
+    section: { type: String, default: '' },
+    score: { type: Number, default: 0 },
     status: {
       type: String,
-      enum: ['pending','approved','dismissed'],
+      enum: ['pending', 'approved', 'dismissed', 'applied'],
       default: 'pending',
-      index: true
+      index: true,
     },
-    createdTaskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', default: null }
+    source: { type: String, default: 'analyze' }, // free text: 'analyze', 'manual', etc.
   },
   { timestamps: true }
 );
 
-export default mongoose.model('Ripple', rippleSchema);
+// quick daily indexing
+RippleSchema.index({ userId: 1, dateKey: 1, status: 1, createdAt: -1 });
+
+export default mongoose.model('Ripple', RippleSchema);

@@ -3,7 +3,9 @@ import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
+import TaskList from '../adapters/TaskList.default.jsx';
 import '../Main.css';
+import SafeHTML from '../components/SafeHTML.jsx'; // (top of file)
 
 /* -------------------------- Tiny helpers -------------------------- */
 function todayISO() {
@@ -64,7 +66,7 @@ export default function SectionPageRoom() {
           id: p._id,
           title: p.title || p.name || p.slug || 'Untitled',
           slug: p.slug || (p.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
-          emoji: p.emoji || ''
+          emoji: p.emoji || p.icon || ''
         }));
         setPages(normalized);
 
@@ -223,9 +225,17 @@ export default function SectionPageRoom() {
                             <span key={i} className="pill pill-muted">#{t}</span>
                           ))}
                       </div>
-                      <div className="entry-text">
-                        {item.data.text || (item.data.html ? <span dangerouslySetInnerHTML={{ __html: item.data.html }} /> : '—')}
-                      </div>
+                      
+<SafeHTML
+  className="entry-text"
+  html={
+    (entry?.html && entry.html.length)
+      ? entry.html
+      : (typeof entry?.content === 'string' && /<[^>]+>/.test(entry.content))
+        ? entry.content
+        : (entry?.text ?? '').replaceAll('\n', '<br/>')
+  }
+/>
                     </article>
                   ))
                 )}
@@ -242,9 +252,19 @@ export default function SectionPageRoom() {
         </div>
       </main>
 
-      {/* Right: Motifs (we’ll add Today/Up Next when tasks/appts are page-scoped) */}
+      {/* Right: Today’s tasks for this section + motifs */}
       <aside className="card" style={{ position: 'sticky', top: 16, height: 'fit-content' }}>
-        <h3 style={{ marginTop: 0 }}>Recent motifs</h3>
+        <h3 style={{ marginTop: 0 }}>Today in “{sectionSlug}”</h3>
+        {/* TaskList adapter filters by section via ?section=; quick-add seeds sections: [sectionSlug] */}
+        {token ? (
+          <div style={{ marginBottom: 16 }}>
+            <TaskList view="today" section={sectionSlug} />
+          </div>
+        ) : (
+          <p className="muted">Sign in to see tasks for this section.</p>
+        )}
+
+        <h3 style={{ marginTop: 8 }}>Recent motifs</h3>
         {entries.length === 0 ? (
           <p className="muted">No trends yet.</p>
         ) : (

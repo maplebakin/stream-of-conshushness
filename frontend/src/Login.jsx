@@ -2,7 +2,6 @@
 import React, { useState, useContext, useRef, useEffect } from 'react';
 import { AuthContext } from './AuthContext.jsx';
 import { useNavigate, Link } from 'react-router-dom';
-import './login.css';
 
 export default function LoginPage() {
   const { login } = useContext(AuthContext);
@@ -11,42 +10,39 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const usernameRef = useRef();
+  const usernameRef = useRef(null);
 
   useEffect(() => {
     usernameRef.current?.focus();
   }, []);
 
-  const handleSubmit = async (e) => {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
-
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Login failed');
-
       login(data.token);
       navigate('/');
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Login failed');
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
     <main className="auth-page">
-      <section className="auth-card" aria-labelledby="auth-title">
-        <header className="auth-header">
-          <h1 id="auth-title" className="font-echo text-plum">Stream of Conshushness</h1>
-          <p className="auth-subtitle font-glow">Welcome back, traveler. Sign in to continue your thread.</p>
+      <section className="auth-card" role="dialog" aria-labelledby="auth-title">
+        <header className="auth-header" style={{ marginBottom: 12 }}>
+          <h1 id="auth-title" className="auth-title font-echo">Stream of Conshushness</h1>
+          <p className="auth-hint font-glow">Welcome back, traveler. Sign in to continue your thread.</p>
         </header>
 
         {error && (
@@ -55,10 +51,12 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="auth-form" noValidate>
-          <label className="auth-label">
-            Username
+        <form onSubmit={handleSubmit} className="auth-form" noValidate aria-busy={loading || undefined}>
+          <div className="field">
+            <label htmlFor="username">Username</label>
             <input
+              id="username"
+              className="input"
               type="text"
               placeholder="Username"
               ref={usernameRef}
@@ -66,38 +64,43 @@ export default function LoginPage() {
               onChange={(e) => setUsername(e.target.value)}
               disabled={loading}
               autoComplete="username"
-              className="auth-input"
               required
             />
-          </label>
+          </div>
 
-          <label className="auth-label">
-            Password
+          <div className="field">
+            <label htmlFor="password">Password</label>
             <input
+              id="password"
+              className="input"
               type="password"
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
               autoComplete="current-password"
-              className="auth-input"
               required
             />
-          </label>
+          </div>
 
-          <button type="submit" disabled={loading} className="auth-submit">
-            {loading ? 'Logging in…' : 'Log In'}
-          </button>
+          <div className="auth-actions">
+            <div className="left" />
+            <div className="right">
+              <button type="submit" className="button" disabled={loading}>
+                {loading ? 'Logging in…' : 'Log In'}
+              </button>
+            </div>
+          </div>
         </form>
 
+        <div className="auth-divider"><span className="muted">or</span></div>
+
         <footer className="auth-footer">
-          <span className="font-glow">Don't have an account?</span>
-          <Link to="/register" className="auth-link">
-            Register here
-          </Link>
-          <p style={{ marginTop: 8 }}>
-  <a href="/forgot">Forgot your password?</a>
-</p>
+          <span className="font-glow">Don’t have an account?</span>
+          <Link to="/register">Register here</Link>
+          <span style={{ marginLeft: 'auto' }}>
+            <Link to="/forgot">Forgot your password?</Link>
+          </span>
         </footer>
       </section>
     </main>

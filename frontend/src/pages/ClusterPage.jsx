@@ -8,10 +8,7 @@ import './ClusterPage.css';
 
 // Toronto date helpers
 function todayISOInToronto(d = new Date()) {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Toronto',
-    year: 'numeric', month: '2-digit', day: '2-digit'
-  });
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' });
   const parts = fmt.formatToParts(d);
   const y = parts.find(p => p.type === 'year').value;
   const m = parts.find(p => p.type === 'month').value;
@@ -29,21 +26,26 @@ function humanDate(iso) {
   const dt = new Date(Y, M-1, D);
   return dt.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
 }
+function normalizeClusters(resOrData) {
+  const d = resOrData?.data ?? resOrData;
+  if (Array.isArray(d)) return d;
+  if (Array.isArray(d?.data)) return d.data;
+  if (Array.isArray(d?.clusters)) return d.clusters;
+  if (Array.isArray(d?.data?.clusters)) return d.data.clusters;
+  return [];
+}
+function normalizeDashboard(resOrData) {
+  const d = resOrData?.data ?? resOrData;
+  return d?.data ?? d ?? null; // backend: { data: { date, key, tasks:{...}, recentEntries:[] } }
+}
 
 // Tiny UI atoms
-function Spinner() {
-  return <div className="spin" aria-label="Loading" />;
-}
-function Empty({children}) {
-  return <div className="empty">{children}</div>;
-}
+function Spinner() { return <div className="spin" aria-label="Loading" />; }
+function Empty({children}) { return <div className="empty">{children}</div>; }
 function Section({title, children, right}) {
   return (
     <section className="section">
-      <div className="section-head">
-        <h3>{title}</h3>
-        {right}
-      </div>
+      <div className="section-head"><h3>{title}</h3>{right}</div>
       {children}
     </section>
   );
@@ -70,14 +72,12 @@ export default function ClusterPage() {
       try {
         const res = await api.get('/api/clusters');
         if (ignore) return;
-        const list = (res?.data || []).sort((a, b) => {
+        const list = normalizeClusters(res).sort((a, b) => {
           if (a.pinned !== b.pinned) return b.pinned - a.pinned;
           if (a.order !== b.order) return a.order - b.order;
           return (a.label || a.key).localeCompare(b.label || b.key);
         });
         setClusters(list);
-
-        // choose active: routeKey wins; else keep existing; else first
         if (routeKey) setActiveKey(routeKey);
         else if (!activeKey && list.length) {
           setActiveKey(list[0].key);
@@ -91,11 +91,7 @@ export default function ClusterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, routeKey]);
 
-  // update active when routeKey changes
-  useEffect(() => {
-    if (routeKey && routeKey !== activeKey) setActiveKey(routeKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routeKey]);
+  useEffect(() => { if (routeKey && routeKey !== activeKey) setActiveKey(routeKey); }, [routeKey]); // eslint-disable-line
 
   // load dashboard
   useEffect(() => {
@@ -106,7 +102,7 @@ export default function ClusterPage() {
       try {
         const res = await api.get(`/api/clusters/${encodeURIComponent(activeKey)}/dashboard?date=${dateISO}`);
         if (ignore) return;
-        setData(res?.data || null);
+        setData(normalizeDashboard(res));
       } catch (e) {
         console.error(e);
         setData(null);
@@ -117,43 +113,35 @@ export default function ClusterPage() {
     return () => { ignore = true; };
   }, [activeKey, dateISO, api]);
 
-  function note(msg) {
-    setOpMsg(msg);
-    setTimeout(() => setOpMsg(''), 1800);
-  }
+  function note(msg) { setOpMsg(msg); setTimeout(() => setOpMsg(''), 1800); }
 
   async function carryOver() {
     try {
       await api.post(`/api/clusters/${encodeURIComponent(activeKey)}/tasks/carryover?date=${dateISO}`);
       note('Carried over unfinished tasks from yesterday.');
       const res = await api.get(`/api/clusters/${encodeURIComponent(activeKey)}/dashboard?date=${dateISO}`);
-      setData(res?.data || null);
+      setData(normalizeDashboard(res));
     } catch (e) {
-      note('Carryover failed.');
-      console.error(e);
+      note('Carryover failed.'); console.error(e);
     }
   }
-
   async function addToDate(taskId) {
     try {
       await api.post(`/api/clusters/${encodeURIComponent(activeKey)}/tasks/${taskId}/add-to-date?date=${dateISO}`);
       note('Added to today.');
       const res = await api.get(`/api/clusters/${encodeURIComponent(activeKey)}/dashboard?date=${dateISO}`);
-      setData(res?.data || null);
+      setData(normalizeDashboard(res));
     } catch (e) {
-      note('Failed to add.');
-      console.error(e);
+      note('Failed to add.'); console.error(e);
     }
   }
-
   async function toggleComplete(task) {
     try {
-      await api.put(`/api/tasks/${task._id}`, { completed: !task.completed });
+      await api.patch(`/api/tasks/${task._id}`, { completed: !task.completed });
       const res = await api.get(`/api/clusters/${encodeURIComponent(activeKey)}/dashboard?date=${dateISO}`);
-      setData(res?.data || null);
+      setData(normalizeDashboard(res));
     } catch (e) {
-      console.error(e);
-      note('Update failed');
+      console.error(e); note('Update failed');
     }
   }
 
@@ -161,7 +149,6 @@ export default function ClusterPage() {
     setClusters(prev => {
       const exists = prev.some(c => c.key === newCluster.key);
       const next = exists ? prev : [...prev, newCluster];
-      // keep sidebar sorted-ish
       next.sort((a, b) => {
         if (a.pinned !== b.pinned) return b.pinned - a.pinned;
         if (a.order !== b.order) return a.order - b.order;
@@ -183,21 +170,12 @@ export default function ClusterPage() {
           <button className="btn ghost sm" onClick={() => setShowCreate(true)}>+ New</button>
         </div>
 
-        {clusters.length === 0 && (
-          <Empty>No clusters yet.<br/>Create your first one.</Empty>
-        )}
+        {clusters.length === 0 && <Empty>No clusters yet.<br/>Create your first one.</Empty>}
 
         <ul className="cluster-list">
           {clusters.map(c => (
-            <li
-              key={c._id}
-              className={`cluster-item ${activeKey === c.key ? 'active' : ''}`}
-            >
-              <Link
-                to={`/clusters/${encodeURIComponent(c.key)}`}
-                className="cluster-link"
-                onClick={() => setActiveKey(c.key)}
-              >
+            <li key={c._id} className={`cluster-item ${activeKey === c.key ? 'active' : ''}`}>
+              <Link to={`/clusters/${encodeURIComponent(c.key)}`} className="cluster-link" onClick={() => setActiveKey(c.key)}>
                 <span className="color-dot" style={{ background: c.color }} />
                 <span className="icon">{c.icon || '🗂️'}</span>
                 <span className="label">{c.label}</span>
@@ -223,7 +201,6 @@ export default function ClusterPage() {
         </header>
 
         {opMsg && <div className="toast">{opMsg}</div>}
-
         {loading && <div className="loading"><Spinner /></div>}
 
         {!loading && !activeKey && (
@@ -244,11 +221,7 @@ export default function ClusterPage() {
                   {data.tasks.today.map(t => (
                     <li key={t._id} className={`task ${t.completed ? 'done' : ''}`}>
                       <label className="chk">
-                        <input
-                          type="checkbox"
-                          checked={!!t.completed}
-                          onChange={() => toggleComplete(t)}
-                        />
+                        <input type="checkbox" checked={!!t.completed} onChange={() => toggleComplete(t)} />
                         <span className="checkmark" />
                       </label>
                       <div className="task-main">
@@ -274,11 +247,7 @@ export default function ClusterPage() {
                   {data.tasks.overdue.map(t => (
                     <li key={t._id} className="task overdue">
                       <label className="chk">
-                        <input
-                          type="checkbox"
-                          checked={!!t.completed}
-                          onChange={() => toggleComplete(t)}
-                        />
+                        <input type="checkbox" checked={!!t.completed} onChange={() => toggleComplete(t)} />
                         <span className="checkmark" />
                       </label>
                       <div className="task-main">
@@ -355,10 +324,7 @@ export default function ClusterPage() {
       </main>
 
       {showCreate && (
-        <CreateClusterModal
-          onClose={() => setShowCreate(false)}
-          onCreated={onCreatedCluster}
-        />
+        <CreateClusterModal onClose={() => setShowCreate(false)} onCreated={onCreatedCluster} />
       )}
     </div>
   );

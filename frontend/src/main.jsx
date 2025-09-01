@@ -1,7 +1,15 @@
 // src/main.jsx
-import './index.css';
-import './variables.css';
-import './Main.css';
+// ── CSS order matters: reset/base → tokens → overlay → app/page styles
+import './index.css';          // your reset / base (keep first)
+import './variables.css';      // design tokens (colors, radii, etc.)
+import './DesignSystem.css';   // ← the overlay I gave you (new)
+import './Main.css';           // existing globals
+
+// optional page-specific add-ons (uncomment if you kept them separate)
+// import './pages/ClusterPage.css';  // cluster layout add-on
+// import './Auth.css';               // login/auth add-on
+
+// existing per-page styles
 import './Sidebar.css';
 import './Calendar.css';
 import './dailypage.css';

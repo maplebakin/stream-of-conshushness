@@ -3,15 +3,21 @@ import React, { useEffect, useMemo, useState, useContext, useCallback } from 're
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
+
 import TaskList from './adapters/TaskList.default.jsx';
-import DailyRipples from './DailyRipples.jsx';
 import EntryQuickAssign from './adapters/EntryQuickAssign.default.jsx';
 import AnalyzeEntryButton from './adapters/AnalyzeEntryButton.default.jsx';
 import EntryModal from './adapters/EntryModal.default.jsx';
 import AppointmentModal from './adapters/AppointmentModal.default.jsx';
+
+import DailyRipples from './components/DailyRipples.jsx';
+import HourlySchedule from './HourlySchedule.jsx';
+import NotesSection from './NotesSection.jsx';
+
 import { renderSafe } from './utils/safeRender.js';
 import { toDisplayDate } from './utils/date.js';
 import { toDisplay } from './utils/display.js';
+
 import './Main.css';
 import './dailypage.css';
 
@@ -40,7 +46,7 @@ function formatHM(hhmm) {
   return `${hour12}:${String(m).padStart(2,'0')} ${ampm}`;
 }
 
-/* ---------- entry filtering helpers ---------- */
+/* ---------- entry helpers ---------- */
 function isoFromDateLike(val) {
   if (!val) return '';
   const d = new Date(val);
@@ -75,9 +81,15 @@ export default function DailyPage() {
   const [dateISO, setDateISO] = useState(routeDate || todayISO);
 
   const [taskListKey, setTaskListKey] = useState(0);
+  const [rippleListKey, setRippleListKey] = useState(0);
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [showApptModal, setShowApptModal] = useState(false);
   const [autoCarry, setAutoCarry] = useState(() => localStorage.getItem('auto_cf') === '1');
+
+  // NEW: collapsible schedule state (persisted)
+  const [showSchedule, setShowSchedule] = useState(
+    () => localStorage.getItem('show_sched') !== '0'
+  );
 
   // ENTRIES
   const [entries, setEntries] = useState([]);
@@ -89,7 +101,7 @@ export default function DailyPage() {
   // AGENDA: appointments + events (+ important-events)
   const [appointments, setAppointments] = useState([]);
   const [events,       setEvents]       = useState([]);
-  const [important,    setImportant]    = useState([]); // NEW: important-events
+  const [important,    setImportant]    = useState([]);
   const [loadingAgenda, setLoadingAgenda] = useState(false);
 
   /* ---------- route sync ---------- */
@@ -136,17 +148,17 @@ export default function DailyPage() {
     }
   }
 
-  /* ---------- load entries (FILTERED) ---------- */
+  /* ---------- load entries (NOW CALLS /by-date/:date) ---------- */
   const loadEntries = useCallback(async () => {
     if (!token || !dateISO) return;
     setLoadingEntries(true);
     try {
-      const res = await axios.get(`/api/entries/${dateISO}`, {
+      const res = await axios.get(`/api/entries/by-date/${dateISO}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       let list = Array.isArray(res.data) ? res.data : [];
-      list = list.filter(e => entryDateISO(e) === dateISO);      // date match
-      list = list.filter(entryHasMeaningfulText);                 // non-empty
+      list = list.filter(e => entryDateISO(e) === dateISO);
+      list = list.filter(entryHasMeaningfulText);
       if (unassignedOnly) list = list.filter(e => !e?.cluster || e.cluster === '');
       setEntries(list);
     } catch (err) {
@@ -173,7 +185,7 @@ export default function DailyPage() {
     setTaskListKey(k => k + 1);
   }
 
-  /* ---------- load agenda (appointments + events + important) ---------- */
+  /* ---------- load agenda ---------- */
   const loadAgenda = useCallback(async () => {
     if (!token || !dateISO) return;
     setLoadingAgenda(true);
@@ -183,7 +195,7 @@ export default function DailyPage() {
       const [apptRes, evtRes, impRes] = await Promise.all([
         axios.get(`/api/appointments?${qs}`,      { headers }),
         axios.get(`/api/events?${qs}`,            { headers }),
-        axios.get(`/api/important-events?${qs}`,  { headers }).catch(() => ({ data: [] })), // NEW: tolerate old servers
+        axios.get(`/api/important-events?${qs}`,  { headers }).catch(() => ({ data: [] })),
       ]);
       setAppointments(Array.isArray(apptRes.data) ? apptRes.data : []);
       setEvents(Array.isArray(evtRes.data) ? evtRes.data : []);
@@ -216,7 +228,7 @@ export default function DailyPage() {
       time: null,
       pinned: !!e.pinned,
     }));
-    const imps = (important || []).map(e => ({ // NEW
+    const imps = (important || []).map(e => ({
       _id: e._id,
       type: 'important',
       title: e.title || '(untitled)',
@@ -293,13 +305,17 @@ export default function DailyPage() {
 
       <section className="daily-layout">
         <div className="daily-main">
-          <div className="panel">
-            {renderSafe(TaskList, { key: taskListKey, date: dateISO, header: "Today’s Tasks" }, 'TaskList')}
-          </div>
+         
 
           {/* Ripples ABOVE entries */}
-          <div className="panel">
-            {renderSafe(DailyRipples, { date: dateISO }, 'DailyRipples')}
+           <div className="panel">
+            
+            {renderSafe(
+              TaskList,
+              { key: taskListKey, date: dateISO, header: "Today’s Tasks", keepCompleted: true },
+              'TaskList'
+            )}
+            <DailyRipples key={rippleListKey} date={dateISO} /> 
           </div>
 
           {/* Today’s Entries Panel */}
@@ -342,9 +358,10 @@ export default function DailyPage() {
                     }, 'EntryQuickAssign')}
 
                     {renderSafe(AnalyzeEntryButton, {
-                      entryText: typeof en?.text === 'string' ? en.text : '',
-                      entryDateISO: en.date || en.dateISO || dateISO
-                    }, 'AnalyzeEntryButton')}
+    text: (typeof en?.text === 'string' ? en.text : ''),    // FIX prop names
+    date: (en.date || en.dateISO || dateISO),
+    onRipples: () => setRippleListKey(k => k + 1)           // let manual analyze also refresh
+  }, 'AnalyzeEntryButton')}
                   </div>
                 </div>
               );
@@ -395,29 +412,57 @@ export default function DailyPage() {
             )}
           </div>
 
+          {/* Collapsible Hourly Schedule */}
+          <div className="panel">
+            <div className="side-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <h3 className="font-thread text-vein">Hourly Schedule</h3>
+              <button
+                className="button chip"
+                onClick={() => {
+                  const next = !showSchedule;
+                  setShowSchedule(next);
+                  localStorage.setItem('show_sched', next ? '1' : '0');
+                }}
+              >
+                {showSchedule ? 'Hide' : 'Show'}
+              </button>
+            </div>
+
+            {showSchedule ? (
+              <div style={{ marginTop: 8 }}>
+                <HourlySchedule date={dateISO} />
+              </div>
+            ) : (
+              <p className="muted" style={{ marginTop: 4 }}>Hidden</p>
+            )}
+          </div>
+
+          {/* Notes UNDER schedule */}
+          <div className="panel">
+            <NotesSection date={dateISO} />
+          </div>
+
+          {/* (optional) Habits placeholder */}
           <div className="panel">
             <h3 className="font-thread text-vein">Habits</h3>
             <p className="muted font-glow">Coming in Phase 4.</p>
           </div>
-
-          <div className="panel">
-            <h3 className="font-thread text-vein">Hourly Schedule</h3>
-            <p className="muted font-glow">Collapsible block coming in Phase 5.</p>
-          </div>
         </aside>
       </section>
 
-      {showEntryModal &&
-        renderSafe(EntryModal, {
-          defaultDate: dateISO,
-          onClose: () => setShowEntryModal(false),
-          onSaved: () => {
-            setTaskListKey(k => k + 1);
-            loadEntries();
-            loadAgenda();
-          }
-        }, 'EntryModal')
-      }
+     {showEntryModal &&
+    renderSafe(EntryModal, {
+      defaultDate: dateISO,
+      onClose: () => setShowEntryModal(false),
+      onSaved: () => {
+        setTaskListKey(k => k + 1);
+        loadEntries();
+        loadAgenda();
+        setRippleListKey(k => k + 1);                       // NEW: refetch ripples
+      },
+      onAnalyzed: () => setRippleListKey(k => k + 1),       // NEW: also after analyzer returns
+    }, 'EntryModal')
+  }
 
       {showApptModal &&
         renderSafe(AppointmentModal, {

@@ -3,7 +3,7 @@ import React, { useContext } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import './variables.css';
-
+import './DesignSystem.css'
 // Pages / Layout
 import MainPage from './MainPage.jsx';
 import DailyPage from './DailyPage.jsx';
@@ -13,9 +13,10 @@ import RegisterPage from './RegisterPage.jsx';
 import GameList from './GameList.jsx';
 import GamePage from './GamePage.jsx';
 
-import SectionPage from './pages/SectionPage.jsx';     // ✅ sections landing + detail (fixed below)
-import ClustersIndex from './pages/ClustersIndex.jsx'; // ✅ NEW: clusters index
-import ClusterRoom from './pages/ClusterRoom.jsx';     // ✅ room view per cluster
+import SectionPage from './pages/SectionPage.jsx';            // landing + section detail
+import SectionPageRoom from './pages/SectionPageRoom.jsx';    // NEW: page room under a section
+import ClustersIndex from './pages/ClustersIndex.jsx';        // clusters index
+import ClusterRoom from './pages/ClusterRoom.jsx';            // per-cluster room
 
 import RippleReviewUI from './RippleReviewUI';
 import Layout from './Layout.jsx';
@@ -24,6 +25,7 @@ import InboxTasksPage from './pages/InboxTasksPage.jsx';
 import Account from './pages/Account.jsx';
 import UserSettings from './pages/UserSettings.jsx';
 import AdminPanel from './pages/AdminPanel.jsx';
+import AdapterHarness from './adapters/AdapterHarness.jsx';
 
 // Auth / Search Contexts
 import { AuthProvider, AuthContext } from './AuthContext.jsx';
@@ -63,16 +65,19 @@ function AppRoutes() {
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/today" element={<TodayRedirect />} />
           <Route path="/day/:date" element={<DailyPage />} />
+          <Route path="/_adapters" element={<AdapterHarness />} />
 
-          {/* ✅ Sections */}
-          <Route path="/sections" element={<SectionPage />} />          {/* landing */}
-          <Route path="/sections/:key" element={<SectionPage />} />     {/* detail; accepts :key */}
+          {/* Sections */}
+          <Route path="/sections" element={<SectionPage />} />                 {/* landing */}
+          <Route path="/sections/:key" element={<SectionPage />} />            {/* section detail */}
+          <Route path="/sections/:sectionSlug/:pageSlug" element={<SectionPageRoom />} />             {/* room default -> journal */}
+          <Route path="/sections/:sectionSlug/:pageSlug/:tab" element={<SectionPageRoom />} />        {/* room tabbed */}
 
-          {/* ✅ Clusters */}
-          <Route path="/clusters" element={<ClustersIndex />} />        {/* index page */}
-          <Route path="/clusters/:slug" element={<ClusterRoom />} />    {/* room */}
+          {/* Clusters */}
+          <Route path="/clusters" element={<ClustersIndex />} />
+          <Route path="/clusters/:clusterSlug" element={<ClusterRoom />} />    {/* param name matches ClusterRoom */}
 
-          {/* Games (keep as-is) */}
+          {/* Games */}
           <Route path="/section/games" element={<GameList />} />
           <Route path="/section/games/:slug" element={<GamePage />} />
 

@@ -1,25 +1,25 @@
-// models/ImportantEvent.js
-import mongoose from 'mongoose';
+// ESM model — ImportantEvent (date-only marker)
+// Fields: userId, date (YYYY-MM-DD), title, description, cluster?, entryId?, pinned?
 
-const ImportantEventSchema = new mongoose.Schema(
+import mongoose from "mongoose";
+const { Schema } = mongoose;
+
+const ImportantEventSchema = new Schema(
   {
-    userId:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    title:    { type: String, required: true, trim: true },
-    date:     { type: String, required: true }, // 'YYYY-MM-DD'
-
-    // Keep both to be friendly with different callers
-    description: { type: String, default: '' },
-    details:     { type: String, default: '' },
-
-    cluster:  { type: String, default: null },
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    date:   { type: String, required: true }, // YYYY-MM-DD (Toronto-normalized)
+    title:  { type: String, default: "" },
+    description: { type: String, default: "" }, // aka "details" in some callers
+    cluster: { type: String },
+    entryId: { type: Schema.Types.ObjectId, ref: "Entry" },
+    pinned: { type: Boolean, default: false },   // 🔥 new
   },
   { timestamps: true }
 );
 
-// Avoid dupes for the same (user, date, title)
-ImportantEventSchema.index(
-  { userId: 1, date: 1, title: 1 },
-  { unique: true }
-);
+// Fast lookups for a user's events by day and pinned flags
+ImportantEventSchema.index({ userId: 1, date: 1 });
+ImportantEventSchema.index({ userId: 1, pinned: 1, date: 1 });
 
-export default mongoose.model('ImportantEvent', ImportantEventSchema);
+export default mongoose.models?.ImportantEvent ||
+  mongoose.model("ImportantEvent", ImportantEventSchema);

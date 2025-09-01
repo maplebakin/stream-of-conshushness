@@ -1,11 +1,14 @@
-// src/Calendar.jsx
+// frontend/src/Calendar.jsx
 import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
-import AppointmentModal from './AppointmentModal.jsx'; // ✅ reuse
+
+// ✅ use adapters (matches DailyPage + harness)
+import AppointmentModal from './adapters/AppointmentModal.default.jsx';
+import ImportantEventModal from './adapters/ImportantEventModal.default.jsx';
+
 import './Calendar.css';
-import ImportantEventModal from './ImportantEventModal.jsx';
 
 // Toronto "today" in YYYY-MM-DD (safe, no UTC flip)
 function todayISOInTZ(timeZone = 'America/Toronto') {
@@ -36,64 +39,6 @@ function countdownLabel(days) {
   return `In ${days} days`;
 }
 
-/** Minimal inline modal for important events (title + date) */
-function QuickEventModal({ defaultDate, onClose, onSaved }) {
-  const { token } = useContext(AuthContext);
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
-  const [title, setTitle] = useState('');
-  const [date, setDate] = useState(defaultDate);
-  const [saving, setSaving] = useState(false);
-
-  async function save() {
-    const t = title.trim();
-    if (!t) return;
-    setSaving(true);
-    try {
-      // Adjust endpoint/shape to your API if needed
-      await axios.post('/api/events', { title: t, date, important: true }, { headers });
-      onSaved?.();
-      onClose?.();
-    } catch (e) {
-      console.error('Failed to create event', e);
-      alert('Could not create event');
-    } finally {
-      setSaving(false);
-    }
-  }
-  function onKey(e) {
-    if (e.key === 'Enter') { e.preventDefault(); save(); }
-    if (e.key === 'Escape') { e.preventDefault(); onClose?.(); }
-  }
-
-  return (
-    <div className="modal-backdrop">
-      <div className="modal-card">
-        <h3 className="font-thread text-vein" style={{ marginTop: 0 }}>Add important event</h3>
-        <div style={{ display:'grid', gap: 8 }}>
-          <input
-            className="input"
-            autoFocus
-            placeholder="Event title…"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            onKeyDown={onKey}
-          />
-          <input
-            className="input"
-            type="date"
-            value={date}
-            onChange={e => setDate(e.target.value)}
-          />
-          <div style={{ display:'flex', gap: 8, justifyContent:'flex-end' }}>
-            <button className="button chip" onClick={onClose} disabled={saving}>Cancel</button>
-            <button className="button chip" onClick={save} disabled={saving || !title.trim()}>Add</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function Calendar() {
   const navigate = useNavigate();
   const { token } = useContext(AuthContext);
@@ -121,20 +66,24 @@ export default function Calendar() {
   // sidebar upcoming
   const [upcoming, setUpcoming] = useState({ appointments: [], events: [], today: tzToday });
 
-  // NEW: modal state
+  // Modals
   const [showApptModal, setShowApptModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
 
   async function loadMonth() {
-    const { data } = await axios.get(`/api/calendar/${monthParam(y, mIdx)}`, { headers });
-    setDayCounts(data?.days || {});
+    // Assumes you’ve got an aggregator route; if not, this will just noop the badges.
+    try {
+      const { data } = await axios.get(`/api/calendar/${monthParam(y, mIdx)}`, { headers });
+      setDayCounts(data?.days || {});
+    } catch {
+      setDayCounts({});
+    }
   }
   async function loadUpcoming() {
     try {
       const { data } = await axios.get(`/api/calendar/upcoming/list?from=${tzToday}`, { headers });
       setUpcoming(data || { appointments: [], events: [], today: tzToday });
     } catch {
-      // if the upcoming route isn't mounted yet, fail quietly
       setUpcoming({ appointments: [], events: [], today: tzToday });
     }
   }
@@ -293,22 +242,21 @@ export default function Calendar() {
         </div>
       </section>
 
-      {/* Modals */}
-     {showApptModal && (
-  <AppointmentModal
-    date={tzToday}
-    onClose={() => setShowApptModal(false)}
-    onSaved={() => { setShowApptModal(false); loadUpcoming(); loadMonth(); }}
-  />
-)}
-{showEventModal && (
-  <ImportantEventModal
-    date={tzToday}
-    onClose={() => setShowEventModal(false)}
-    onSaved={() => { setShowEventModal(false); loadUpcoming(); loadMonth(); }}
-  />
-)}
-
+      {/* Modals — pass defaultDate to match adapters */}
+      {showApptModal && (
+        <AppointmentModal
+          defaultDate={tzToday}
+          onClose={() => setShowApptModal(false)}
+          onSaved={() => { setShowApptModal(false); loadUpcoming(); loadMonth(); }}
+        />
+      )}
+      {showEventModal && (
+        <ImportantEventModal
+          defaultDate={tzToday}
+          onClose={() => setShowEventModal(false)}
+          onSaved={() => { setShowEventModal(false); loadUpcoming(); loadMonth(); }}
+        />
+      )}
     </main>
   );
 }

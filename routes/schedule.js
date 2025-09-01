@@ -1,40 +1,28 @@
-import express from 'express';
-import DailySchedule from '../models/DailySchedule.js';
-import auth from '../middleware/auth.js';
+import { Router } from 'express';
+import ScheduleItem from '../models/ScheduleItem.js';
 
-const router = express.Router();
+const r = Router();
 
-// Normalize JWT user id across payload shapes
-function getUserId(req) {
-  return req.user?._id || req.user?.userId || req.user?.id;
-}
-
-// Get full schedule for a day
-router.get('/:date', auth, async (req, res) => {
-  try {
-    const schedule = await DailySchedule.find({
-      userId: getUserId(req),
-      date: req.params.date,
-    }).sort({ hour: 1 });
-    res.json(schedule);
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
+// GET /api/schedule/:date  → [{ hour, text }, ...]
+r.get('/:date', async (req, res) => {
+  const userId = req.user.userId;
+  const { date } = req.params;
+  const rows = await ScheduleItem.find({ userId, date }).sort({ hour: 1 });
+  res.json(rows.map(x => ({ hour: x.hour, text: x.text })));
 });
 
-// Update/create a single hour block
-router.post('/:date/:hour', auth, async (req, res) => {
-  try {
-    const { text } = req.body;
-    const updated = await DailySchedule.findOneAndUpdate(
-      { userId: getUserId(req), date: req.params.date, hour: req.params.hour },
-      { $set: { text: text || '' } },
-      { upsert: true, new: true }
-    );
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
+// POST /api/schedule  body: { date, hour, text }
+r.post('/', async (req, res) => {
+  const userId = req.user.userId;
+  const { date, hour, text = '' } = req.body || {};
+  if (!date || !hour) return res.status(400).json({ error: 'date and hour required' });
+
+  const doc = await ScheduleItem.findOneAndUpdate(
+    { userId, date, hour },
+    { $set: { text } },
+    { new: true, upsert: true }
+  );
+  res.json({ ok: true, hour: doc.hour, text: doc.text });
 });
 
-export default router;
+export default r;

@@ -6,7 +6,6 @@ import toast from 'react-hot-toast';
 import { AuthContext } from './AuthContext.jsx';
 import './modal.css';
 
-/** Ensure a portal root exists (safe on hard refresh) */
 function ensurePortalRoot(id = 'modal-root') {
   let el = document.getElementById(id);
   if (!el) {
@@ -20,38 +19,34 @@ function ensurePortalRoot(id = 'modal-root') {
 export default function EntryModal({
   onClose,
   onSaved,
+  onAnalyzed,           // NEW: optional callback when analyze finishes
   defaultCluster = '',
   defaultTags = [],
-  defaultDate,          // ← added (preferred)
-  date,                 // ← legacy prop, still supported
+  defaultDate,          // preferred
+  date,                 // legacy prop, still supported
 }) {
   const root = ensurePortalRoot();
   const { token } = useContext(AuthContext);
   const textareaRef = useRef(null);
   const [saving, setSaving] = useState(false);
 
-  // form state
-  const [text, setText]   = useState('');
-  const [mood, setMood]   = useState('');
-  const [tags, setTags]   = useState(defaultTags.join(', '));
+  const [text, setText] = useState('');
+  const [mood, setMood] = useState('');
+  const [tags, setTags] = useState(defaultTags.join(', '));
 
-  // target date (ISO)
-  const dateISO = date || defaultDate || new Date().toISOString().slice(0,10);
+  const dateISO = date || defaultDate || new Date().toISOString().slice(0, 10);
 
-  // Lock page scroll while open
   useEffect(() => {
     const prev = document.documentElement.style.overflow;
     document.documentElement.style.overflow = 'hidden';
     return () => { document.documentElement.style.overflow = prev; };
   }, []);
 
-  // Focus textarea after mount
   useEffect(() => {
     const id = requestAnimationFrame(() => textareaRef.current?.focus());
     return () => cancelAnimationFrame(id);
   }, []);
 
-  // Close on Esc
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
     window.addEventListener('keydown', onKey);
@@ -68,19 +63,30 @@ export default function EntryModal({
     try {
       const cleanTags = tags.split(',').map(t => t.trim()).filter(Boolean);
       const body = {
-        date: dateISO,                 // ← ensure entry lands on selected day
+        date: dateISO,
         text,
         mood: mood.trim() || null,
         cluster: defaultCluster || '',
         tags: cleanTags,
       };
 
-      const res = await axios.post('/api/entries', body, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await axios.post('/api/entries', body, { headers });
       toast.success('Entry saved');
       onSaved?.(res.data);
+
+      // 🔮 Auto-analyze the just-saved text for ripples
+      try {
+        const ar = await axios.post('/api/ripples/analyze', { text, date: dateISO }, { headers });
+        // optional: surface a tiny hint if something got queued
+        if (Array.isArray(ar?.data?.ripples) && ar.data.ripples.length > 0) {
+          toast('Ripples queued', { icon: '💧' });
+        }
+        onAnalyzed?.(ar?.data);
+      } catch (anErr) {
+        console.warn('[EntryModal] analyze failed:', anErr?.response?.data || anErr?.message);
+      }
+
       onClose?.();
     } catch (err) {
       console.error('save entry failed:', err?.response?.data || err.message);
@@ -142,19 +148,9 @@ export default function EntryModal({
               </div>
             </div>
 
-            {defaultCluster && (
-              <div className="sc-inline-note">
-                Cluster: <span className="pill">{defaultCluster}</span>
-              </div>
-            )}
-
-            <div className="sc-modal-actions">
-              <button type="button" className="sc-btn" onClick={onClose}>
-                Cancel
-              </button>
-              <button type="submit" className="sc-btn sc-btn-primary" disabled={saving || !text.trim()}>
-                {saving ? 'Saving…' : 'Save'}
-              </button>
+            <div className="sc-modal-footer">
+              <button type="submit" className="button bg-lantern text-ink">Save</button>
+              <button type="button" className="button" onClick={onClose}>Cancel</button>
             </div>
           </form>
         </div>

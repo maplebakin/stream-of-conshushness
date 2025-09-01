@@ -1,66 +1,114 @@
-// frontend/src/pages/ClustersIndex.jsx
-import { useEffect, useState, useContext } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
+import CreateClusterModal from '../components/CreateClusterModal.jsx';
+
+function slugifyKey(s = '') {
+  return String(s).toLowerCase().trim().replace(/[^\p{Letter}\p{Number}]+/gu,'-').replace(/^-+|-+$/g,'').slice(0,64);
+}
+function normalizeClusters(resOrData) {
+  const d = resOrData?.data ?? resOrData;
+  if (Array.isArray(d)) return d;
+  if (Array.isArray(d?.data)) return d.data;
+  if (Array.isArray(d?.clusters)) return d.clusters;
+  if (Array.isArray(d?.data?.clusters)) return d.data.clusters;
+  return [];
+}
 
 export default function ClustersIndex() {
   const { token } = useContext(AuthContext);
+  const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
+  const navigate = useNavigate();
+
   const [clusters, setClusters] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
 
-  useEffect(() => {
-    let cancel = false;
-    async function run() {
-      setLoading(true);
-      try {
-        const res = await axios.get('/api/sections'); // using Section model for clusters
-        if (!cancel) {
-          const list = (Array.isArray(res.data) ? res.data : [])
-            .map(s => ({
-              key: s.key || s.slug || '',
-              label: s.label || s.name || s.key || '',
-              emoji: s.icon || s.emoji || '🧩',
-              pinned: !!s.pinned,
-              order: Number.isFinite(s.order) ? s.order : 0,
-            }))
-            .filter(s => s.key)
-            .sort((a,b) => (a.pinned !== b.pinned) ? (a.pinned ? -1:1) : (a.order - b.order) || a.label.localeCompare(b.label));
-          setClusters(list);
-        }
-      } catch (e) {
-        console.warn('ClustersIndex error:', e?.response?.data || e.message);
-        if (!cancel) setClusters([]);
-      } finally {
-        if (!cancel) setLoading(false);
-      }
+  async function load() {
+    setLoading(true); setErr('');
+    try {
+      const r = await axios.get('/api/clusters', { headers });
+      const list = normalizeClusters(r);
+      const normalized = list.map(c => ({
+        _id: c._id,
+        key: (c.key || c.slug || slugifyKey(c.label || c.name || '')).toLowerCase(),
+        label: c.label || c.name || c.key || 'Untitled',
+        color: c.color || '#9b87f5',
+        icon: c.icon || '🗂️',
+        pinned: !!c.pinned,
+        order: Number.isFinite(c.order) ? c.order : 0,
+        updatedAt: c.updatedAt || c.createdAt || new Date().toISOString()
+      })).filter(c => c.key);
+
+      normalized.sort((a, b) =>
+        (a.pinned !== b.pinned) ? (a.pinned ? -1 : 1)
+        : (a.order - b.order) || a.label.localeCompare(b.label)
+      );
+      setClusters(normalized);
+    } catch (e) {
+      setErr(e?.response?.data?.error || e.message || 'Failed to load clusters.');
+      setClusters([]);
+    } finally {
+      setLoading(false);
     }
-    if (token) run();
-    return () => { cancel = true; };
-  }, [token]);
+  }
+
+  useEffect(() => { if (token) load(); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function onCreated(newCluster) {
+    setShowCreate(false);
+    const key = (newCluster?.key || slugifyKey(newCluster?.label || newCluster?.name || '')).toLowerCase();
+    if (key) navigate(`/clusters/${encodeURIComponent(key)}`);
+    else load();
+  }
 
   return (
     <div className="page">
-      <div className="card">
-        <div className="section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="section-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <h2 style={{ margin: 0 }}>Clusters</h2>
+          <div style={{ display:'flex', gap:8 }}>
+            <button className="pill" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>
+            <button className="pill" onClick={() => setShowCreate(true)}>+ New</button>
+          </div>
         </div>
+
+        {err && <div style={{ color: 'crimson', marginTop: 8 }}>{err}</div>}
 
         {loading ? (
           <div>Loading…</div>
-        ) : clusters.length === 0 ? (
-          <p className="muted">No clusters yet.</p>
+        ) : !clusters.length ? (
+          <p className="muted">No clusters yet. Create one to begin.</p>
         ) : (
-          <ul className="unstyled" style={{ columns: 2, columnGap: 16, maxWidth: 720 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(240px,1fr))', gap:12 }}>
             {clusters.map(c => (
-              <li key={c.key} style={{ breakInside: 'avoid', marginBottom: 8 }}>
-                <a className="link" href={`/clusters/${encodeURIComponent(c.key)}`}>
-                  <span style={{ marginRight: 6 }}>{c.emoji}</span>{c.label}
-                </a>
-              </li>
+              <Link
+                key={c._id || c.key}
+                to={`/clusters/${encodeURIComponent(c.key)}`}
+                className="card"
+                style={{ textDecoration:'none', color:'inherit', borderColor: c.color }}
+              >
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <span style={{ fontSize: 22 }}>{c.icon}</span>
+                  <div style={{ display:'grid' }}>
+                    <div style={{ fontWeight: 700 }}>{c.label}</div>
+                    <div className="muted" style={{ fontSize: 12 }}>#{c.key}</div>
+                  </div>
+                </div>
+                <small className="muted" style={{ marginTop: 6 }}>
+                  updated {new Date(c.updatedAt).toLocaleString()}
+                </small>
+              </Link>
             ))}
-          </ul>
+          </div>
         )}
       </div>
+
+      {showCreate && (
+        <CreateClusterModal onClose={() => setShowCreate(false)} onCreated={onCreated} />
+      )}
     </div>
   );
 }

@@ -1,16 +1,9 @@
+// frontend/src/RippleReviewUI.jsx
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import { toDisplay, formatRecurrence } from './utils/display.js';
-import './RippleReviewUI.css'; // optional
-
-/* TODO: replace with real cluster list pulled from API */
-const CLUSTERS = [
-  { id: 'home',     name: 'Home' },
-  { id: 'work',     name: 'Work' },
-  { id: 'personal', name: 'Personal' },
-  { id: 'health',   name: 'Health' }
-];
+import './RippleReviewUI.css';
 
 const band = (c) => (Number(c) >= 0.66 ? 'high' : Number(c) >= 0.33 ? 'medium' : 'low');
 
@@ -46,49 +39,96 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
 
   const [ripples, setRipples] = useState([]);
   const [filter, setFilter] = useState('pending');
-  const [clusterSel, setClusterSel] = useState({}); // { rippleId: 'Home' }
+  const [clusters, setClusters] = useState([]);        // [{ id, name }]
+  const [clusterSel, setClusterSel] = useState({});    // { rippleId: 'Home' }
+  const [drafts, setDrafts] = useState({});            // { rippleId: { dueDate } }
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
 
-  // fetch pending for the specified day
+  // load clusters (sidebar source of truth)
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      try {
+        const res = await axios.get('/api/clusters', { headers: authHeaders });
+        if (ignore) return;
+        const list = Array.isArray(res.data) ? res.data : [];
+        setClusters(
+          list.map(c => ({
+            id: c.key || c._id || c.id || (c.label || 'cluster'),
+            name: c.label || c.name || c.key || 'Cluster'
+          }))
+        );
+      } catch {
+        // fallback to a tiny default set if API not ready
+        if (!ignore) {
+          setClusters([
+            { id: 'home', name: 'Home' },
+            { id: 'work', name: 'Work' },
+            { id: 'personal', name: 'Personal' },
+            { id: 'health', name: 'Health' }
+          ]);
+        }
+      }
+    })();
+    return () => { ignore = true; };
+  }, [authHeaders]);
+
+  // fetch ripples for the specified day
   useEffect(() => {
     if (!token) return;
+    let ignore = false;
     setLoading(true);
     setErr('');
     axios
-      .get(`/api/ripples/${dayISO}`, { headers: authHeaders })
-      .then(res => setRipples(Array.isArray(res.data) ? res.data : []))
+      .get(`/api/ripples/${dayISO}?scan=1`, { headers: authHeaders })
+      .then(res => {
+        if (ignore) return;
+        const arr = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.ripples) ? res.data.ripples : []);
+        setRipples(arr);
+
+        // prime due-date drafts (prefer backend hint or default day)
+        const init = {};
+        for (const r of arr) {
+          const id = r._id || r.id;
+          const hinted = r.meta?.dueDate || r.dueDate || dayISO;
+          init[id] = { dueDate: hinted };
+        }
+        setDrafts(init);
+      })
       .catch(e => {
         console.error('Failed to fetch ripples:', e);
         setErr('Failed to load ripples');
         setRipples([]);
+        setDrafts({});
       })
       .finally(() => setLoading(false));
+
+    return () => { ignore = true; };
   }, [token, authHeaders, dayISO]);
 
   // approve / dismiss
-async function act(id, action, clusterName) {
-  try {
-    const body = action === 'approve'
-      ? {
-          assignedClusters: clusterName ? [clusterName] : [],
-          dueDate: /* default to the panel date if no field present */ (drafts[id]?.dueDate || dayISO)
-        }
-      : {};
-    await axios.put(`/api/ripples/${id}/${action}`, body, { headers: authHeaders });
-    setRipples(prev => prev.filter(r => r._id !== id));
-  } catch (e) {
-    console.error(`Error ${action}ing ripple:`, e);
-    alert(`Could not ${action} ripple. Check console.`);
+  async function act(id, action, clusterName) {
+    try {
+      const dueDate = drafts?.[id]?.dueDate || dayISO;
+      const body =
+        action === 'approve'
+          ? { assignedClusters: clusterName ? [clusterName] : [], dueDate }
+          : {};
+      await axios.put(`/api/ripples/${id}/${action}`, body, { headers: authHeaders });
+      setRipples(prev => prev.filter(r => (r._id || r.id) !== id));
+    } catch (e) {
+      console.error(`Error ${action}ing ripple:`, e);
+      alert(`Could not ${action} ripple. Check console.`);
+    }
   }
-}
-
 
   // filter list
   const visible = useMemo(() => {
     return ripples.filter(r => {
+      const status = r.status || 'pending';
       if (filter === 'all') return true;
-      if (['pending','approved','dismissed'].includes(filter)) return r.status === filter;
+      if (['pending','approved','dismissed'].includes(filter)) return status === filter;
       if (['high','medium','low'].includes(filter)) return band(r.confidence) === filter;
       return true;
     });
@@ -126,14 +166,17 @@ async function act(id, action, clusterName) {
       )}
 
       {visible.map(r => {
+        const id = r._id || r.id;
         const b = band(r.confidence);
-        const cluster = clusterSel[r._id] || '';
+        const cluster = clusterSel[id] || '';
+        const dueDate = drafts?.[id]?.dueDate || dayISO;
+
         return (
           <div
-            key={r._id ?? r.id}
+            key={id}
             className={`p-4 rounded-lg border-2 mb-4 ${colorClass[b]}`}
           >
-            <div className="mb-2 text-gray-800 font-medium">{toDisplay(r.extractedText)}</div>
+            <div className="mb-2 text-gray-800 font-medium">{toDisplay(r.extractedText || r.text || '')}</div>
 
             {r.originalContext && typeof r.originalContext === 'string' && (
               <div className="text-sm text-gray-600 italic mb-2">“{r.originalContext}”</div>
@@ -147,28 +190,36 @@ async function act(id, action, clusterName) {
               </div>
             )}
 
-            {r.status === 'pending' ? (
+            {(r.status || 'pending') === 'pending' ? (
               <div className="flex flex-wrap gap-2 items-center">
                 <select
                   value={cluster}
-                  onChange={e => setClusterSel(prev => ({ ...prev, [r._id]: e.target.value }))}
+                  onChange={e => setClusterSel(prev => ({ ...prev, [id]: e.target.value }))}
                   className="border rounded px-2 py-1"
                 >
                   <option value="">Select Cluster</option>
-                  {CLUSTERS.map(c => (
+                  {clusters.map(c => (
                     <option key={c.id} value={c.name}>{c.name}</option>
                   ))}
                 </select>
 
+                <input
+                  type="date"
+                  className="border rounded px-2 py-1"
+                  value={dueDate}
+                  onChange={e => setDrafts(d => ({ ...d, [id]: { ...(d[id]||{}), dueDate: e.target.value } }))}
+                  title="Due date for the task that will be created"
+                />
+
                 <button
-                  onClick={() => act(r._id, 'approve', cluster)}
+                  onClick={() => act(id, 'approve', cluster)}
                   disabled={!cluster}
                   className="px-3 py-1 rounded bg-green-100 hover:bg-green-200 text-green-900 text-sm font-medium disabled:opacity-40"
                 >
                   Approve
                 </button>
                 <button
-                  onClick={() => act(r._id, 'dismiss')}
+                  onClick={() => act(id, 'dismiss')}
                   className="px-3 py-1 rounded bg-red-100 hover:bg-red-200 text-red-900 text-sm font-medium"
                 >
                   Dismiss
