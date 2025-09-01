@@ -2,6 +2,7 @@
 import express from 'express';
 import Section from '../models/Section.js';
 import auth from '../middleware/auth.js';
+import { escapeRegex } from '../utils/regex.js';
 
 const router = express.Router();
 router.use(auth);
@@ -29,9 +30,9 @@ router.get('/', async (req, res) => {
     if (pin === 'true') find.pinned = true;
     if (q && String(q).trim()) {
       find.$or = [
-        { key:   new RegExp(String(q).trim(), 'i') },
-        { label: new RegExp(String(q).trim(), 'i') },
-        { description: new RegExp(String(q).trim(), 'i') }
+        { key:   new RegExp(escapeRegex(String(q).trim()), 'i') },
+        { label: new RegExp(escapeRegex(String(q).trim()), 'i') },
+        { description: new RegExp(escapeRegex(String(q).trim()), 'i') }
       ];
     }
 

@@ -1,216 +1,148 @@
-// routes/compat.js (ESM)
-// Mount at /api (AFTER all real /api/* routers)
-import express from "express";
-import path from "path";
-import fs from "fs";
-import multer from "multer";
-import auth from "../middleware/auth.js";
+// routes/compat.js
+import { Router } from 'express';
+import auth from '../middleware/auth.js';
+import Task from '../models/Task.js';
+import Entry from '../models/Entry.js';
 
-const router = express.Router();
+const r = Router();
+r.use(auth);
 
-/* -------------------------
-   Ensure uploads/ exists (for other parts of the app)
-   ------------------------- */
-const uploadDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+/* ─── RIPPLES ────────────────────────────────────────────────────────── */
 
-/* -------------------------
-   1) True FLAT AUTH aliases at /api/*
-   Forwards /api/<path> -> /api/auth/<path>
-   ------------------------- */
-const { default: authRouter } = await import("./auth.js");
-const flatAuthPaths = [
-  "/login",
-  "/register",
-  "/me",
-  "/forgot",
-  "/reset",
-  "/change-password",
-  "/email/start-verify",
-  "/email/verify",
-];
-for (const p of flatAuthPaths) {
-  router.use(p, (req, res, next) => {
-    req.url = `/auth${req.url}`; // e.g., /login -> /auth/login
-    authRouter(req, res, next);
-  });
-}
-
-/* -------------------------
-   2) Hyphen vs camelCase (AUTH)
-      /suggested-tasks -> /suggestedTasks
-   ------------------------- */
-try {
-  const { default: suggestedTasksRouter } = await import("./suggestedTasks.js");
-  router.use("/suggested-tasks", auth, suggestedTasksRouter);
-} catch (e) {
-  console.warn("[compat] suggestedTasks router not found:", e.message);
-}
-
-/* -------------------------
-   3) Pages naming variants (AUTH)
-      /pages and /section-pages -> sectionPages
-   ------------------------- */
-try {
-  const { default: sectionPagesRouter } = await import("./sectionPages.js");
-  router.use("/pages", auth, sectionPagesRouter);
-  router.use("/section-pages", auth, sectionPagesRouter);
-} catch (e) {
-  console.warn("[compat] sectionPages router not found:", e.message);
-}
-
-/* -------------------------
-   4) Notes singular alias (AUTH)
-      /note -> /notes
-   ------------------------- */
-try {
-  const { default: notesRouter } = await import("./notes.js");
-  router.use("/note", auth, notesRouter);
-} catch (e) {
-  console.warn("[compat] notes router not found:", e.message);
-}
-
-/* -------------------------
-   5) Ripples forwarder (AUTH, robust)
-      Ensure /api/ripples/:whatever works even if the inner router
-      defines its own '/ripples/...' paths.
-   ------------------------- */
-try {
-  const { default: ripplesRouter } = await import("./ripples.js");
-  router.use("/ripples", auth, (req, res, next) => {
-    const rest = req.url;            // '/2025-08-21' or '/<id>/approve'
-    req.url = `/ripples${rest}`;     // '/ripples/2025-08-21'
-    ripplesRouter(req, res, next);
-  });
-} catch (e) {
-  console.warn("[compat] ripples router not found:", e.message);
-}
-
-/* -------------------------
-   6) Schedule base (AUTH)
-      /api/schedule?date=YYYY-MM-DD -> /api/schedule/:date
-   ------------------------- */
-router.get("/schedule", auth, (req, res) => {
-  const tz = "America/Toronto";
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
-  const date = (req.query.date || today).trim();
-  res.redirect(307, `/api/schedule/${date}`);
+// Old FE: POST /api/ripples/approve  { id }
+// Canonical: POST /api/ripples/:id/approve
+r.post('/ripples/approve', (req, res) => {
+  const id = String(req.body?.id || '').trim();
+  if (!id) return res.status(400).json({ error: 'id required' });
+  return res.redirect(307, `/api/ripples/${id}/approve`);
 });
 
-/* -------------------------
-   7) Tasks link/unlink (AUTH) — REAL implementation
-      POST /api/tasks/:id/link-entry
-        Body options:
-          { entryId: "<Entry._id>" }
-          OR { date: "YYYY-MM-DD", autoCreate?: boolean, title?, content? }
-        - If date provided and no entry exists:
-            - If autoCreate === true → create Entry for that date (with optional title/content)
-            - Else → 404
-      POST /api/tasks/:id/unlink-entry
-   ------------------------- */
-import mongoose from "mongoose";
-const { default: Task } = await import("../models/Task.js");
-const { default: Entry } = await import("../models/Entry.js");
+// Old FE: POST /api/ripples/dismiss  { id }
+r.post('/ripples/dismiss', (req, res) => {
+  const id = String(req.body?.id || '').trim();
+  if (!id) return res.status(400).json({ error: 'id required' });
+  return res.redirect(307, `/api/ripples/${id}/dismiss`);
+});
 
-function isObjectId(id) {
-  return mongoose.Types.ObjectId.isValid(id);
-}
+// Old FE: GET /api/ripples/for-day?date=YYYY-MM-DD
+// Canonical: GET /api/ripples?date=YYYY-MM-DD
+r.get('/ripples/for-day', (req, res) => {
+  const q = new URLSearchParams({ date: String(req.query?.date || '') }).toString();
+  return res.redirect(307, `/api/ripples?${q}`);
+});
 
-router.post("/tasks/:id/link-entry", auth, async (req, res) => {
-  try {
-    const taskId = req.params.id;
-    if (!isObjectId(taskId)) return res.status(400).json({ error: "Invalid task id" });
+// Old FE: GET /api/ripples/pending
+// Canonical: GET /api/ripples?status=pending
+r.get('/ripples/pending', (_req, res) => {
+  return res.redirect(307, `/api/ripples?status=pending`);
+});
 
-    const task = await Task.findById(taskId);
-    if (!task) return res.status(404).json({ error: "Task not found" });
-    // Ensure ownership (if your auth middleware sets req.user)
-    if (task.userId && req.user?.id && String(task.userId) !== String(req.user.id)) {
-      return res.status(403).json({ error: "Forbidden" });
-    }
+// Old FE: POST /api/entries/:id/analyze
+// Canonical: POST /api/ripples/analyze  { entryId, ... }
+// We proxy by injecting entryId into the body and replaying the request.
+r.post('/entries/:id/analyze', expressJsonReplay((req) => ({
+  url: '/api/ripples/analyze',
+  body: { ...req.body, entryId: req.params.id },
+})));
 
-    const { entryId, date, autoCreate = false, title = "", content = "" } = req.body || {};
-    let entry = null;
+/* ─── TASKS ──────────────────────────────────────────────────────────── */
 
-    if (entryId) {
-      if (!isObjectId(entryId)) return res.status(400).json({ error: "Invalid entryId" });
-      entry = await Entry.findById(entryId);
-      if (!entry) return res.status(404).json({ error: "Entry not found" });
-    } else if (date) {
-      entry = await Entry.findOne({ date });
-      if (!entry && autoCreate) {
-        // Create minimal entry; adjust fields if your Entry schema differs
-        entry = await Entry.create({
-          userId: task.userId || req.user?.id, // best guess tie
-          date,
-          title: title || `Journal for ${date}`,
-          content: content || "",
-        });
-      }
-      if (!entry) return res.status(404).json({ error: `No entry for date ${date}` });
-    } else {
-      return res.status(400).json({ error: "Provide entryId or date" });
-    }
-
-    task.entryId = entry._id;
-    await task.save();
-
-    return res.json({
-      ok: true,
-      taskId: String(task._id),
-      entryId: String(task.entryId),
-    });
-  } catch (err) {
-    console.error("[link-entry] error:", err);
-    return res.status(500).json({ error: "Server error" });
+// Old FE: POST /api/tasks/:id/complete  (idempotent set done=true)
+r.post('/tasks/:id/complete', async (req, res) => {
+  const userId = req.user.userId;
+  const id = req.params.id;
+  const t = await Task.findOne({ _id: id, userId });
+  if (!t) return res.status(404).json({ error: 'task not found' });
+  if (!t.done) {
+    t.done = true;
+    await t.save();
   }
+  res.json({ ok: true, task: { id: t._id, done: t.done } });
 });
 
-router.post("/tasks/:id/unlink-entry", auth, async (req, res) => {
+// Old FE: POST /api/tasks/carry-forward  { from, to, cluster? }
+r.post('/tasks/carry-forward', async (req, res) => {
+  const userId = req.user.userId;
+  const from = String(req.body?.from || '').trim();
+  const to   = String(req.body?.to || '').trim();
+  const cluster = req.body?.cluster ? String(req.body.cluster) : null;
+  if (!from || !to) return res.status(400).json({ error: 'from and to required' });
+
+  const match = { userId, done: false, dueDate: from };
+  if (cluster) match.cluster = cluster;
+
+  const result = await Task.updateMany(match, { $set: { dueDate: to } });
+  res.json({ moved: result.modifiedCount || 0, to });
+});
+
+// Old FE: POST /api/tasks/from-entry { entryId, text?, title?, dueDate? }
+r.post('/tasks/from-entry', async (req, res) => {
+  const userId = req.user.userId;
+  const { entryId, text = '', title = '', dueDate = null, cluster = null } = req.body || {};
+  if (!entryId) return res.status(400).json({ error: 'entryId required' });
+
+  const base = {};
   try {
-    const taskId = req.params.id;
-    if (!isObjectId(taskId)) return res.status(400).json({ error: "Invalid task id" });
-
-    const task = await Task.findById(taskId);
-    if (!task) return res.status(404).json({ error: "Task not found" });
-    if (task.userId && req.user?.id && String(task.userId) !== String(req.user.id)) {
-      return res.status(403).json({ error: "Forbidden" });
+    const e = await Entry.findOne({ _id: entryId, userId });
+    if (e) {
+      base.text = text || e.text || e.content || '';
+      base.title = title || e.title || '';
     }
+  } catch { /* non-fatal */ }
 
-    task.entryId = null;
-    await task.save();
-
-    return res.json({
-      ok: true,
-      taskId: String(task._id),
-      entryId: null,
-    });
-  } catch (err) {
-    console.error("[unlink-entry] error:", err);
-    return res.status(500).json({ error: "Server error" });
-  }
+  const doc = await Task.create({
+    userId,
+    title: (title || base.title || '').slice(0, 200) || 'Task',
+    text: (text || base.text || '').slice(0, 5000),
+    dueDate: dueDate || null,
+    cluster: cluster || null,
+    done: false,
+  });
+  res.status(201).json({ id: doc._id, ok: true });
 });
 
-/* -------------------------
-   8) Sections rename (AUTH) — real alias
-      POST /api/sections/rename  { id, name }  →  PUT /api/sections/:id { name }
-   ------------------------- */
-try {
-  const { default: sectionsRouter } = await import("./sections.js");
-  router.post("/sections/rename", auth, (req, res, next) => {
-    const { id, name } = req.body || {};
-    if (!id || !name) {
-      return res.status(400).json({
-        error: "Missing id or name",
-        expectedBody: { id: "<sectionId>", name: "<newName>" },
-      });
-    }
-    req.method = "PUT";
-    req.url = `/sections/${encodeURIComponent(id)}`;
-    req.body = { name };
-    sectionsRouter(req, res, next);
-  });
-} catch (e) {
-  console.warn("[compat] sections router not found for rename alias:", e.message);
-}
+/* ─── SCHEDULE ───────────────────────────────────────────────────────── */
 
-export default router;
+// Old FE: GET /api/schedule/:date   → canonical: GET /api/schedule?date=:date
+r.get('/schedule/:date', (req, res) => {
+  const q = new URLSearchParams({ date: req.params.date }).toString();
+  return res.redirect(307, `/api/schedule?${q}`);
+});
+
+/* ─── CALENDAR ───────────────────────────────────────────────────────── */
+
+// Some old calls may hit /api/calendar/* patterns that expect redirect.
+r.get('/calendar/upcoming/list', (req, res) => {
+  const q = new URLSearchParams({ from: String(req.query?.from || '') }).toString();
+  return res.redirect(307, `/api/calendar/upcoming/list?${q}`);
+});
+
+/* ─── helpers ────────────────────────────────────────────────────────── */
+/** Build a handler that replays a JSON POST to a new URL with a transformed body. */
+function expressJsonReplay(mapper) {
+  return async (req, res, next) => {
+    try {
+      // Capture original JSON body (already parsed by global express.json)
+      const mapped = mapper(req);
+      // Re-emit through Express by calling next route stack with modified req
+      req.url = mapped.url;
+      req.originalUrl = mapped.url;
+      req.body = mapped.body;
+      return next(); // falls through to the canonical route mounted later
+    } catch (e) {
+      return res.status(500).json({ error: 'compat replay failed' });
+    }
+  };
+}
+// Auth legacy shortcuts
+r.post('/login',  expressJsonReplay(() => ({ url: '/api/auth/login',  body: {} })));
+r.post('/register', expressJsonReplay(() => ({ url: '/api/auth/register', body: {} })));
+r.post('/forgot', expressJsonReplay(() => ({ url: '/api/auth/forgot', body: {} })));
+r.post('/reset',  expressJsonReplay(() => ({ url: '/api/auth/reset',  body: {} })));
+r.get('/change-password',  (req,res)=>res.status(405).json({error:'use POST /api/auth/change-password'}));
+r.post('/change-password', expressJsonReplay(() => ({ url: '/api/auth/change-password', body: {} })));
+
+// Cluster singular → plural
+r.get('/cluster', expressJsonReplay(() => ({ url: '/api/clusters', body: {} })));
+
+export default r;

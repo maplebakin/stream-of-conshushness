@@ -1,10 +1,11 @@
 // /routes/auth.js
 // Unified auth router for Stream of Conshushness
-// Flows: register, login, forgot (link+code), reset, change-password (authed), admin reset
-import 'dotenv/config'; 
+// Flows: register, login (username OR email), forgot (link+code), reset, change-password, admin reset, email verify, profile
+
+import 'dotenv/config';
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';          // or: import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import User from '../models/User.js';
@@ -50,45 +51,115 @@ function makeJWT(user) {
 const nowPlus = (mins) => new Date(Date.now() + mins * 60 * 1000);
 const isProd = NODE_ENV === 'production';
 const devLog = (...args) => (!isProd ? console.log('[DEV]', ...args) : null);
-
-// Standard response helpers
 const ok = (res, payload = {}) => res.json({ ok: true, ...payload });
 const fail = (res, code, message) => res.status(code).json({ error: message });
+const escapeRegex = (s = '') => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function isEmail(s = '') {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
+}
+
+async function generateUniqueUsername(base) {
+  // normalize: a-z0-9._- only, trim dots/dashes
+  let stem = (base || 'user')
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, '')
+    .replace(/^[-_.]+|[-_.]+$/g, '') || 'user';
+
+  let candidate = stem;
+  let n = 0;
+  // try stem, stem1, stem2, ...
+  while (await User.findOne({ username: candidate })) {
+    n += 1;
+    candidate = `${stem}${n}`;
+    if (n > 200) {
+      candidate = `user${crypto.randomBytes(3).toString('hex')}`;
+      if (!(await User.findOne({ username: candidate }))) break;
+    }
+  }
+  return candidate;
+}
 
 /* ─────────────────────────── ROUTES ─────────────────────────── */
 
-/** REGISTER
- * POST /api/auth/register  { username, password, email? }
+/** REGISTER (tolerant)
+ * POST /api/register  or  /api/auth/register
+ * Accepts any of:
+ *   { username, password, email? }
+ *   { email, password }                    // auto-generates username from email local-part
+ *   { identifier, password }               // identifier can be username or email
  */
 router.post('/register', async (req, res) => {
   try {
-    const { username, password, email = '' } = req.body || {};
-    if (!username || !password) return fail(res, 400, 'username and password required');
+    const {
+      username: rawUsername,
+      email: rawEmail,
+      identifier,
+      password,
+    } = req.body || {};
 
-    const exists = await User.findOne({ username });
-    if (exists) return fail(res, 409, 'username already taken');
+    const loginId = (identifier || rawUsername || rawEmail || '').trim();
+    const email = rawEmail?.trim() || (isEmail(loginId) ? loginId : '');
 
-    const user = new User({ username, email });
+    if (!password || password.length < 6) {
+      return fail(res, 400, 'password must be at least 6 chars');
+    }
+
+    let username = (rawUsername || (!isEmail(loginId) ? loginId : '') || '').trim();
+
+    // If username missing but we have an email, mint a stable unique username from local-part.
+    if (!username && email) {
+      const local = email.split('@')[0];
+      username = await generateUniqueUsername(local);
+    }
+
+    if (!username) return fail(res, 400, 'username or email required');
+
+    // Uniqueness checks
+    const nameTaken = await User.findOne({ username });
+    if (nameTaken) return fail(res, 409, 'username already taken');
+
+    if (email) {
+      const emailClash = await User.findOne({
+        email: { $regex: new RegExp(`^${escapeRegex(email)}$`, 'i') },
+      });
+      if (emailClash) return fail(res, 409, 'email already in use');
+    }
+
+    const user = new User({ username, email: email || '' });
     user.passwordHash = await bcrypt.hash(password, 10);
     await user.save();
 
     const token = makeJWT(user);
-    return ok(res, { token, user: { id: user._id, username: user.username, email: user.email } });
+    return ok(res, {
+      token,
+      user: { id: user._id, username: user.username, email: user.email },
+    });
   } catch (e) {
     console.error(e);
     return fail(res, 500, 'register failed');
   }
 });
 
-/** LOGIN
- * POST /api/auth/login  { username, password }
+/** LOGIN (username OR email)
+ * POST /api/login  or  /api/auth/login
+ * Bodies supported:
+ *   { username, password }
+ *   { email, password }
+ *   { identifier, password }
  */
 router.post('/login', async (req, res) => {
   try {
-    const { username, password } = req.body || {};
-    if (!username || !password) return fail(res, 400, 'missing credentials');
+    const { username, email, identifier, password } = req.body || {};
+    const loginId = (identifier || username || email || '').trim();
+    if (!loginId || !password) return fail(res, 400, 'missing credentials');
 
-    const user = await User.findOne({ username });
+    const byEmail = isEmail(loginId);
+    const query = byEmail
+      ? { email: { $regex: new RegExp(`^${escapeRegex(loginId)}$`, 'i') } }
+      : { username: loginId };
+
+    const user = await User.findOne(query);
     if (!user) return fail(res, 401, 'invalid credentials');
 
     const okPass = await bcrypt.compare(password, user.passwordHash);
@@ -103,10 +174,7 @@ router.post('/login', async (req, res) => {
 });
 
 /** FORGOT (no enumeration)
- * POST /api/auth/forgot  { identifier }   // username or email (case-insensitive)
- * - Issues both:
- *   1) token link → /reset?token=...
- *   2) 6-digit code → manual path (works w/out email)
+ * POST /api/forgot  or  /api/auth/forgot   { identifier }
  */
 router.post('/forgot', async (req, res) => {
   try {
@@ -114,7 +182,10 @@ router.post('/forgot', async (req, res) => {
     if (!identifier) return fail(res, 400, 'identifier required');
 
     const user = await User.findOne({
-      $or: [{ username: identifier }, { email: new RegExp(`^${identifier}$`, 'i') }],
+      $or: [
+        { username: identifier },
+        { email: new RegExp(`^${escapeRegex(identifier)}$`, 'i') },
+      ],
     });
 
     // Always 200 to avoid enumeration.
@@ -167,7 +238,7 @@ router.post('/forgot', async (req, res) => {
 });
 
 /** RESET (two paths)
- * POST /api/auth/reset
+ * POST /api/reset  or  /api/auth/reset
  *   A) { token, newPassword }
  *   B) { username, code, newPassword }
  */
@@ -213,7 +284,7 @@ router.post('/reset', async (req, res) => {
 });
 
 /** CHANGE PASSWORD (logged-in)
- * POST /api/auth/change-password  { oldPassword, newPassword }
+ * POST /api/change-password  or  /api/auth/change-password
  * Header: Authorization: Bearer <jwt>
  */
 router.post('/change-password', auth, async (req, res) => {
@@ -239,8 +310,7 @@ router.post('/change-password', auth, async (req, res) => {
 });
 
 /** ADMIN RESET (manual override)
- * POST /api/auth/admin/reset-password  { adminSecret, username, newPassword }
- * - Use via CLI/curl only (do not call from frontend)
+ * POST /api/admin/reset-password  or  /api/auth/admin/reset-password
  */
 router.post('/admin/reset-password', async (req, res) => {
   try {
@@ -266,9 +336,9 @@ router.post('/admin/reset-password', async (req, res) => {
     return fail(res, 500, 'admin reset failed');
   }
 });
+
 /* ───────────────── Email: add & verify (logged-in) ───────────────── */
 
-// Profile: who am I?
 // GET /api/me
 router.get('/me', auth, async (req, res) => {
   try {
@@ -282,7 +352,6 @@ router.get('/me', auth, async (req, res) => {
   }
 });
 
-// Update profile (email and/or username)
 // PATCH /api/me   { email?, username? }
 router.patch('/me', auth, async (req, res) => {
   try {
@@ -290,12 +359,15 @@ router.patch('/me', auth, async (req, res) => {
     const user = await User.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'user not found' });
 
-    // Update email
-    if (typeof email === 'string') {
+    if (typeof email === 'string' && email.trim()) {
+      const clash = await User.findOne({
+        _id: { $ne: user._id },
+        email: { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, 'i') },
+      });
+      if (clash) return res.status(409).json({ error: 'email already in use' });
       user.email = email.trim();
     }
 
-    // Optional: allow username change (unique)
     if (typeof username === 'string' && username.trim() && username.trim() !== user.username) {
       const exists = await User.findOne({ username: username.trim() });
       if (exists) return res.status(409).json({ error: 'username already taken' });
@@ -313,25 +385,20 @@ router.patch('/me', auth, async (req, res) => {
   }
 });
 
-
 /** START EMAIL VERIFY
  * POST /api/email/start-verify  { email }
- * Header: Authorization: Bearer <jwt>
- * Sends a 6-digit code to the provided email and stores it as pendingEmail.
  */
 router.post('/email/start-verify', auth, async (req, res) => {
   try {
     const { email } = req.body || {};
-    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
-      return fail(res, 400, 'valid email required');
+    if (!email || !isEmail(email)) return fail(res, 400, 'valid email required');
 
     const user = await User.findById(req.user.userId);
     if (!user) return fail(res, 401, 'not authorized');
 
-    // Optional uniqueness check (case-insensitive)
     const clash = await User.findOne({
       _id: { $ne: user._id },
-      email: { $regex: new RegExp(`^${email}$`, 'i') },
+      email: { $regex: new RegExp(`^${escapeRegex(email)}$`, 'i') },
     });
     if (clash) return fail(res, 409, 'email already in use');
 
@@ -340,10 +407,9 @@ router.post('/email/start-verify', auth, async (req, res) => {
 
     user.pendingEmail = email;
     user.emailVerifyCodeHash = codeHash;
-    user.emailVerifyCodeExpiry = nowPlus(30); // 30 minutes
+    user.emailVerifyCodeExpiry = nowPlus(30);
     await user.save();
 
-    // Send the code
     if (transporter) {
       try {
         await transporter.sendMail({
@@ -372,8 +438,6 @@ router.post('/email/start-verify', auth, async (req, res) => {
 
 /** CONFIRM EMAIL VERIFY
  * POST /api/email/verify  { code }
- * Header: Authorization: Bearer <jwt>
- * Confirms the pendingEmail using the 6-digit code.
  */
 router.post('/email/verify', auth, async (req, res) => {
   try {
@@ -391,7 +455,6 @@ router.post('/email/verify', auth, async (req, res) => {
     const okCode = await bcrypt.compare(String(code), user.emailVerifyCodeHash || '');
     if (!okCode) return fail(res, 400, 'invalid code');
 
-    // Commit pending → email
     user.email = user.pendingEmail;
     user.emailVerifiedAt = new Date();
     user.pendingEmail = '';

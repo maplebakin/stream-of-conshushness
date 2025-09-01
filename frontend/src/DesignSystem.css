@@ -1,0 +1,22 @@
+/* frontend/src/DesignSystem.css */
+
+/* 1) tokens + base */
+@import "./variables.css";
+@import "./base.css";
+
+/* 2) page-level styles (bigger canvases first) */
+@import "./dailypage.css";
+@import "./Calendar.css";
+@import "./streampage.css";
+@import "./Settings.css";
+@import "./login.css";
+
+/* 3) components / feature panels */
+@import "./Sidebar.css";
+@import "./TaskList.css";
+@import "./TaskModal.css";
+@import "./modal.css";
+
+/* 4) tailwind helper (if you genuinely use it here) */
+/* If this file only contains `@tailwind screens;` you can skip it safely. */
+

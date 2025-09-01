@@ -1,79 +1,38 @@
-// frontend/src/pages/ClusterRoom.jsx
-import React, { useEffect, useMemo, useState, useContext } from 'react';
+import React, { useEffect, useMemo, useState, useContext, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
 import RoomLayout from '../components/room/RoomLayout.jsx';
+import TaskModal from '../TaskModal.jsx';
 import '../Main.css';
+import SafeHTML from '../components/SafeHTML.jsx';
 
-/* -------------------------- Toronto date helpers -------------------------- */
 function torontoParts(d = new Date()) {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Toronto',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  });
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' });
   const p = fmt.formatToParts(d);
-  const y = p.find(x => x.type === 'year').value;
-  const m = p.find(x => x.type === 'month').value;
-  const dd = p.find(x => x.type === 'day').value;
-  return { y, m, dd };
+  return { y: p.find(x => x.type === 'year').value, m: p.find(x => x.type === 'month').value, dd: p.find(x => x.type === 'day').value };
 }
-function torontoTodayISO() {
-  const { y, m, dd } = torontoParts();
-  return `${y}-${m}-${dd}`;
-}
-function parseISODateLocalMidnight(iso) {
-  const [y, m, d] = iso.split('-').map(n => parseInt(n, 10));
-  return new Date(y, m - 1, d);
-}
-function toTorontoISOFromDate(d) {
-  const { y, m, dd } = torontoParts(d);
-  return `${y}-${m}-${dd}`;
-}
+function torontoTodayISO() { const { y, m, dd } = torontoParts(); return `${y}-${m}-${dd}`; }
+function parseISODateLocalMidnight(iso) { const [y, m, d] = iso.split('-').map(n => parseInt(n, 10)); return new Date(y, m - 1, d); }
+function toTorontoISOFromDate(d) { const { y, m, dd } = torontoParts(d); return `${y}-${m}-${dd}`; }
 
-/* -------------------------- Timeline builder -------------------------- */
 function buildTimeline({ entries, tasks, appts }, filters) {
   const items = [];
-
   if (filters.entries && Array.isArray(entries)) {
-    for (const e of entries) {
-      items.push({
-        type: 'entry',
-        id: e._id,
-        timelineDate: e.createdAt || e.date || '1970-01-01',
-        data: e
-      });
-    }
+    for (const e of entries) items.push({ type: 'entry', id: e._id, timelineDate: e.createdAt || e.date || '1970-01-01', data: e });
   }
   if (filters.tasks && Array.isArray(tasks)) {
-    for (const t of tasks) {
-      const tl = t.dueDate || t.createdAt || '1970-01-01';
-      items.push({ type: 'task', id: t._id, timelineDate: tl, data: t });
-    }
+    for (const t of tasks) items.push({ type: 'task', id: t._id, timelineDate: t.dueDate || t.createdAt || '1970-01-01', data: t });
   }
   if (filters.appts && Array.isArray(appts)) {
-    for (const a of appts) {
-      const tl = a.start || a.date || '1970-01-01';
-      items.push({ type: 'appt', id: a._id, timelineDate: tl, data: a });
-    }
+    for (const a of appts) items.push({ type: 'appt', id: a._id, timelineDate: a.start || a.date || '1970-01-01', data: a });
   }
-
   items.sort((a, b) => (a.timelineDate > b.timelineDate ? -1 : a.timelineDate < b.timelineDate ? 1 : 0));
   return items;
 }
-
-/* -------------------------- Simple UI atoms --------------------------- */
 function PillButton({ active, onClick, children }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`pill ${active ? '' : 'pill-muted'}`}
-      style={{ cursor: 'pointer', border: 'none', background: 'transparent' }}
-      aria-pressed={!!active}
-    >
+    <button type="button" onClick={onClick} className={`pill ${active ? '' : 'pill-muted'}`} style={{ cursor: 'pointer', border: 'none', background: 'transparent' }} aria-pressed={!!active}>
       {children}
     </button>
   );
@@ -84,25 +43,37 @@ function EntryCard({ e }) {
       <div className="entry-meta">
         <span className="date">{e.date}</span>
         {e.mood && <span className="pill">{e.mood}</span>}
-        {Array.isArray(e.tags) &&
-          e.tags.slice(0, 5).map((t, i) => (
-            <span key={i} className="pill pill-muted">#{t}</span>
-          ))}
+        {Array.isArray(e.tags) && e.tags.slice(0, 5).map((t, i) => (<span key={i} className="pill pill-muted">#{t}</span>))}
       </div>
-      <div className="entry-text">
-        {e.text || (e.html ? <span dangerouslySetInnerHTML={{ __html: e.html }} /> : '—')}
-      </div>
+      <SafeHTML
+        className="entry-text"
+        html={
+          (e?.html && e.html.length)
+            ? e.html
+            : (typeof e?.content === 'string' && /<[^>]+>/.test(e.content))
+              ? e.content
+              : (e?.text ?? '').replaceAll('\n', '<br/>')
+        }
+      />
     </article>
   );
 }
-function TaskCard({ t }) {
+function TaskCard({ t, onToggle, onEdit }) {
   return (
     <article className="entry-card" key={t._id}>
-      <div className="entry-meta">
-        <span className="pill">Task</span>
+      <div className="entry-meta" style={{ display:'flex', gap:8, alignItems:'center' }}>
+        <label className="chk" title={t.completed ? 'Mark not done' : 'Mark done'}>
+          <input type="checkbox" checked={!!t.completed} onChange={() => onToggle?.(t)} />
+          <span className="checkmark" />
+        </label>
+        <span className={`pill ${t.completed ? 'pill-muted' : ''}`}>Task</span>
         {t.dueDate ? <span className="pill">{t.dueDate}</span> : <span className="pill pill-muted">no date</span>}
+        {Array.isArray(t.sections) && t.sections.length > 0 && (<span className="pill pill-muted">§{t.sections.join(' • ')}</span>)}
       </div>
-      <div>{t.title}</div>
+      <div className="entry-text" onClick={() => onEdit?.(t)} style={{ cursor: onEdit ? 'pointer' : 'default', textDecoration: t.completed ? 'line-through' : 'none', opacity: t.completed ? 0.7 : 1 }} title="Click to edit">
+        {t.title}
+      </div>
+      {t.notes && <div className="muted" style={{ marginTop: 6 }}>{t.notes}</div>}
     </article>
   );
 }
@@ -110,32 +81,33 @@ function ApptCard({ a }) {
   const when = a.start ? new Date(a.start).toLocaleString() : (a.date || '—');
   return (
     <article className="entry-card" key={a._id}>
-      <div className="entry-meta">
-        <span className="pill">Appointment</span>
-        <span className="pill">{when}</span>
-      </div>
+      <div className="entry-meta"><span className="pill">Appointment</span><span className="pill">{when}</span></div>
       <div>{a.title}</div>
     </article>
   );
 }
+function normalizeClusters(resOrData) {
+  const d = resOrData?.data ?? resOrData;
+  if (Array.isArray(d)) return d;
+  if (Array.isArray(d?.data)) return d.data;
+  if (Array.isArray(d?.clusters)) return d.clusters;
+  if (Array.isArray(d?.data?.clusters)) return d.data.clusters;
+  return [];
+}
 
-/* =============================== Page =============================== */
 export default function ClusterRoom() {
   const { clusterSlug } = useParams();
   const { token } = useContext(AuthContext);
+  const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
-  // Left spine
   const [clusters, setClusters] = useState([]);
-  // Center feed data
   const [entries, setEntries] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [appts, setAppts] = useState([]);
-  // Right panel slices
   const [tasksToday, setTasksToday] = useState([]);
   const [tasksUpcoming, setTasksUpcoming] = useState([]);
   const [apptsToday, setApptsToday] = useState([]);
   const [apptsUpcoming, setApptsUpcoming] = useState([]);
-  // Motifs (tags/mood)
   const [motifs, setMotifs] = useState({ tags: [], moods: [] });
 
   const [loading, setLoading] = useState(true);
@@ -143,134 +115,97 @@ export default function ClusterRoom() {
   const [composing, setComposing] = useState(false);
   const [newText, setNewText] = useState('');
 
-  // Pagination for entries
   const [page, setPage] = useState(0);
   const limit = 50;
   const [hasMore, setHasMore] = useState(false);
 
-  // Filter toggles for center feed (entries default on)
   const [filters, setFilters] = useState({ entries: true, tasks: false, appts: false, notes: false });
 
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+
   const title = (clusterSlug || '').replace(/-/g, ' ');
+
+  const recomputeSlices = useCallback((tasksData, apptsData) => {
+    const today = torontoTodayISO();
+    const tToday = (tasksData || []).filter(t => t.dueDate === today);
+    const tUpcoming = (tasksData || []).filter(t => t.dueDate && t.dueDate > today).sort((a,b)=>a.dueDate.localeCompare(b.dueDate)).slice(0,5);
+    const aToday = (apptsData || []).filter(a => {
+      const dt = a.start ? new Date(a.start) : (a.date ? parseISODateLocalMidnight(a.date) : null);
+      return dt && toTorontoISOFromDate(dt) === today;
+    });
+    const aUpcoming = (apptsData || []).filter(a => {
+      const dt = a.start ? new Date(a.start) : (a.date ? parseISODateLocalMidnight(a.date) : null);
+      return dt && toTorontoISOFromDate(dt) > today;
+    }).sort((a,b)=> (a.start || a.date || '').localeCompare(b.start || b.date || '')).slice(0,5);
+    setTasksToday(tToday); setTasksUpcoming(tUpcoming); setApptsToday(aToday); setApptsUpcoming(aUpcoming);
+  }, []);
+
+  const reloadTasks = useCallback(async () => {
+    try {
+      const tRes = await axios.get(`/api/tasks?cluster=${encodeURIComponent(clusterSlug)}&completed=false&limit=200`, { headers });
+      const tasksData = Array.isArray(tRes.data) ? tRes.data : (Array.isArray(tRes.data?.data) ? tRes.data.data : []);
+      setTasks(tasksData);
+      recomputeSlices(tasksData, appts);
+    } catch {}
+  }, [clusterSlug, headers, appts, recomputeSlices]);
 
   useEffect(() => {
     if (!token || !clusterSlug) return;
 
-    // reset on cluster change
-    setEntries([]);
-    setPage(0);
-    setHasMore(false);
-    setLoading(true);
-    setErrorMsg('');
+    setEntries([]); setPage(0); setHasMore(false);
+    setLoading(true); setErrorMsg('');
 
     const controller = new AbortController();
-    const headers = { Authorization: `Bearer ${token}` };
     const signal = controller.signal;
 
     (async () => {
       try {
         // 1) Left spine clusters
-        let spine = [];
+        let list = [];
         try {
-          const sec = await axios.get('/api/sections?type=cluster', { headers, signal });
-          spine = Array.isArray(sec.data)
-            ? sec.data.map(s => ({
-                slug: s.slug || (s.name || '').toLowerCase(),
-                name: s.name || s.title || s.slug || 'Unnamed',
-                emoji: s.emoji || ''
-              }))
-            : [];
+          const res = await axios.get('/api/clusters', { headers, signal });
+          list = normalizeClusters(res);
         } catch {
-          spine = [{ slug: clusterSlug, name: title, emoji: '' }];
+          list = [{ key: clusterSlug, label: title }]; // minimal fallback
         }
-        if (!signal.aborted) setClusters(spine);
+        if (!signal.aborted) {
+          const spine = list.map(c => ({ slug: c.key || c.slug || '', name: c.label || c.name || c.key || 'Unnamed', emoji: c.icon || '' })).filter(x => x.slug);
+          setClusters(spine);
+        }
 
         // 2) Entries page 0
-        const entryRes = await axios.get(
-          `/api/entries?cluster=${encodeURIComponent(clusterSlug)}&limit=${limit}&offset=0`,
-          { headers, signal }
-        );
-        const entriesData = Array.isArray(entryRes.data) ? entryRes.data : [];
-        if (!signal.aborted) {
-          setEntries(entriesData);
-          setHasMore(entriesData.length === limit);
-        }
+        const entryRes = await axios.get(`/api/entries?cluster=${encodeURIComponent(clusterSlug)}&limit=${limit}&offset=0`, { headers, signal });
+        const entriesData = Array.isArray(entryRes.data) ? entryRes.data : (Array.isArray(entryRes.data?.data) ? entryRes.data.data : []);
+        if (!signal.aborted) { setEntries(entriesData); setHasMore(entriesData.length === limit); }
 
         // 3) Tasks + Appointments
         let tasksData = [];
         try {
-          const tRes = await axios.get(
-            `/api/tasks?cluster=${encodeURIComponent(clusterSlug)}&completed=false&limit=200`,
-            { headers, signal }
-          );
-          tasksData = Array.isArray(tRes.data) ? tRes.data : [];
+          const tRes = await axios.get(`/api/tasks?cluster=${encodeURIComponent(clusterSlug)}&completed=false&limit=200`, { headers, signal });
+          tasksData = Array.isArray(tRes.data) ? tRes.data : (Array.isArray(tRes.data?.data) ? tRes.data.data : []);
         } catch { tasksData = []; }
         if (!signal.aborted) setTasks(tasksData);
 
         let apptsData = [];
         try {
-          const aRes = await axios.get(
-            `/api/appointments?cluster=${encodeURIComponent(clusterSlug)}&limit=200`,
-            { headers, signal }
-          );
-          apptsData = Array.isArray(aRes.data) ? aRes.data : [];
+          const aRes = await axios.get(`/api/appointments?cluster=${encodeURIComponent(clusterSlug)}&limit=200`, { headers, signal });
+          apptsData = Array.isArray(aRes.data) ? aRes.data : (Array.isArray(aRes.data?.data) ? aRes.data.data : []);
         } catch { apptsData = []; }
         if (!signal.aborted) setAppts(apptsData);
 
-        // 4) Compute Today / Up next (Toronto)
-        const today = torontoTodayISO();
-
-        const tToday = tasksData.filter(t => t.dueDate === today);
-        const tUpcoming = tasksData
-          .filter(t => t.dueDate && t.dueDate > today)
-          .sort((a, b) => (a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0))
-          .slice(0, 5);
-
-        const aToday = apptsData.filter(a => {
-          if (!a.start && !a.date) return false;
-          const dt = a.start ? new Date(a.start) : parseISODateLocalMidnight(a.date);
-          return toTorontoISOFromDate(dt) === today;
-        });
-        const aUpcoming = apptsData
-          .filter(a => {
-            const dt = a.start ? new Date(a.start) : (a.date ? parseISODateLocalMidnight(a.date) : null);
-            return dt && toTorontoISOFromDate(dt) > today;
-          })
-          .sort((a, b) => {
-            const ad = a.start ? a.start : (a.date || '');
-            const bd = b.start ? b.start : (b.date || '');
-            return ad < bd ? -1 : ad > bd ? 1 : 0;
-          })
-          .slice(0, 5);
-
-        if (!signal.aborted) {
-          setTasksToday(tToday);
-          setTasksUpcoming(tUpcoming);
-          setApptsToday(aToday);
-          setApptsUpcoming(aUpcoming);
-        }
+        if (!signal.aborted) recomputeSlices(tasksData, apptsData);
 
         // 5) Motifs from last 30 days of entries
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const recent = entriesData.filter(e => {
-          const created = e.createdAt ? new Date(e.createdAt) : parseISODateLocalMidnight(e.date);
-          return created >= thirtyDaysAgo;
-        });
-        const tagCounts = {};
-        const moodCounts = {};
+        const thirty = new Date(); thirty.setDate(thirty.getDate() - 30);
+        const recent = entriesData.filter(e => (e.createdAt ? new Date(e.createdAt) : parseISODateLocalMidnight(e.date)) >= thirty);
+        const tagCounts = {}; const moodCounts = {};
         for (const e of recent) {
           if (Array.isArray(e.tags)) e.tags.forEach(t => (tagCounts[t] = (tagCounts[t] || 0) + 1));
           if (e.mood) moodCounts[e.mood] = (moodCounts[e.mood] || 0) + 1;
         }
-        const topTags = Object.entries(tagCounts)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 8)
-          .map(([tag, count]) => ({ tag, count }));
-        const topMoods = Object.entries(moodCounts)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5)
-          .map(([mood, count]) => ({ mood, count }));
+        const topTags = Object.entries(tagCounts).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([tag,count])=>({tag,count}));
+        const topMoods = Object.entries(moodCounts).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([mood,count])=>({mood,count}));
         if (!signal.aborted) setMotifs({ tags: topTags, moods: topMoods });
       } catch (e) {
         if (!controller.signal.aborted) {
@@ -283,50 +218,44 @@ export default function ClusterRoom() {
     })();
 
     return () => controller.abort();
-  }, [token, clusterSlug]);
+  }, [token, clusterSlug, headers, recomputeSlices, title]);
 
   async function handleAddEntry(e) {
     e.preventDefault();
     if (!newText.trim()) return;
     try {
       setComposing(true);
-      const resp = await axios.post(
-        '/api/entries',
-        { text: newText, cluster: clusterSlug },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setNewText('');
-      setEntries(prev => [resp.data, ...prev]);
+      const resp = await axios.post('/api/entries', { text: newText, cluster: clusterSlug }, { headers });
+      setNewText(''); setEntries(prev => [resp.data, ...prev]);
     } catch (err) {
       console.warn('Add entry failed:', err?.response?.data || err.message);
-    } finally {
-      setComposing(false);
-    }
+    } finally { setComposing(false); }
   }
 
   async function loadMoreEntries() {
     try {
       const nextPage = page + 1;
       const offset = nextPage * limit;
-      const res = await axios.get(
-        `/api/entries?cluster=${encodeURIComponent(clusterSlug)}&limit=${limit}&offset=${offset}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const batch = Array.isArray(res.data) ? res.data : [];
+      const res = await axios.get(`/api/entries?cluster=${encodeURIComponent(clusterSlug)}&limit=${limit}&offset=${offset}`, { headers });
+      const batch = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.data) ? res.data.data : []);
       setEntries(prev => [...prev, ...batch]);
       setPage(nextPage);
       setHasMore(batch.length === limit);
-    } catch (e) {
-      console.warn('Load more failed:', e?.response?.data || e.message);
-    }
+    } catch (e) { console.warn('Load more failed:', e?.response?.data || e.message); }
   }
 
-  const timeline = useMemo(
-    () => buildTimeline({ entries, tasks, appts }, filters),
-    [entries, tasks, appts, filters]
-  );
+  const toggleTask = async (task) => {
+    const id = task?._id; if (!id) return;
+    try { await axios.patch(`/api/tasks/${id}`, { completed: !task.completed }, { headers }); await reloadTasks(); }
+    catch (e) { console.warn('Toggle task failed:', e?.response?.data || e.message); }
+  };
+  const openEditTask = (task) => { setEditingTask(task || null); setShowTaskModal(true); };
+  const openNewTask = () => { setEditingTask(null); setShowTaskModal(true); };
+  const closeTaskModal = () => setShowTaskModal(false);
+  const onTaskSaved = async () => { setShowTaskModal(false); await reloadTasks(); };
 
-  /* ------------- left / center / right slots (fed into RoomLayout) ------------- */
+  const timeline = useMemo(() => buildTimeline({ entries, tasks, appts }, filters), [entries, tasks, appts, filters]);
+
   const leftSlot = (
     <>
       <h3 style={{ marginTop: 0 }}>Clusters</h3>
@@ -335,12 +264,7 @@ export default function ClusterRoom() {
         {clusters.map(c => {
           const active = c.slug === clusterSlug;
           return (
-            <Link
-              key={c.slug}
-              to={`/clusters/${c.slug}`}
-              className={`px-3 py-2 rounded-button ${active ? 'bg-plum text-mist' : 'text-ink hover:bg-thread hover:text-mist'}`}
-              style={{ textTransform: 'capitalize' }}
-            >
+            <Link key={c.slug} to={`/clusters/${c.slug}`} className={`px-3 py-2 rounded-button ${active ? 'bg-plum text-mist' : 'text-ink hover:bg-thread hover:text-mist'}`} style={{ textTransform: 'capitalize' }}>
               {c.emoji ? `${c.emoji} ` : ''}{c.name}
             </Link>
           );
@@ -358,23 +282,15 @@ export default function ClusterRoom() {
             <PillButton active={filters.entries} onClick={() => setFilters(f => ({ ...f, entries: !f.entries }))}>Entries</PillButton>
             <PillButton active={filters.tasks} onClick={() => setFilters(f => ({ ...f, tasks: !f.tasks }))}>Tasks</PillButton>
             <PillButton active={filters.appts} onClick={() => setFilters(f => ({ ...f, appts: !f.appts }))}>Appointments</PillButton>
+            <button className="pill" onClick={openNewTask}>+ New Task</button>
           </div>
         </div>
 
         <form onSubmit={handleAddEntry} style={{ marginTop: 12 }}>
-          <textarea
-            className="input"
-            placeholder={`New entry in ${title}…`}
-            value={newText}
-            onChange={e => setNewText(e.target.value)}
-            rows={3}
-            style={{ width: '100%' }}
-          />
+          <textarea className="input" placeholder={`New entry in ${title}…`} value={newText} onChange={e => setNewText(e.target.value)} rows={3} style={{ width: '100%' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>
             {errorMsg ? <span className="muted">{errorMsg}</span> : <span />}
-            <button type="submit" className="button" disabled={composing || !newText.trim()}>
-              {composing ? 'Saving…' : 'Add Entry'}
-            </button>
+            <button type="submit" className="button" disabled={composing || !newText.trim()}>{composing ? 'Saving…' : 'Add Entry'}</button>
           </div>
         </form>
       </div>
@@ -388,7 +304,7 @@ export default function ClusterRoom() {
           <>
             {timeline.map(item => {
               if (item.type === 'entry') return <EntryCard key={`e-${item.id}`} e={item.data} />;
-              if (item.type === 'task') return <TaskCard key={`t-${item.id}`} t={item.data} />;
+              if (item.type === 'task') return <TaskCard key={`t-${item.id}`} t={item.data} onToggle={toggleTask} onEdit={openEditTask} />;
               if (item.type === 'appt') return <ApptCard key={`a-${item.id}`} a={item.data} />;
               return null;
             })}
@@ -414,7 +330,7 @@ export default function ClusterRoom() {
             <>
               <div className="muted" style={{ marginTop: 6 }}>Tasks</div>
               <ul className="unstyled">
-                {tasksToday.map(t => <li key={t._id}>• {t.title}</li>)}
+                {tasksToday.map(t => (<li key={t._id}>• <button className="link" onClick={() => openEditTask(t)}>{t.title}</button></li>))}
               </ul>
             </>
           )}
@@ -423,9 +339,7 @@ export default function ClusterRoom() {
               <div className="muted" style={{ marginTop: 6 }}>Appointments</div>
               <ul className="unstyled">
                 {apptsToday.map(a => {
-                  const time = a.start
-                    ? new Date(a.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    : (a.date || '');
+                  const time = a.start ? new Date(a.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (a.date || '');
                   return <li key={a._id}>• {a.title} {time && <span className="pill pill-muted">{time}</span>}</li>;
                 })}
               </ul>
@@ -443,7 +357,12 @@ export default function ClusterRoom() {
             <>
               <div className="muted" style={{ marginTop: 6 }}>Tasks</div>
               <ul className="unstyled">
-                {tasksUpcoming.map(t => <li key={t._id}>• {t.title} <span className="pill pill-muted">{t.dueDate}</span></li>)}
+                {tasksUpcoming.map(t => (
+                  <li key={t._id}>
+                    • <button className="link" onClick={() => openEditTask(t)}>{t.title}</button>{' '}
+                    <span className="pill pill-muted">{t.dueDate}</span>
+                  </li>
+                ))}
               </ul>
             </>
           )}
@@ -470,9 +389,7 @@ export default function ClusterRoom() {
             <div style={{ marginBottom: 8 }}>
               <div className="muted">Top tags</div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-                {motifs.tags.map(({ tag, count }) => (
-                  <span key={tag} className="pill pill-muted">#{tag} ×{count}</span>
-                ))}
+                {motifs.tags.map(({ tag, count }) => (<span key={tag} className="pill pill-muted">#{tag} ×{count}</span>))}
               </div>
             </div>
           )}
@@ -480,9 +397,7 @@ export default function ClusterRoom() {
             <div>
               <div className="muted">Top moods</div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-                {motifs.moods.map(({ mood, count }) => (
-                  <span key={mood} className="pill">{mood} ×{count}</span>
-                ))}
+                {motifs.moods.map(({ mood, count }) => (<span key={mood} className="pill">{mood} ×{count}</span>))}
               </div>
             </div>
           )}
@@ -492,8 +407,11 @@ export default function ClusterRoom() {
   );
 
   return (
-    <RoomLayout title={title} left={leftSlot} right={rightSlot}>
-      {centerSlot}
-    </RoomLayout>
+    <>
+      <RoomLayout title={title} left={leftSlot} right={rightSlot}>{centerSlot}</RoomLayout>
+      {showTaskModal && (
+        <TaskModal onClose={closeTaskModal} onSaved={onTaskSaved} task={editingTask || undefined} defaultCluster={clusterSlug} defaultDate={torontoTodayISO()} />
+      )}
+    </>
   );
 }

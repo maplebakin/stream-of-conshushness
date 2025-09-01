@@ -3,7 +3,9 @@ import { useParams } from 'react-router-dom';
 import { useState, useEffect, useContext, useMemo } from 'react';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
+import TaskList from '../adapters/TaskList.default.jsx';
 import '../Main.css';
+import SafeHTML from '../components/SafeHTML.jsx'; // (top of file)
 
 export default function SectionPage() {
   const params = useParams();
@@ -126,11 +128,18 @@ export default function SectionPage() {
                       <span key={i} className="pill pill-muted">#{t}</span>
                     ))}
                   </div>
-                  <div className="entry-text">
-                    {e.html
-                      ? <span dangerouslySetInnerHTML={{ __html: e.html }} />
-                      : (e.text || '—')}
-                  </div>
+                  
+
+<SafeHTML
+  className="entry-text"
+  html={
+    (entry?.html && entry.html.length)
+      ? entry.html
+      : (typeof entry?.content === 'string' && /<[^>]+>/.test(entry.content))
+        ? entry.content
+        : (entry?.text ?? '').replaceAll('\n', '<br/>')
+  }
+/>
                 </article>
               ))
             )
@@ -145,11 +154,28 @@ export default function SectionPage() {
             <p className="muted">No pages yet.</p>
           ) : (
             <ul className="unstyled">
-              {pages.map(p => <li key={p._id}>{p.title}</li>)}
+              {pages.map(p => (
+                <li key={p._id}>
+                  <a className="link" href={`/sections/${encodeURIComponent(sectionKey)}/${encodeURIComponent(p.slug)}`}>
+                    {p.icon || '📄'} {p.title}
+                  </a>
+                </li>
+              ))}
             </ul>
           )}
         </div>
       </main>
+
+      {/* Sidebar: tasks in this section */}
+      {token && (
+        <aside className="sidebar">
+          <div className="card">
+            <h3 style={{ marginTop: 0 }}>Tasks in “{title}”</h3>
+            {/* TaskList now supports `section` filtering */}
+            <TaskList view="today" section={sectionKey} />
+          </div>
+        </aside>
+      )}
     </div>
   );
 }

@@ -1,21 +1,17 @@
-// frontend/src/components/ClusterPicker.jsx
 import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { AuthContext } from '../AuthContext.jsx';
 import { makeApi } from '../utils/api.js';
 
 function normalizeClusters(payload) {
-  // Accept {data:[...]}, [...], or anything else → []
-  if (Array.isArray(payload)) return payload;
-  if (payload && Array.isArray(payload.data)) return payload.data;
+  const d = payload?.data ?? payload;
+  if (Array.isArray(d)) return d;
+  if (Array.isArray(d?.data)) return d.data;
+  if (Array.isArray(d?.clusters)) return d.clusters;
+  if (Array.isArray(d?.data?.clusters)) return d.data.clusters;
   return [];
 }
 
-export default function ClusterPicker({
-  value = '',
-  onChange,
-  disabled = false,
-  id = 'cluster-picker'
-}) {
+export default function ClusterPicker({ value = '', onChange, disabled = false, id = 'cluster-picker' }) {
   const { token } = useContext(AuthContext);
   const api = useMemo(() => makeApi(token), [token]);
 
@@ -33,7 +29,7 @@ export default function ClusterPicker({
           key: c.key ?? (c.slug || c.name?.toLowerCase() || ''),
           label: c.label ?? c.name ?? c.key ?? ''
         })).filter(c => c.key && c.label);
-        // sort pinned/order/label if present
+
         const original = normalizeClusters(res);
         const keyed = new Map(list.map(c => [c.key, c]));
         const pinnedMap = new Map(original.map(c => [c.key, !!c.pinned]));
@@ -72,9 +68,7 @@ export default function ClusterPicker({
         aria-label="Set cluster"
       >
         <option value="">{loading ? 'Loading clusters…' : '— set cluster —'}</option>
-        {clusters.map(c => (
-          <option key={c.key} value={c.key}>{c.label}</option>
-        ))}
+        {clusters.map(c => (<option key={c.key} value={c.key}>{c.label}</option>))}
       </select>
     </div>
   );

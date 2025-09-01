@@ -1,0 +1,97 @@
+.
+├── frontend
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── public
+│   │   └── vite.svg
+│   ├── README.md
+│   ├── src
+│   │   ├── api
+│   │   ├── App.jsx
+│   │   ├── assets
+│   │   ├── AuthContext.jsx
+│   │   ├── Calendar.css
+│   │   ├── Calendar.jsx
+│   │   ├── dailypage.css
+│   │   ├── DailyPage.jsx
+│   │   ├── DailyRipples.jsx
+│   │   ├── EntriesSection.jsx
+│   │   ├── EntryModal.css
+│   │   ├── EntryModal.jsx
+│   │   ├── GameList.jsx
+│   │   ├── GamePage.jsx
+│   │   ├── GoalPage.jsx
+│   │   ├── Header.jsx
+│   │   ├── HourlySchedule.css
+│   │   ├── HourlySchedule.jsx
+│   │   ├── ImageUploader.jsx
+│   │   ├── index.css
+│   │   ├── Layout.jsx
+│   │   ├── LoginPage.jsx
+│   │   ├── Main.css
+│   │   ├── main.jsx
+│   │   ├── MainPage.jsx
+│   │   ├── ManageSections.jsx
+│   │   ├── NotesSection.jsx
+│   │   ├── pages
+│   │   ├── RegisterPage.jsx
+│   │   ├── RippleReviewUI.jsx
+│   │   ├── SearchContext.jsx
+│   │   ├── SectionPage.jsx
+│   │   ├── SectionPageView.jsx
+│   │   ├── SectionSidebar.jsx
+│   │   ├── SectionsPage.jsx
+│   │   ├── Sidebar.css
+│   │   ├── Sidebar.jsx
+│   │   ├── TaskList.jsx
+│   │   ├── TaskModal.jsx
+│   │   ├── TopPriorities.jsx
+│   │   ├── upload.js
+│   │   ├── utils
+│   │   └── variables.css
+│   └── vite.config.js
+├── graphql
+│   ├── resolvers.js
+│   └── schema.js
+├── middleware
+│   └── auth.js
+├── models
+│   ├── Appointment.js
+│   ├── DailySchedule.js
+│   ├── Entry.js
+│   ├── Game.js
+│   ├── GameNote.js
+│   ├── Goal.js
+│   ├── Habit.js
+│   ├── ImportantEvent.js
+│   ├── Note.js
+│   ├── Page.js
+│   ├── Ripple.js
+│   ├── SectionPage.js
+│   ├── Task.js
+│   └── User.js
+├── package.json
+├── package-lock.json
+├── routes
+│   ├── auth.js
+│   ├── entries.js
+│   ├── games.js
+│   ├── goals.js
+│   ├── habits.js
+│   ├── pages.js
+│   ├── sectionPages.js
+│   └── tasks.js
+├── server.js
+├── structure.txt
+├── test.js
+├── testRipple.js
+├── uploads
+│   └── 1753558445316-pajamas (1).png
+└── utils
+    ├── analyzeEntry.js
+    ├── rippleExtractor.js
+    └── suggestMetadata.js
+
+13 directories, 81 files

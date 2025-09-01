@@ -1,10 +1,12 @@
-// utils/upload.js (ESM)
 import express from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import auth from "../middleware/auth.js";
 
 const router = express.Router();
+router.use(auth);
+
 const uploadDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
@@ -16,15 +18,14 @@ const storage = multer.diskStorage({
   },
 });
 
-// Accept typical doc/image types; tweak as needed
+// Only allow these mime types
 const allowed = new Set([
   "image/png", "image/jpeg", "image/webp", "image/gif",
   "application/pdf", "text/plain", "text/markdown",
 ]);
 const fileFilter = (_req, file, cb) => {
-  // allow unknowns too; just warn
   if (!allowed.has(file.mimetype)) {
-    console.warn("[upload] unusual mimetype:", file.mimetype);
+    return cb(new Error("Unsupported file type"), false);
   }
   cb(null, true);
 };
@@ -35,7 +36,7 @@ const upload = multer({
   fileFilter,
 });
 
-// Accept ANY field name and pick the first file
+// Accept ANY field name, pick the first file
 router.post("/", upload.any(), (req, res) => {
   const f = (req.files || [])[0];
   if (!f) {

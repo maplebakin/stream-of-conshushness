@@ -294,7 +294,7 @@
 }
 .daily-page .qa-select:hover { background: linear-gradient(180deg, rgba(199,181,213,.18), rgba(199,181,213,.1)); }
 .daily-page .qa-select:focus { outline: 2px solid var(--color-spool); outline-offset: 2px; }
-.daily-page .qa-select:disabled { opacity: .65; cursor: default; }
+.daily-page .qa-select:disabled { opacity: .65; cursor: default; }r
 
 /* Soft action button */
 .daily-page .qa-btn {
@@ -310,3 +310,204 @@
 }
 .daily-page .qa-btn:hover { background: linear-gradient(180deg, rgba(199,181,213,.2), rgba(199,181,213,.12)); transform: translateY(-1px); }
 .daily-page .qa-btn:disabled { opacity: .65; cursor: default; transform: none; }
+/* ========== DailyPage task inbox layout fixes ========== */
+
+/* Let the main column actually grow inside the grid */
+.daily-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px; /* center + right */
+  gap: 16px;
+}
+.daily-main,
+.daily-main .panel {
+  min-width: 0; /* critical for long content in grid children */
+}
+
+/* Normalize task list container */
+.panel .task-list,
+.panel .tasks-inbox,
+.panel .inbox-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Make each task a comfy flex row */
+.panel .task,
+.panel .task-row,
+.panel .inbox-item,
+.panel .task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border, #2a2a32);
+  border-radius: 10px;
+  background: var(--card, rgba(255,255,255,.03));
+}
+
+/* Checkbox column */
+.panel .task .chk,
+.panel .task-row .chk {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+/* Main text column should breathe */
+.panel .task .task-main,
+.panel .task-row .task-main,
+.panel .inbox-item .task-main,
+.panel .task-item .task-main {
+  flex: 1 1 auto;
+  min-width: 0;                     /* <-- prevents squish */
+}
+
+/* Title + notes */
+.panel .task .task-title {
+  font-weight: 600;
+  line-height: 1.35;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.panel .task .task-notes {
+  opacity: 0.8;
+  margin-top: 2px;
+  font-size: 0.92rem;
+}
+
+/* Right-side meta/actions */
+.panel .task .task-meta,
+.panel .task .task-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* If the adapter used grid for rows, make sure the text track can shrink properly */
+.panel .task-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto; /* checkbox | text | actions */
+  gap: 10px;
+  align-items: start;
+}
+/* ========== DailyPage task inbox layout fixes ========== */
+
+/* Let the main column actually grow inside the grid */
+.daily-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px; /* center + right */
+  gap: 16px;
+}
+.daily-main,
+.daily-main .panel {
+  min-width: 0; /* critical for long content in grid children */
+}
+
+/* Normalize task list container */
+.panel .task-list,
+.panel .tasks-inbox,
+.panel .inbox-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Make each task a comfy flex row */
+.panel .task,
+.panel .task-row,
+.panel .inbox-item,
+.panel .task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border, #2a2a32);
+  border-radius: 10px;
+  background: var(--card, rgba(255,255,255,.03));
+}
+
+/* Checkbox column */
+.panel .task .chk,
+.panel .task-row .chk {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+/* Main text column should breathe */
+.panel .task .task-main,
+.panel .task-row .task-main,
+.panel .inbox-item .task-main,
+.panel .task-item .task-main {
+  flex: 1 1 auto;
+  min-width: 0;                     /* <-- prevents squish */
+}
+
+/* Title + notes */
+.panel .task .task-title {
+  font-weight: 600;
+  line-height: 1.35;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.panel .task .task-notes {
+  opacity: 0.8;
+  margin-top: 2px;
+  font-size: 0.92rem;
+}
+
+/* Right-side meta/actions */
+.panel .task .task-meta,
+.panel .task .task-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* If the adapter used grid for rows, make sure the text track can shrink properly */
+.panel .task-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto; /* checkbox | text | actions */
+  gap: 10px;
+  align-items: start;
+}
+/* push completed tasks lower inside lists */
+.panel .task-list .task.completed,
+.panel .task-list .task.done,
+.panel .task-list .task[data-completed="true"] {
+  order: 2;
+}
+.panel .task-list .task { order: 1; }
+/* DailyPage → TaskList visual polish */
+.task-list .task-row .task-title.line {
+  text-decoration: line-through;
+  opacity: .65;
+}
+
+.task-list .task-row.is-completed {
+  background: var(--surface-quiet, #faf9ff);
+  border-color: var(--border, #e6e6ea);
+}
+
+.task-list .pill {
+  display: inline-block;
+  font-size: .75rem;
+  padding: .1rem .5rem;
+  border: 1px solid var(--border, #e6e6ea);
+  border-radius: 999px;
+  color: var(--muted, #6b7280);
+  background: var(--chip, #f8fafc);
+}
+
+.task-list .pill-muted {
+  opacity: .85;
+}

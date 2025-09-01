@@ -11,11 +11,12 @@ const taskSchema = new mongoose.Schema(
     completedAt: { type: Date, default: null },
     priority   : { type: Number, default: 0 },
 
-    // existing clusters support
+    // Multi tags
     clusters   : { type: [String], default: [], index: true },
-
-    // NEW: sections support (multi)
     sections   : { type: [String], default: [], index: true },
+
+    // Recurrence (aligns with UI)
+    rrule      : { type: String, default: '' },
 
     entryId    : { type: mongoose.Schema.Types.ObjectId, ref: 'Entry', default: null },
     goalId     : { type: mongoose.Schema.Types.ObjectId, ref: 'Goal', default: null },
@@ -33,7 +34,7 @@ taskSchema.virtual('cluster')
     else if (!this.clusters.includes(key)) this.clusters.unshift(key);
   });
 
-// NEW: singular section (for easy form binding)
+// Singular section (for easy form binding)
 taskSchema.virtual('section')
   .get(function () { return this.sections?.[0] || ''; })
   .set(function (val) {

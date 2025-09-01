@@ -7,6 +7,7 @@ import './streampage.css';
 import toast from 'react-hot-toast';
 import { AuthContext } from './AuthContext.jsx';
 import { getLocalTodayISO, toDisplayDate } from './utils/date.js';
+import SafeHTML from './components/SafeHTML.jsx'; // (top of file)
 
 /* ---------- Robust sort helpers so newest stay on top across reloads ---------- */
 const parseDayMs = (v) => {
@@ -230,17 +231,19 @@ export default function MainPage() {
                 )}
               </div>
 
-              <div
-                className="entry-text"
-                dangerouslySetInnerHTML={{
-                  __html:
-                    (entry.html && entry.html.length)
-                      ? entry.html
-                      : (typeof entry.content === 'string' && /<[^>]+>/.test(entry.content))
-                        ? entry.content
-                        : (entry.text ?? '').replaceAll('\n', '<br/>')
-                }}
-              />
+              
+
+
+<SafeHTML
+  className="entry-text"
+  html={
+    (entry?.html && entry.html.length)
+      ? entry.html
+      : (typeof entry?.content === 'string' && /<[^>]+>/.test(entry.content))
+        ? entry.content
+        : (entry?.text ?? '').replaceAll('\n', '<br/>')
+  }
+/>
 
               <div className="entry-actions">
                 <button

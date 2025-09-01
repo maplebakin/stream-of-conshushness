@@ -1,86 +1,54 @@
-// api/tasks.js
+import api from './axiosInstance.js';
 
-const BASE = '/api/tasks';
 
-/* Build headers with JWT */
-export function authHeaders(token) {
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+export async function listTasks(params) {
+const { data } = await api.get('/api/tasks', { params });
+return data;
 }
 
-/* GET /api/tasks?includeEntries=1&completed=0&cluster=home&date=YYYY-MM-DD
-   Tip: for the Daily page, call with { completed: false } and omit `date`
-   so you can group Carry Forward / Today / Upcoming on the client. */
-export async function fetchTasks({ token, includeEntries = true, completed, cluster, date } = {}) {
-  const qs = new URLSearchParams();
-  if (includeEntries) qs.set('includeEntries', '1');
-  if (completed != null) qs.set('completed', completed ? '1' : '0');
-  if (cluster) qs.set('cluster', cluster);
-  if (date) qs.set('date', date);
 
-  const res = await fetch(`${BASE}?${qs.toString()}`, { headers: authHeaders(token) });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || 'Failed to load tasks');
+export async function toggleTask(id) {
+const { data } = await api.post(`/api/tasks/${id}/toggle`);
+return data;
+}
+
+
+export async function completeTask(id) {
+// If your backend only has /toggle, we still expose complete for old callers
+return toggleTask(id);
+}
+
+
+export async function carryForward({ from, to, cluster }) {
+// Use canonical if you add it later; otherwise keep this helper here
+const { data } = await api.post('/api/tasks/carry-forward', { from, to, cluster });
+return data;
+}
+
+
+export async function linkTaskToEntry(id, entryId) {
+const { data } = await api.post(`/api/tasks/${id}/link-entry`, { entryId });
+return data;
+}
+
+
+export async function unlinkTaskFromEntry(id) {
+const { data } = await api.post(`/api/tasks/${id}/unlink-entry`);
+return data;
+}
+
+
+export async function createTask(payload) {
+const { data } = await api.post('/api/tasks', payload);
+return data;
+}
+
+export async function deleteTask(id) {
+  const { data } = await api.delete(`/api/tasks/${id}`);
   return data;
 }
 
-/* POST /api/tasks */
-export async function createTask({ token, body }) {
-  const res = await fetch(BASE, {
-    method: 'POST',
-    headers: authHeaders(token),
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || 'Failed to create task');
-  return data;
-}
-
-/* PATCH /api/tasks/:id */
-export async function updateTask({ token, id, patch }) {
-  const res = await fetch(`${BASE}/${id}`, {
-    method: 'PATCH',
-    headers: authHeaders(token),
-    body: JSON.stringify(patch),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || 'Failed to update task');
-  return data;
-}
-
-/* POST /api/tasks/:id/link-entry */
-export async function linkTaskEntry({ token, id, entryId }) {
-  const res = await fetch(`${BASE}/${id}/link-entry`, {
-    method: 'POST',
-    headers: authHeaders(token),
-    body: JSON.stringify({ entryId }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || 'Failed to link entry');
-  return data;
-}
-
-/* POST /api/tasks/:id/unlink-entry */
-export async function unlinkTaskEntry({ token, id, entryId }) {
-  const res = await fetch(`${BASE}/${id}/unlink-entry`, {
-    method: 'POST',
-    headers: authHeaders(token),
-    body: JSON.stringify({ entryId }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || 'Failed to unlink entry');
-  return data;
-}
-
-/* POST /api/tasks/carry-forward */
-export async function carryForwardAll({ token }) {
-  const res = await fetch(`${BASE}/carry-forward`, {
-    method: 'POST',
-    headers: authHeaders(token),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || 'Carry-forward failed');
+export async function bulkDeleteTasks(ids = []) {
+  const { data } = await api.post('/api/tasks/bulk-delete', { ids });
   return data;
 }

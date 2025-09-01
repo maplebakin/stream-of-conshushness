@@ -1,469 +1,254 @@
-// routes/tasks.js
+// server/routes/tasks.js
 import express from 'express';
-import mongoose from 'mongoose';
+import authenticateToken from '../middleware/auth.js';
 import Task from '../models/Task.js';
-import Entry from '../models/Entry.js';
-import auth from '../middleware/auth.js';
 
 const router = express.Router();
-router.use(auth);
 
-/** Normalize user id across JWT shapes */
-function getUserId(req) {
-  return req.user?.userId || req.user?._id || req.user?.id;
+/* ---------------------- helpers ---------------------- */
+function parseBool(v, def = false) {
+  if (v == null) return def;
+  const s = String(v).toLowerCase();
+  return s === '1' || s === 'true' || s === 'yes';
+}
+function clamp(n, lo, hi) {
+  const x = parseInt(n, 10);
+  if (Number.isNaN(x)) return lo;
+  return Math.max(lo, Math.min(hi, x));
 }
 
-/** YYYY-MM-DD in America/Toronto */
-function todayISOInToronto() {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Toronto',
-    year: 'numeric', month: '2-digit', day: '2-digit'
-  });
-  const p = fmt.formatToParts(new Date());
-  const y = p.find(x => x.type === 'year').value;
-  const m = p.find(x => x.type === 'month').value;
-  const d = p.find(x => x.type === 'day').value;
-  return `${y}-${m}-${d}`;
-}
-
-/** Parse ISO to Date (local midnight) */
-function parseISO(iso) {
-  const [y, m, d] = String(iso).split('-').map(Number);
-  return new Date(y, (m || 1) - 1, d || 1);
-}
-
-/** Add days, return ISO local */
-function addDaysISO(iso, n) {
-  const dt = parseISO(iso);
-  dt.setDate(dt.getDate() + n);
-  const y = dt.getFullYear();
-  const m = String(dt.getMonth() + 1).padStart(2, '0');
-  const d = String(dt.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-/** Clamp day-of-month (e.g., Feb 31 → Feb 28/29) */
-function addMonthsClampISO(iso, n) {
-  const [y, m, d] = String(iso).split('-').map(Number);
-  const base = new Date(y, (m - 1) + n, 1);
-  const targetDay = Math.min(
-    d || 1,
-    new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate()
-  );
-  base.setDate(targetDay);
-  const yy = base.getFullYear();
-  const mm = String(base.getMonth() + 1).padStart(2, '0');
-  const dd = String(base.getDate()).padStart(2, '0');
-  return `${yy}-${mm}-${dd}`;
-}
-
-/** Map MO..SU -> 0..6 (Sun=0) */
-const DOW = { SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6 };
-
-/** Compute next due date for a repeating task */
-function nextDueDate({ currentDue, repeat, fromDateISO }) {
-  if (!repeat) return null;
-  const unit = repeat.unit || String(repeat).toLowerCase(); // allow legacy strings like "daily"
-  const interval = Number(repeat.interval || 1);
-
-  // Anchor: if currentDue exists, use that; else use fromDate (today).
-  const anchor = currentDue || fromDateISO || todayISOInToronto();
-
-  if (unit === 'day' || /daily/.test(unit)) {
-    return addDaysISO(fromDateISO || anchor, Math.max(1, interval));
-  }
-
-  if (unit === 'week' || /weekly/.test(unit)) {
-    const from = parseISO(fromDateISO || anchor);
-    const by = Array.isArray(repeat.byDay) ? repeat.byDay : [];
-
-    // If specific weekdays provided (e.g., ['MO','TH']), find the next one strictly after 'from'
-    if (by.length) {
-      const wanted = by
-        .map(s => DOW[(s || '').toUpperCase()])
-        .filter(v => v !== undefined);
-
-      for (let i = 1; i <= 21; i++) {
-        const cand = new Date(from);
-        cand.setDate(cand.getDate() + i);
-        const dow = cand.getDay();
-        if (wanted.includes(dow)) {
-          // (Basic) interval handling: if interval>1, only accept every Nth week from anchor week
-          if (interval > 1) {
-            const weeksFromAnchor = Math.floor(i / 7);
-            if (weeksFromAnchor % interval !== 0) continue;
-          }
-          const yy = cand.getFullYear();
-          const mm = String(cand.getMonth() + 1).padStart(2, '0');
-          const dd = String(cand.getDate()).padStart(2, '0');
-          return `${yy}-${mm}-${dd}`;
-        }
-      }
-      // fallback: just +interval weeks
-      return addDaysISO(fromDateISO || anchor, 7 * Math.max(1, interval));
-    }
-
-    // No specific weekday → bump by N weeks
-    return addDaysISO(fromDateISO || anchor, 7 * Math.max(1, interval));
-  }
-
-  if (unit === 'month' || /monthly/.test(unit)) {
-    return addMonthsClampISO(fromDateISO || anchor, Math.max(1, interval));
-  }
-
-  // Unknown format → default to +1 day
-  return addDaysISO(fromDateISO || anchor, 1);
-}
-
-/** Base query from req */
-function baseQuery(req) {
-  const userId = getUserId(req);
-  const q = { userId };
-
-  const { cluster, completed } = req.query;
-
-  // Completed filter passthrough
-  if (completed === 'true') q.completed = true;
-  if (completed === 'false') q.completed = false;
-
-  // Cluster filter (supports legacy `cluster` string AND new `clusters[]` array)
-  if (cluster) {
-    const clusters = Array.isArray(cluster)
-      ? cluster
-      : String(cluster).split(',').map(s => s.trim()).filter(Boolean);
-
-    if (clusters.length) {
-      const clusterOr = {
-        $or: [
-          { cluster: { $in: clusters } },   // legacy single string
-          { clusters: { $in: clusters } }   // new array
-        ]
-      };
-      // Use $and so it can coexist with the date-based $or added later
-      q.$and = q.$and ? [...q.$and, clusterOr] : [clusterOr];
-    }
-  }
-
-  return q;
-}
-
-
-/** Sort: due soon first; undated last */
-const defaultSort = { completed: 1, dueDate: 1, createdAt: 1 };
-
-/**
- * GET /api/tasks
- *   view=today|inbox|overdue|date|all  (default today)
- *   date=YYYY-MM-DD (default Toronto today)
- *   includeOverdue=0|1 (default 1 when view=today)
- *   countOnly=0|1
- *   cluster, completed
- *
- * Recurring tasks show ONLY when due (or overdue), not every day.
- */
-router.get('/', async (req, res) => {
-  const view = (req.query.view || 'today').toLowerCase();
-  const date = req.query.date || todayISOInToronto();
-  const includeOverdue = req.query.includeOverdue !== '0';
-  const countOnly = req.query.countOnly === '1';
-
-  const q = baseQuery(req);
-
-  if (view === 'today') {
-    q.completed ??= false;
-    q.$or = [{ dueDate: date }];
-    if (includeOverdue) q.$or.push({ dueDate: { $lt: date } });
-  } else if (view === 'inbox') {
-    q.completed ??= false;
-    q.$or = [{ dueDate: { $exists: false } }, { dueDate: null }, { dueDate: '' }];
-  } else if (view === 'overdue') {
-    q.completed ??= false;
-    q.dueDate = { $lt: date };
-  } else if (view === 'date') {
-    q.dueDate = date;
-  } else if (view === 'all') {
-    // no extra filters
-  } else {
-    return res.status(400).json({ error: 'Invalid view' });
-  }
-
-  if (countOnly) {
-    const count = await Task.countDocuments(q);
-    return res.json({ count });
-  }
-
-  const tasks = await Task.find(q).sort(defaultSort);
-  res.json(tasks);
-});
-
-/**
- * GET /api/tasks/counts/inbox-by-cluster
- * Returns counts of undated, incomplete tasks grouped by cluster name.
- * Works with both legacy `cluster` (string) and modern `clusters` (array).
- * Response: [{ cluster: 'Arts & Crafts', count: 3 }, ...]
- */
-router.get('/counts/inbox-by-cluster', async (req, res) => {
+/* Core lister wrapped so it never explodes */
+async function listTasksCore(req, res) {
   try {
-    const userId = getUserId(req);
-    const match = {
-      userId: new mongoose.Types.ObjectId(userId),
-      completed: false,
-      $or: [{ dueDate: { $exists: false } }, { dueDate: null }, { dueDate: '' }]
-    };
-
-    const pipeline = [
-      { $match: match },
-      // normalize to an array field
-      { $addFields: {
-          clustersComputed: {
-            $cond: [
-              { $gt: [{ $size: { $ifNull: ['$clusters', []] } }, 0] },
-              '$clusters',
-              { $cond: [
-                { $and: [ { $ne: ['$cluster', null] }, { $ne: ['$cluster', '' ] } ] },
-                ['$cluster'],
-                ['Unassigned']
-              ] }
-            ]
-          }
-      }},
-      { $unwind: '$clustersComputed' },
-      { $group: { _id: '$clustersComputed', count: { $sum: 1 } } },
-      { $project: { _id: 0, cluster: '$_id', count: 1 } },
-      { $sort: { cluster: 1 } }
-    ];
-
-    const out = await Task.aggregate(pipeline);
-    res.json(out);
-  } catch (e) {
-    console.error('counts/inbox-by-cluster error', e);
-    res.status(500).json({ error: 'Failed to get inbox counts by cluster' });
-  }
-});
-
-/** POST /api/tasks — create */
-router.post('/', async (req, res) => {
-  try {
+    const userId = req.user.userId;
     const {
-      title,
-      details = '',
-      dueDate = null,
-      cluster = '',
-      clusters = [],
-      repeat = null,
-      entryId = null,
-      goalId = null
-    } = req.body;
-
-    if (!title || !String(title).trim()) {
-      return res.status(400).json({ error: 'Title is required' });
-    }
-
-    const task = await Task.create({
-      userId: getUserId(req),
-      title: String(title).trim(),
-      details: String(details || ''),
-      dueDate: dueDate || null,
-      cluster,
-      clusters: Array.isArray(clusters) ? clusters : [],
-      repeat,
-      entryId,
-      goalId,
-      completed: false
-    });
-
-    res.status(201).json(task);
-  } catch (e) {
-    console.error('POST /api/tasks error', e);
-    res.status(500).json({ error: 'Failed to create task' });
-  }
-});
-
-/**
- * NEW: POST /api/tasks/from-entry
- * Spawn a task from an entry in one tap.
- * Body: {
- *   entryId: string (required),
- *   title?: string (fallback: first 120 chars of entry.text),
- *   dueDate?: 'YYYY-MM-DD' | null,
- *   cluster?: string,          // default: entry.cluster or ''
- *   clusters?: string[],       // optional
- *   goalId?: string | null
- * }
- */
-router.post('/from-entry', async (req, res) => {
-  try {
-    const userId = getUserId(req);
-    const {
-      entryId,
-      title,
-      dueDate = null,
-      cluster = '',
-      clusters = [],
-      goalId = null
-    } = req.body;
-
-    if (!entryId) return res.status(400).json({ error: 'entryId required' });
-
-    const entry = await Entry.findOne({ _id: entryId, userId });
-    if (!entry) return res.status(404).json({ error: 'Entry not found' });
-
-    const taskTitle =
-      (title && String(title).trim()) ||
-      (entry.text || '').slice(0, 120).trim() ||
-      'Untitled task';
-
-    const task = await Task.create({
-      userId,
-      title: taskTitle,
-      details: '',
+      date,            // alias of dueDate
       dueDate,
-      cluster: cluster || entry.cluster || '',
-      clusters: Array.isArray(clusters) && clusters.length ? clusters : [],
-      repeat: null,
-      entryId: entry._id,
-      goalId,
-      completed: false
-    });
+      cluster,         // single cluster key (string)
+      includeCompleted,
+      completed,       // explicit completed=true/false overrides includeCompleted
+      limit,
+      offset,
+    } = req.query;
 
-    res.status(201).json(task);
-  } catch (e) {
-    console.error('POST /api/tasks/from-entry error', e);
-    res.status(500).json({ error: 'Failed to create task from entry' });
-  }
-});
+    const q = { userId };
 
-/** PATCH /api/tasks/:id — standard update */
-router.patch('/:id', async (req, res) => {
-  try {
-    const update = {};
-    [
-      'title', 'details', 'dueDate', 'cluster', 'clusters',
-      'repeat', 'completed', 'entryId', 'goalId'
-    ].forEach((k) => {
-      if (k in req.body) update[k] = req.body[k];
-    });
+    const dayISO = dueDate || date;
+    if (dayISO) q.dueDate = dayISO;
 
-    if (update.dueDate === '' || update.dueDate === undefined) delete update.dueDate;
-    if (update.dueDate === null) update.dueDate = null;
+    if (cluster) q.clusters = cluster;
 
-    const task = await Task.findOneAndUpdate(
-      { _id: req.params.id, userId: getUserId(req) },
-      update,
-      { new: true }
-    );
-    if (!task) return res.status(404).json({ error: 'Task not found' });
-    res.json(task);
-  } catch (e) {
-    console.error('PATCH /api/tasks/:id error', e);
-    res.status(500).json({ error: 'Failed to update task' });
-  }
-});
-
-/**
- * POST /api/tasks/:id/complete
- * Completes a task. If the task has `repeat`, it ADVANCES to the next due date
- * and stays incomplete (rolling task pattern). Returns the updated (advanced) task.
- * Body: { fromDate?: 'YYYY-MM-DD' }  (defaults to today in Toronto)
- */
-router.post('/:id/complete', async (req, res) => {
-  try {
-    const userId = getUserId(req);
-    const id = req.params.id;
-    const fromDate = req.body?.fromDate || todayISOInToronto();
-
-    const task = await Task.findOne({ _id: id, userId });
-    if (!task) return res.status(404).json({ error: 'Task not found' });
-
-    if (task.repeat) {
-      const next = nextDueDate({
-        currentDue: task.dueDate,
-        repeat: task.repeat,
-        fromDateISO: fromDate
-      });
-      const updated = await Task.findOneAndUpdate(
-        { _id: id, userId },
-        { $set: { dueDate: next, completed: false } },
-        { new: true }
-      );
-      return res.json(updated);
+    if (completed !== undefined) {
+      q.completed = parseBool(completed);
+    } else if (!parseBool(includeCompleted, false)) {
+      q.completed = false;
     }
 
-    // Non-repeating: mark complete
-    const updated = await Task.findOneAndUpdate(
-      { _id: id, userId },
-      { $set: { completed: true } },
-      { new: true }
-    );
-    res.json(updated);
+    const lim = clamp(limit ?? 200, 1, 1000);
+    const off = clamp(offset ?? 0, 0, 1_000_000);
+
+    const sort = { completed: 1, dueDate: 1, createdAt: -1 };
+    const items = await Task.find(q).sort(sort).skip(off).limit(lim).lean();
+    res.json(items);
   } catch (e) {
-    console.error('complete error', e);
-    res.status(500).json({ error: 'Failed to complete task' });
+    console.error('[tasks] list failed:', e);
+    res.status(500).json({ error: 'list failed' });
+  }
+}
+
+/* ---------------------- routes ---------------------- */
+
+// GET /api/tasks
+router.get('/', authenticateToken, listTasksCore);
+
+// Alias: GET /api/tasks/day/:date  (includes completed by default)
+router.get('/day/:date', authenticateToken, async (req, res) => {
+  try {
+    req.query.dueDate = req.params.date;
+    if (req.query.includeCompleted == null) req.query.includeCompleted = '1';
+    return listTasksCore(req, res);
+  } catch (e) {
+    console.error('[tasks] day list failed:', e);
+    res.status(500).json({ error: 'list failed' });
   }
 });
 
-/**
- * POST /api/tasks/:id/skip
- * Advances a repeating task to its next scheduled date (keeps completed:false).
- * Body: { fromDate?: 'YYYY-MM-DD' }  (defaults to today in Toronto)
- */
-router.post('/:id/skip', async (req, res) => {
+// PATCH/PUT /api/tasks/:id
+async function updateTask(req, res) {
   try {
-    const userId = getUserId(req);
-    const id = req.params.id;
-    const fromDate = req.body?.fromDate || todayISOInToronto();
+    const userId = req.user.userId;
+    const { id } = req.params;
+    const up = {};
+    for (const k of ['title','notes','dueDate','completed','priority','clusters','sections','rrule']) {
+      if (req.body[k] !== undefined) up[k] = req.body[k];
+    }
+    if (typeof up.title === 'string') {
+      up.title = up.title.trim();
+      if (!up.title) return res.status(400).json({ error: 'title required' });
+    }
+    const doc = await Task.findOneAndUpdate({ _id: id, userId }, { $set: up }, { new: true });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+    res.json(doc);
+  } catch (e) {
+    console.error('[tasks] update failed:', e);
+    res.status(500).json({ error: 'update failed' });
+  }
+}
+router.patch('/:id', authenticateToken, updateTask);
+router.put('/:id', authenticateToken, updateTask);
 
-    const task = await Task.findOne({ _id: id, userId });
-    if (!task) return res.status(404).json({ error: 'Task not found' });
-    if (!task.repeat) return res.status(400).json({ error: 'Task is not repeating' });
+// Toggle + spawn next if recurring (validation-safe)
+router.patch('/:id/toggle', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { id } = req.params;
 
-    const next = nextDueDate({
-      currentDue: task.dueDate,
-      repeat: task.repeat,
-      fromDateISO: fromDate
+    // Load minimal fields we need for recurrence, but don't save this doc.
+    const task = await Task.findOne(
+      { _id: id, userId },
+      'completed title notes dueDate priority clusters sections rrule'
+    ).lean();
+    if (!task) return res.status(404).json({ error: 'Not found' });
+
+    const nowCompleted = !task.completed;
+
+    // Atomic flip WITHOUT running model validation on unrelated fields
+    const updated = await Task.findOneAndUpdate(
+      { _id: id, userId },
+      { $set: { completed: nowCompleted } },
+      { new: true, runValidators: false } // ← important
+    ).lean();
+
+    // If we just completed and it's recurring, spawn the next
+    let next = null;
+    if (nowCompleted && task.rrule && task.dueDate) {
+      const nextDue = nextFromRRule(task.rrule, task.dueDate);
+      if (nextDue) {
+        const safeTitle = (typeof task.title === 'string' && task.title.trim()) ? task.title.trim() : '(untitled)';
+        const safePriority = Number.isFinite(Number(task.priority)) ? Number(task.priority) : 0;
+        next = await Task.create({
+          userId,
+          title: safeTitle,
+          notes: task.notes || '',
+          dueDate: nextDue,
+          priority: safePriority,
+          clusters: Array.isArray(task.clusters) ? task.clusters : [],
+          sections: Array.isArray(task.sections) ? task.sections : [],
+          rrule: task.rrule,
+          completed: false,
+        });
+      }
+    }
+
+    return res.json({ task: updated, next });
+  } catch (e) {
+    console.error('[tasks] toggle failed:', e);
+    return res.status(500).json({ error: 'toggle failed' });
+  }
+});
+
+// POST /api/tasks (create)
+router.post('/', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    let { title, notes, dueDate, priority = 0, clusters = [], sections = [], rrule = '' } = req.body || {};
+    title = typeof title === 'string' ? title.trim() : '';
+    if (!title) return res.status(400).json({ error: 'title required' });
+
+    const doc = await Task.create({
+      userId,
+      title,
+      notes: notes || '',
+      dueDate,
+      priority,
+      clusters: clusters || [],
+      sections: sections || [],
+      rrule,
+      completed: false,
     });
-
-    const updated = await Task.findOneAndUpdate(
-      { _id: id, userId },
-      { $set: { dueDate: next, completed: false } },
-      { new: true }
-    );
-    res.json(updated);
+    res.status(201).json(doc);
   } catch (e) {
-    console.error('skip error', e);
-    res.status(500).json({ error: 'Failed to skip task occurrence' });
+    // validation stays 400; everything else 500
+    const code = e?.name === 'ValidationError' ? 400 : 500;
+    console.error('[tasks] create failed:', e);
+    res.status(code).json({ error: e?.message || 'create failed' });
   }
 });
 
-/** DELETE /api/tasks/:id */
-router.delete('/:id', async (req, res) => {
+// DELETE /api/tasks/:id  → hard delete a single task
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const out = await Task.deleteOne({ _id: req.params.id, userId: getUserId(req) });
-    if (out.deletedCount === 0) return res.status(404).json({ error: 'Task not found' });
-    res.sendStatus(204);
+    const userId = req.user.userId;
+    const { id } = req.params;
+    const doc = await Task.findOneAndDelete({ _id: id, userId });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true, deleted: doc._id });
   } catch (e) {
-    console.error('DELETE /api/tasks/:id error', e);
-    res.status(500).json({ error: 'Failed to delete task' });
+    console.error('[tasks] delete failed:', e);
+    res.status(500).json({ error: 'delete failed' });
   }
 });
 
-/**
- * POST /api/tasks/carry-forward
- * Moves all incomplete overdue tasks (dueDate < today) to today.
- */
-router.post('/carry-forward', async (req, res) => {
+// POST /api/tasks/bulk-delete  → hard delete many by id
+router.post('/bulk-delete', authenticateToken, async (req, res) => {
   try {
-    const userId = getUserId(req);
-    const today = todayISOInToronto();
-    const criteria = { userId, completed: false, dueDate: { $lt: today } };
-
-    const result = await Task.updateMany(criteria, { $set: { dueDate: today } });
-    const moved = result.modifiedCount ?? result.nModified ?? 0;
-    res.json({ moved, date: today });
+    const userId = req.user.userId;
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter(Boolean) : [];
+    if (ids.length === 0) return res.status(400).json({ error: 'ids required' });
+    const r = await Task.deleteMany({ _id: { $in: ids }, userId });
+    res.json({ ok: true, deletedCount: r.deletedCount });
   } catch (e) {
-    console.error('carry-forward error', e);
-    res.status(500).json({ error: 'Failed to carry forward tasks' });
+    console.error('[tasks] bulk-delete failed:', e);
+    res.status(500).json({ error: 'bulk-delete failed' });
   }
 });
+
+
+/* -------- minimal recurrence helpers (daily/weekly/monthly) -------- */
+function addDaysISO(iso, n) {
+  const [Y, M, D] = iso.split('-').map(Number);
+  const d = new Date(Date.UTC(Y, M - 1, D));
+  d.setUTCDate(d.getUTCDate() + n);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+const DOW = { SU:0, MO:1, TU:2, WE:3, TH:4, FR:5, SA:6 };
+function nextWeekdayFrom(iso, targetDow) {
+  const d = new Date(`${iso}T12:00:00Z`);
+  const cur = d.getUTCDay();
+  let delta = (targetDow - cur + 7) % 7;
+  if (delta === 0) delta = 7;
+  d.setUTCDate(d.getUTCDate() + delta);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function nextFromRRule(rrule, fromISO) {
+  if (!rrule || !fromISO) return '';
+  const parts = Object.fromEntries(rrule.split(';').map(s => s.split('=')));
+  const FREQ = parts.FREQ;
+  const INTERVAL = Math.max(1, parseInt(parts.INTERVAL || '1', 10));
+  if (FREQ === 'DAILY') return addDaysISO(fromISO, INTERVAL);
+  if (FREQ === 'WEEKLY') {
+    const by = (parts.BYDAY || '').split(',').filter(Boolean);
+    if (by.length === 0) return addDaysISO(fromISO, 7 * INTERVAL);
+    const options = by.map(code => nextWeekdayFrom(fromISO, DOW[code]));
+    options.sort();
+    return options[0];
+  }
+  if (FREQ === 'MONTHLY') {
+    // naive: next month same day
+    const [Y, M, D] = fromISO.split('-').map(Number);
+    const d = new Date(Date.UTC(Y, M - 1 + INTERVAL, D));
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  return '';
+}
 
 export default router;
