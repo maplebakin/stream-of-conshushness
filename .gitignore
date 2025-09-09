@@ -26,3 +26,7 @@ stream-of-conshushness-main/
 node_modules/
 stream-of-conshushness-main/
 node_modules/
+
+# big zips
+SOC_*.zip
+*.zip
