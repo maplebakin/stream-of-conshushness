@@ -72,6 +72,37 @@ app.use(
 
 app.use(express.json({ limit: "5mb" }));
 
+app.use('/routes', compatRouter);
+
+// ── Legacy note-by-date shim (quiet 200 on "no note yet") ───────────
+import Note from './models/Note.js'; // put at top with other imports if not already
+
+app.get('/api/note/:date(\\d{4}-\\d{2}-\\d{2})', auth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const date = req.params.date;
+    const item = await Note.findOne({ userId, date }).lean();
+    return res.json({ ok: true, item: item || null, content: item?.content || '' });
+  } catch (e) {
+    console.error('[note-by-date shim] failed:', e);
+    return res.json({ ok: true, item: null, content: '' });
+  }
+});
+
+app.get('/api/note', auth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const date = (req.query?.date || '').toString().trim();
+  if (!date) return res.json({ ok: true, item: null, content: '' });
+    const item = await Note.findOne({ userId, date }).lean();
+    return res.json({ ok: true, item: item || null, content: item?.content || '' });
+  } catch (e) {
+    console.error('[note-by-query shim] failed:', e);
+    return res.json({ ok: true, item: null, content: '' });
+  }
+});
+
+
 /* ───────────── Health Check ───────────── */
 app.get("/health", (_req, res) => {
   res.json({
@@ -83,6 +114,7 @@ app.get("/health", (_req, res) => {
 
 /* ───────────── Static: uploads ───────────── */
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 
 /* ───────────── REST Routes ───────────── */
 /** Auth: expose at /api/login AND /api/auth/login for compatibility */

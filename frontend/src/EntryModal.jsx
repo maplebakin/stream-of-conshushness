@@ -19,11 +19,11 @@ function ensurePortalRoot(id = 'modal-root') {
 export default function EntryModal({
   onClose,
   onSaved,
-  onAnalyzed,           // NEW: optional callback when analyze finishes
+  onAnalyzed,
   defaultCluster = '',
   defaultTags = [],
-  defaultDate,          // preferred
-  date,                 // legacy prop, still supported
+  defaultDate,
+  date,
 }) {
   const root = ensurePortalRoot();
   const { token } = useContext(AuthContext);
@@ -75,10 +75,8 @@ export default function EntryModal({
       toast.success('Entry saved');
       onSaved?.(res.data);
 
-      // 🔮 Auto-analyze the just-saved text for ripples
       try {
         const ar = await axios.post('/api/ripples/analyze', { text, date: dateISO }, { headers });
-        // optional: surface a tiny hint if something got queued
         if (Array.isArray(ar?.data?.ripples) && ar.data.ripples.length > 0) {
           toast('Ripples queued', { icon: '💧' });
         }

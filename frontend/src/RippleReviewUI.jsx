@@ -45,7 +45,6 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
 
-  // load clusters (sidebar source of truth)
   useEffect(() => {
     let ignore = false;
     (async () => {
@@ -60,7 +59,6 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
           }))
         );
       } catch {
-        // fallback to a tiny default set if API not ready
         if (!ignore) {
           setClusters([
             { id: 'home', name: 'Home' },
@@ -74,7 +72,6 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
     return () => { ignore = true; };
   }, [authHeaders]);
 
-  // fetch ripples for the specified day
   useEffect(() => {
     if (!token) return;
     let ignore = false;
@@ -86,8 +83,6 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
         if (ignore) return;
         const arr = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.ripples) ? res.data.ripples : []);
         setRipples(arr);
-
-        // prime due-date drafts (prefer backend hint or default day)
         const init = {};
         for (const r of arr) {
           const id = r._id || r.id;
@@ -107,7 +102,6 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
     return () => { ignore = true; };
   }, [token, authHeaders, dayISO]);
 
-  // approve / dismiss
   async function act(id, action, clusterName) {
     try {
       const dueDate = drafts?.[id]?.dueDate || dayISO;
@@ -115,7 +109,9 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
         action === 'approve'
           ? { assignedClusters: clusterName ? [clusterName] : [], dueDate }
           : {};
-      await axios.put(`/api/ripples/${id}/${action}`, body, { headers: authHeaders });
+
+      // backend uses POST /api/ripples/:id/approve|dismiss
+      await axios.post(`/api/ripples/${id}/${action}`, body, { headers: authHeaders });
       setRipples(prev => prev.filter(r => (r._id || r.id) !== id));
     } catch (e) {
       console.error(`Error ${action}ing ripple:`, e);
@@ -123,7 +119,6 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
     }
   }
 
-  // filter list
   const visible = useMemo(() => {
     return ripples.filter(r => {
       const status = r.status || 'pending';
@@ -141,7 +136,6 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
         <span className="text-sm text-gray-500">{dayISO}</span>
       </div>
 
-      {/* filter chips */}
       <div className="flex flex-wrap gap-2 mb-4">
         {['all','pending','approved','dismissed','high','medium','low'].map(t => (
           <button
@@ -172,10 +166,7 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
         const dueDate = drafts?.[id]?.dueDate || dayISO;
 
         return (
-          <div
-            key={id}
-            className={`p-4 rounded-lg border-2 mb-4 ${colorClass[b]}`}
-          >
+          <div key={id} className={`p-4 rounded-lg border-2 mb-4 ${colorClass[b]}`}>
             <div className="mb-2 text-gray-800 font-medium">{toDisplay(r.extractedText || r.text || '')}</div>
 
             {r.originalContext && typeof r.originalContext === 'string' && (

@@ -4,7 +4,6 @@ import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import './DailyRipples.css';
 
-// Toronto day helpers
 function todayISOInToronto(d = new Date()) {
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Toronto',
@@ -38,11 +37,10 @@ export default function DailyRipples(props) {
 
   const [ripples, setRipples] = useState([]);
   const [clusters, setClusters] = useState([]);
-  const [clusterSel, setClusterSel] = useState({}); // { rippleId: 'Home' }
+  const [clusterSel, setClusterSel] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // load clusters (optional assignment)
   useEffect(() => {
     if (!token) return;
     axios.get('/api/clusters', { headers: authHeaders })
@@ -50,7 +48,6 @@ export default function DailyRipples(props) {
       .catch(() => setClusters([]));
   }, [token, authHeaders]);
 
-  // load ripples; force scan on first load to derive suggestions from entries
   useEffect(() => {
     if (!token) return;
     let ignore = false;
@@ -77,7 +74,7 @@ export default function DailyRipples(props) {
     try {
       const cluster = clusterSel[id] || '';
       const body = { assignedClusters: cluster ? [cluster] : [], dueDate: day };
-      await axios.put(`/api/ripples/${id}/approve`, body, { headers: authHeaders });
+      await axios.post(`/api/ripples/${id}/approve`, body, { headers: authHeaders });
       setRipples(prev => prev.filter(r => (r._id || r.id) !== id));
     } catch (e) {
       console.error('approve ripple error', e);
@@ -86,7 +83,7 @@ export default function DailyRipples(props) {
   }
   async function dismiss(id) {
     try {
-      await axios.put(`/api/ripples/${id}/dismiss`, {}, { headers: authHeaders });
+      await axios.post(`/api/ripples/${id}/dismiss`, {}, { headers: authHeaders });
       setRipples(prev => prev.filter(r => (r._id || r.id) !== id));
     } catch (e) {
       console.error('dismiss ripple error', e);
@@ -116,11 +113,9 @@ export default function DailyRipples(props) {
                 </div>
 
                 <div className="ripple-actions">
-                  {/* meta pills */}
                   {r.rrule ? <span className="chip">repeat</span> : null}
                   {conf != null ? <span className="chip">conf {conf}%</span> : null}
 
-                  {/* optional cluster selection */}
                   <select
                     className="chip-input"
                     value={clusterSel[id] || ''}
@@ -128,11 +123,12 @@ export default function DailyRipples(props) {
                   >
                     <option value="">Cluster (optional)</option>
                     {clusters.map(c => (
-                      <option key={c._id} value={c.name}>{c.name}</option>
+                      <option key={c._id || c.id} value={c.name || c.label || c.key}>
+                        {c.name || c.label || c.key}
+                      </option>
                     ))}
                   </select>
 
-                  {/* actions */}
                   <button className="chip chip--active" onClick={() => approve(id)}>Approve</button>
                   <button className="chip" onClick={() => dismiss(id)}>Dismiss</button>
                 </div>

@@ -2,7 +2,7 @@
 
 /* Page shell */
 .daily-page {
-  padding: var(--space-5);
+  padding: var(--space-5, 20px);
   background: var(--color-mist);
   color: var(--color-ink);
 }
@@ -16,20 +16,14 @@
 }
 
 @media (max-width: 1100px) {
-  .daily-page .daily-layout {
-    grid-template-columns: 1fr;
-  }
-  .daily-page .daily-side {
-    order: 2;
-  }
+  .daily-page .daily-layout { grid-template-columns: 1fr; }
+  .daily-page .daily-side { order: 2; }
 }
 
 /* ---------------------------------------
    Header (soft ribbon, centered + roomy)
 ---------------------------------------- */
-.daily-page .daily-header {
-  margin-bottom: var(--space-4);
-}
+.daily-page .daily-header { margin-bottom: var(--space-4); }
 
 .daily-page .centered-header {
   display: grid;
@@ -56,29 +50,19 @@
 
 /* Force arrow nav buttons to be equal width & height */
 .daily-page .centered-header .button.nav-arrow {
-  width: 2.5rem;
-  height: 2.5rem;
-  padding: 0;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 999px;
+  width: 2.5rem; height: 2.5rem; padding: 0;
+  display: inline-grid; place-items: center; border-radius: 999px;
 }
 
-/* Keep date pill at natural size and centered */
+/* Date pill */
 .daily-page .daily-date {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 3.5rem; /* prevents squish on single-digit days */
-  padding: 4px 10px;
-  border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 3.5rem; padding: 4px 10px; border-radius: 999px;
   border: 1px solid rgba(0,0,0,.08);
   background: linear-gradient(180deg, rgba(255,255,255,.65), rgba(255,255,255,.4));
   backdrop-filter: blur(6px);
-  font-size: 0.9rem;
-  font-family: var(--font-glow);
-  color: var(--color-vein);
-  white-space: nowrap;
+  font-size: 0.9rem; font-family: var(--font-glow);
+  color: var(--color-vein); white-space: nowrap;
 }
 
 .daily-page .centered-header .button:hover {
@@ -88,18 +72,13 @@
 }
 
 .daily-page .today-btn {
-  padding: 0 .9rem;
-  height: 2.25rem;
-  font-family: var(--font-thread);
-  border-radius: 999px;
+  padding: 0 .9rem; height: 2.25rem;
+  font-family: var(--font-thread); border-radius: 999px;
 }
 
 /* Actions row under header */
 .daily-page .daily-actions {
-  margin-top: var(--space-2);
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
+  margin-top: var(--space-2); display: flex; gap: var(--space-2); flex-wrap: wrap;
 }
 
 /* ---------------------------------------
@@ -116,30 +95,21 @@
   box-shadow: var(--shadow-soft);
   transition: background .15s ease, border-color .15s ease, transform .08s ease;
 }
-
 .daily-page .button:hover {
-  background: rgba(199,181,213,.15);
-  border-color: rgba(0,0,0,.08);
+  background: rgba(199,181,213,.15); border-color: rgba(0,0,0,.08);
   transform: translateY(-1px);
 }
-
 .daily-page .button.chip {
-  border-radius: 999px;
-  padding: .35rem .8rem;
-  font-size: 0.9rem;
+  border-radius: 999px; padding: .35rem .8rem; font-size: 0.9rem;
   background: linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,.5));
   border: 1px solid rgba(0,0,0,.08);
 }
-
 .daily-page .button.chip:hover {
   background: linear-gradient(180deg, rgba(199,181,213,.22), rgba(199,181,213,.12));
 }
-
 /* Accent buttons keep their bg; soften hover */
-.daily-page .bg-lantern:hover,
-.daily-page .bg-spool:hover {
-  filter: brightness(0.98);
-  transform: translateY(-1px);
+.daily-page .bg-lantern:hover, .daily-page .bg-spool:hover {
+  filter: brightness(0.98); transform: translateY(-1px);
 }
 
 /* ---------------------------------------
@@ -152,11 +122,8 @@
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-soft);
 }
-
 .daily-page .daily-main .panel + .panel,
-.daily-page .daily-side .panel + .panel {
-  margin-top: var(--space-4);
-}
+.daily-page .daily-side .panel + .panel { margin-top: var(--space-4); }
 
 /* Entry cards (Today’s Entries) */
 .daily-page .entry-card {
@@ -166,74 +133,42 @@
   padding: var(--space-3);
   box-shadow: var(--shadow-soft);
 }
-
-.daily-page .entry-card + .entry-card {
-  margin-top: var(--space-2);
-}
+.daily-page .entry-card + .entry-card { margin-top: var(--space-2); }
 
 /* Lists */
 .daily-page .list { display: grid; gap: 12px; }
-
 .daily-page .list-item {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   padding: var(--space-3);
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--space-2);
+  display: grid; grid-template-columns: 1fr auto; gap: var(--space-2);
 }
-
-.daily-page .list-item .title {
-  font-weight: 600;
-  font-family: var(--font-thread);
-}
-
-.daily-page .list-item .meta {
-  font-size: 0.9rem;
-  color: var(--color-vein);
-  font-family: var(--font-glow);
-}
+.daily-page .list-item .title { font-weight: 600; font-family: var(--font-thread); }
+.daily-page .list-item .meta { font-size: 0.9rem; color: var(--color-vein); font-family: var(--font-glow); }
 
 /* Tags & Chips */
 .daily-page .tags { display: flex; gap: 6px; flex-wrap: wrap; }
-
-.daily-page .tag,
-.daily-page .status-chip {
-  font-size: 0.8rem;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-family: var(--font-glow);
+.daily-page .tag, .daily-page .status-chip {
+  font-size: 0.8rem; padding: 2px 8px; border-radius: 999px; font-family: var(--font-glow);
 }
-
-.daily-page .tag {
-  background: rgba(0, 0, 0, 0.06);
-  color: var(--color-vein);
-}
-
+.daily-page .tag { background: rgba(0, 0, 0, 0.06); color: var(--color-vein); }
 .daily-page .status-chip { background: rgba(0, 0, 0, 0.05); }
-.daily-page .status-chip.done   { background: rgba(138,161,193,.22); }
-.daily-page .status-chip.due    { background: rgba(199,181,213,.22); }
-.daily-page .status-chip.alert  { background: rgba(255, 99, 71, .18); }
+.daily-page .status-chip.done { background: rgba(138,161,193,.22); }
+.daily-page .status-chip.due  { background: rgba(199,181,213,.22); }
+.daily-page .status-chip.alert{ background: rgba(255, 99, 71, .18); }
 
 /* Appointment list */
 .daily-page .appt-list { display: grid; gap: var(--space-2); }
-
 .daily-page .appt-item {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: var(--space-2);
-  align-items: center;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  padding: var(--space-3);
+  display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-2); align-items: center;
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-card); padding: var(--space-3);
 }
-
-.daily-page .appt-time { font-weight: 600; font-variant-numeric: tabular-nums; }
+.daily-page .appt-time  { font-weight: 600; font-variant-numeric: tabular-nums; }
 .daily-page .appt-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Ripple box */
+/* Ripple box (compat with DailyRipples.css chips) */
 .daily-page .ripple-item {
   margin-top: var(--space-2);
   padding: var(--space-3);
@@ -243,34 +178,20 @@
 }
 
 /* Form fields */
-.daily-page .input,
-.daily-page .select,
-.daily-page .textarea {
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-input);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-ink);
-  font-size: 0.95rem;
+.daily-page .input, .daily-page .select, .daily-page .textarea {
+  width: 100%; padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-input); border: 1px solid var(--color-border);
+  background: var(--color-surface); color: var(--color-ink); font-size: 0.95rem;
 }
-.daily-page .input:focus,
-.daily-page .select:focus,
-.daily-page .textarea:focus {
-  outline: 2px solid var(--color-spool);
-  outline-offset: 1px;
+.daily-page .input:focus, .daily-page .select:focus, .daily-page .textarea:focus {
+  outline: 2px solid var(--color-spool); outline-offset: 1px;
 }
 
 /* Entries panel header layout */
 .daily-page .entries-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-2); margin-bottom: var(--space-2);
 }
-
-/* Entry card text spacing */
 .daily-page .entry-card .entry-text { margin-bottom: .5rem; }
 
 /* Quick-assign row */
@@ -279,235 +200,69 @@
 
 /* Soft select */
 .daily-page .qa-select {
-  appearance: none;
-  -webkit-appearance: none;
+  appearance: none; -webkit-appearance: none;
   background: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.55));
   border: 1px solid rgba(0,0,0,.08);
-  border-radius: 999px;
-  padding: .35rem .9rem;
-  font-family: var(--font-thread);
-  font-size: .95rem;
-  color: var(--color-ink);
+  border-radius: 999px; padding: .35rem .9rem; font-family: var(--font-thread);
+  font-size: .95rem; color: var(--color-ink);
   box-shadow: var(--shadow-soft);
-  cursor: pointer;
-  transition: background .15s ease, transform .08s ease, border-color .15s ease;
+  cursor: pointer; transition: background .15s ease, transform .08s ease, border-color .15s ease;
 }
 .daily-page .qa-select:hover { background: linear-gradient(180deg, rgba(199,181,213,.18), rgba(199,181,213,.1)); }
 .daily-page .qa-select:focus { outline: 2px solid var(--color-spool); outline-offset: 2px; }
-.daily-page .qa-select:disabled { opacity: .65; cursor: default; }r
+.daily-page .qa-select:disabled { opacity: .65; cursor: default; }
 
 /* Soft action button */
 .daily-page .qa-btn {
   border: 1px solid rgba(0,0,0,.08);
   background: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.55));
   color: var(--color-ink);
-  padding: .35rem .85rem;
-  border-radius: 999px;
-  font-family: var(--font-thread);
-  box-shadow: var(--shadow-soft);
-  cursor: pointer;
+  padding: .35rem .85rem; border-radius: 999px; font-family: var(--font-thread);
+  box-shadow: var(--shadow-soft); cursor: pointer;
   transition: background .15s ease, transform .08s ease, border-color .15s ease;
 }
 .daily-page .qa-btn:hover { background: linear-gradient(180deg, rgba(199,181,213,.2), rgba(199,181,213,.12)); transform: translateY(-1px); }
 .daily-page .qa-btn:disabled { opacity: .65; cursor: default; transform: none; }
-/* ========== DailyPage task inbox layout fixes ========== */
 
-/* Let the main column actually grow inside the grid */
-.daily-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px; /* center + right */
-  gap: 16px;
-}
-.daily-main,
-.daily-main .panel {
-  min-width: 0; /* critical for long content in grid children */
-}
+/* ====== Task-list layout fixes inside panels ====== */
+.daily-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; }
+.daily-main, .daily-main .panel { min-width: 0; }
 
-/* Normalize task list container */
-.panel .task-list,
-.panel .tasks-inbox,
-.panel .inbox-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.panel .task-list, .panel .tasks-inbox, .panel .inbox-list {
+  list-style: none; margin: 0; padding: 0; width: 100%;
+  display: flex; flex-direction: column; gap: 8px;
 }
-
-/* Make each task a comfy flex row */
-.panel .task,
-.panel .task-row,
-.panel .inbox-item,
-.panel .task-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--color-border, #2a2a32);
-  border-radius: 10px;
-  background: var(--card, rgba(255,255,255,.03));
+.panel .task, .panel .task-row, .panel .inbox-item, .panel .task-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--color-border, #2a2a32);
+  border-radius: 10px; background: var(--color-card, rgba(255,255,255,.03));
 }
-
-/* Checkbox column */
-.panel .task .chk,
-.panel .task-row .chk {
-  flex: 0 0 auto;
-  margin-top: 2px;
+.panel .task .chk, .panel .task-row .chk { flex: 0 0 auto; margin-top: 2px; }
+.panel .task .task-main, .panel .task-row .task-main,
+.panel .inbox-item .task-main, .panel .task-item .task-main {
+  flex: 1 1 auto; min-width: 0;
 }
-
-/* Main text column should breathe */
-.panel .task .task-main,
-.panel .task-row .task-main,
-.panel .inbox-item .task-main,
-.panel .task-item .task-main {
-  flex: 1 1 auto;
-  min-width: 0;                     /* <-- prevents squish */
-}
-
-/* Title + notes */
-.panel .task .task-title {
-  font-weight: 600;
-  line-height: 1.35;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-}
-.panel .task .task-notes {
-  opacity: 0.8;
-  margin-top: 2px;
-  font-size: 0.92rem;
-}
-
-/* Right-side meta/actions */
-.panel .task .task-meta,
-.panel .task .task-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-/* If the adapter used grid for rows, make sure the text track can shrink properly */
+.panel .task .task-title { font-weight: 600; line-height: 1.35; word-break: break-word; overflow-wrap: anywhere; }
+.panel .task .task-notes { opacity: 0.8; margin-top: 2px; font-size: 0.92rem; }
+.panel .task .task-meta, .panel .task .task-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
 .panel .task-grid {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto; /* checkbox | text | actions */
-  gap: 10px;
-  align-items: start;
-}
-/* ========== DailyPage task inbox layout fixes ========== */
-
-/* Let the main column actually grow inside the grid */
-.daily-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px; /* center + right */
-  gap: 16px;
-}
-.daily-main,
-.daily-main .panel {
-  min-width: 0; /* critical for long content in grid children */
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start;
 }
 
-/* Normalize task list container */
-.panel .task-list,
-.panel .tasks-inbox,
-.panel .inbox-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* Make each task a comfy flex row */
-.panel .task,
-.panel .task-row,
-.panel .inbox-item,
-.panel .task-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--color-border, #2a2a32);
-  border-radius: 10px;
-  background: var(--card, rgba(255,255,255,.03));
-}
-
-/* Checkbox column */
-.panel .task .chk,
-.panel .task-row .chk {
-  flex: 0 0 auto;
-  margin-top: 2px;
-}
-
-/* Main text column should breathe */
-.panel .task .task-main,
-.panel .task-row .task-main,
-.panel .inbox-item .task-main,
-.panel .task-item .task-main {
-  flex: 1 1 auto;
-  min-width: 0;                     /* <-- prevents squish */
-}
-
-/* Title + notes */
-.panel .task .task-title {
-  font-weight: 600;
-  line-height: 1.35;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-}
-.panel .task .task-notes {
-  opacity: 0.8;
-  margin-top: 2px;
-  font-size: 0.92rem;
-}
-
-/* Right-side meta/actions */
-.panel .task .task-meta,
-.panel .task .task-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-/* If the adapter used grid for rows, make sure the text track can shrink properly */
-.panel .task-grid {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto; /* checkbox | text | actions */
-  gap: 10px;
-  align-items: start;
-}
-/* push completed tasks lower inside lists */
+/* completed → order after open items */
 .panel .task-list .task.completed,
 .panel .task-list .task.done,
-.panel .task-list .task[data-completed="true"] {
-  order: 2;
-}
+.panel .task-list .task[data-completed="true"] { order: 2; }
 .panel .task-list .task { order: 1; }
-/* DailyPage → TaskList visual polish */
-.task-list .task-row .task-title.line {
-  text-decoration: line-through;
-  opacity: .65;
-}
 
+/* strike styling when adapter uses line class */
+.task-list .task-row .task-title.line { text-decoration: line-through; opacity: .65; }
 .task-list .task-row.is-completed {
-  background: var(--surface-quiet, #faf9ff);
-  border-color: var(--border, #e6e6ea);
+  background: var(--surface-quiet, #faf9ff); border-color: var(--border, #e6e6ea);
 }
-
 .task-list .pill {
-  display: inline-block;
-  font-size: .75rem;
-  padding: .1rem .5rem;
-  border: 1px solid var(--border, #e6e6ea);
-  border-radius: 999px;
-  color: var(--muted, #6b7280);
-  background: var(--chip, #f8fafc);
+  display: inline-block; font-size: .75rem; padding: .1rem .5rem;
+  border: 1px solid var(--border, #e6e6ea); border-radius: 999px;
+  color: var(--muted, #6b7280); background: var(--chip, #f8fafc);
 }
-
-.task-list .pill-muted {
-  opacity: .85;
-}
+.task-list .pill-muted { opacity: .85; }

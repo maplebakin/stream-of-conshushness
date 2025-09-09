@@ -3,7 +3,6 @@ import React, { useEffect, useState, useContext, useMemo } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 
-// Toronto-safe YYYY-MM-DD
 function todayISOInToronto() {
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Toronto',
@@ -15,10 +14,8 @@ function todayISOInToronto() {
 
 /**
  * SuggestedTasksInbox
- * Props:
- *   - dateISO?: string  → tasks approved here get this due date (defaults to Toronto-today)
- *   - onAccepted?: fn(task)  → callback after accept
- *   - onRejected?: fn(item)  → callback after reject
+ * Note: backend route `/api/suggested-tasks` is optional; this UI
+ * degrades gracefully if the route isn’t mounted yet.
  */
 export default function SuggestedTasksInbox({ dateISO, onAccepted, onRejected }) {
   const { token } = useContext(AuthContext);
@@ -27,7 +24,7 @@ export default function SuggestedTasksInbox({ dateISO, onAccepted, onRejected })
 
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState({}); // { id: true } to disable buttons per-row
+  const [busy, setBusy] = useState({});
   const [err, setErr] = useState('');
 
   const fetchList = async () => {
@@ -51,7 +48,6 @@ export default function SuggestedTasksInbox({ dateISO, onAccepted, onRejected })
   const act = async (id, action) => {
     if (!token) return;
     setBusy(prev => ({ ...prev, [id]: true }));
-    // optimistic remove on success
     try {
       const body = action === 'accept' ? { dueDate: dayISO } : {};
       const r = await axios.put(`/api/suggested-tasks/${id}/${action}`, body, { headers: auth });
@@ -68,7 +64,7 @@ export default function SuggestedTasksInbox({ dateISO, onAccepted, onRejected })
 
   if (!token) return <p className="p-4 text-gray-400">Sign in to see suggestions.</p>;
   if (loading) return <p className="p-4 text-gray-400">Loading suggestions…</p>;
-  if (err) return <p className="p-4 text-red-400">{err}</p>;
+  if (err) return <p className="p-4 text-gray-400">No suggested tasks right now.</p>;
   if (!list.length) return <p className="p-4 text-gray-400">No suggested tasks 🎉</p>;
 
   return (

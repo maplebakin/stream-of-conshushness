@@ -1,40 +1,49 @@
 :root {
-  --color-mist: #c6b6bd;       /* softened overlay base - mood fog */
-  --color-ink: #262322;        /* deep text, never change you icon */
-  --color-vein: #4b4d4b;       /* muted neutral gray-green */
-  --color-lantern: #a9654b;    /* a smidge duskier, less orange */
-  --color-ripple: #92ad94;     /* dreamy green - keep */
-  --color-spool: #9a8ca5;      /* muted lavender thread - keep */
-  --color-plum: #5d4e5f;       /* richer, deeper than vein for contrast */
-  --color-border: #6a7c8a;     /* softened steel blue-gray */
+  /* Core palette */
+  --color-mist: #c6b6bd;        /* background haze */
+  --color-ink: #262322;         /* primary text */
+  --color-vein: #4b4d4b;        /* muted neutral */
+  --color-lantern: #a9654b;     /* warm accent */
+  --color-ripple: #92ad94;      /* gentle green */
+  --color-spool: #9a8ca5;       /* lavender thread */
+  --color-plum: #5d4e5f;        /* deep accent */
+  --color-border: #6a7c8a;      /* soft steel */
 
   --color-bg: var(--color-mist);
-  --color-surface: #e5dce6;    /* lighter than d3c4d1, less gray cast */
-  --color-text: var(--color-ink); 
+  --color-surface: #e5dce6;
+  --color-text: var(--color-ink);
   --color-muted: var(--color-vein);
   --color-accent: var(--color-ripple);
   --color-accent-2: var(--color-spool);
   --color-accent-dark: var(--color-plum);
   --color-background: var(--color-bg);
---color-petal: #e7d8e8;    /* hint of rosy blush, for highlights or hover */
---color-ghost: #f4f1f5;    /* ultra-light background, almost invisible */
---color-shadow: rgba(38, 35, 34, 0.15); /* matches ink */
 
+  /* Extras / highlights */
+  --color-petal: #e7d8e8;
+  --color-ghost: #f4f1f5;
+  --color-shadow: rgba(38, 35, 34, 0.15);
 
+  /* Surfaces */
+  --color-card: var(--color-surface);
+
+  /* Type */
   --font-thread: "EB Garamond", Georgia, serif;
   --font-glow: "Libre Baskerville", serif;
   --font-echo: "Dancing Script", cursive;
   --font-sans: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
 
+  /* Radii & shadow */
   --radius: 12px;
   --radius-card: var(--radius);
   --radius-input: 6px;
   --radius-button: 6px;
   --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.1);
 
+  /* Spacing scale */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
+  --space-5: 20px;   /* added for daily page */
   --space-6: 24px;
 }

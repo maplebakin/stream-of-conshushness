@@ -1,7 +1,10 @@
+// routes/ripples.js
 import express from 'express';
 import Ripple from '../models/Ripple.js';
+import auth from '../middleware/auth.js';
 
 const router = express.Router();
+router.use(auth);
 
 const ok   = (res, payload = {}) => res.json({ ok: true, ...payload });
 const fail = (res, code, msg) => res.status(code).json({ error: msg });
@@ -203,6 +206,5 @@ router.post('/ripples/analyze', async (req, res) => {
     return fail(res, 500, 'analyze failed');
   }
 });
-
 
 export default router;

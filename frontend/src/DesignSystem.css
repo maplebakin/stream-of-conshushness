@@ -4,19 +4,19 @@
 @import "./variables.css";
 @import "./base.css";
 
-/* 2) page-level styles (bigger canvases first) */
+/* 2) global shell */
+@import "./Main.css";
+
+/* 3) page-level styles */
 @import "./dailypage.css";
 @import "./Calendar.css";
-@import "./streampage.css";
-@import "./Settings.css";
-@import "./login.css";
 
-/* 3) components / feature panels */
-@import "./Sidebar.css";
+/* 4) components */
 @import "./TaskList.css";
-@import "./TaskModal.css";
+@import "./DailyRipples.css";
+@import "./RippleReviewUI.css";
 @import "./modal.css";
 
-/* 4) tailwind helper (if you genuinely use it here) */
-/* If this file only contains `@tailwind screens;` you can skip it safely. */
-
+/* Note:
+   Removed imports for files not guaranteed to exist (Sidebar, TaskModal, Settings, etc.)
+   to avoid build-time resolution errors. Add them back when the files land. */

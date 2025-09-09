@@ -2,7 +2,6 @@
    Calendar Page Layout
 ==================================*/
 .calendar-page {
-  /* page-level grid: left sidebar + month grid */
   display: grid;
   grid-template-columns: 280px 1fr;
   gap: 16px;
@@ -27,64 +26,39 @@
 
 /* Main panel (header + grid + legend) */
 .calendar-panel {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
+  display: flex; flex-direction: column; height: 100%; min-height: 0;
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-soft);
-  padding: 12px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft); padding: 12px;
 }
 
 /* ================================
    Header
 ==================================*/
 .calendar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-  border-bottom: 1px solid var(--color-border);
-  padding-bottom: 6px;
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px; border-bottom: 1px solid var(--color-border); padding-bottom: 6px;
 }
-
 .calendar-header .title h2 {
-  font-family: var(--font-glow);
-  font-size: 1.75rem;
-  margin: 0;
+  font-family: var(--font-glow); font-size: 1.75rem; margin: 0;
 }
-
-.calendar-header .subtitle {
-  font-size: 0.9rem;
-  color: var(--color-muted);
-}
+.calendar-header .subtitle { font-size: 0.9rem; color: var(--color-muted); }
 
 /* ================================
    Month Grid
 ==================================*/
 .calendar-grid {
-  /* fills remaining height under header */
-  flex: 1 1 auto;
-  min-height: 0;
-
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  /* Weekday row + 6 week rows; tune 9.5vh if needed */
+  flex: 1 1 auto; min-height: 0;
+  display: grid; grid-template-columns: repeat(7, 1fr);
   grid-template-rows: auto repeat(6, minmax(clamp(66px, 9.5vh, 110px), 1fr));
   gap: 8px;
 }
 
 /* Weekday labels (first row) */
 .calendar-weekday {
-  font-weight: 700;
-  text-align: center;
-  padding: 0.4rem 0;
-  color: var(--color-accent-dark);
-  font-family: var(--font-glow);
-  border-bottom: 1px solid var(--color-border);
-  align-self: center;
+  font-weight: 700; text-align: center; padding: 0.4rem 0;
+  color: var(--color-accent-dark); font-family: var(--font-glow);
+  border-bottom: 1px solid var(--color-border); align-self: center;
 }
 
 /* ================================
@@ -95,82 +69,41 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   padding: 8px;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+  display: flex; flex-direction: column; min-height: 0;
   box-shadow: var(--shadow-soft);
   transition: transform 0.06s ease, background 0.2s ease;
 }
-
 .calendar-cell:hover:not(.empty) {
-  transform: translateY(-1px);
-  cursor: pointer;
+  transform: translateY(-1px); cursor: pointer;
   background: color-mix(in oklab, var(--color-accent-2) 8%, var(--color-surface));
-  color: inherit; /* don’t invert text */
+  color: inherit;
 }
-
 .calendar-cell.today {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 0;
+  outline: 2px solid var(--color-accent); outline-offset: 0;
   background: color-mix(in oklab, var(--color-accent) 8%, var(--color-surface));
 }
-
-.calendar-cell.empty {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  pointer-events: none;
-}
+.calendar-cell.empty { background: transparent; border: none; box-shadow: none; pointer-events: none; }
 
 /* Top row inside each cell: day number + badges */
-.calendar-daynum {
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.calendar-cell .badges {
-  margin-left: auto;
-  display: flex;
-  gap: 6px;
-}
+.calendar-daynum { font-size: 1rem; font-weight: 700; }
+.calendar-cell .badges { margin-left: auto; display: flex; gap: 6px; }
 
 .pill {
-  font-size: 0.8rem;
-  line-height: 1;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: var(--color-border);
-  color: var(--color-text);
-  white-space: nowrap;
+  font-size: 0.8rem; line-height: 1; padding: 2px 6px; border-radius: 999px;
+  background: var(--color-border); color: var(--color-text); white-space: nowrap;
 }
 
 /* Optional preview stack area */
-.calendar-content {
-  margin-top: 6px;
-  font-size: 0.9rem;
-}
+.calendar-content { margin-top: 6px; font-size: 0.9rem; }
 
 /* Bottom dots row (presence indicators) */
-.calendar-dots {
-  margin-top: auto;
-  display: flex;
-  gap: 4px;
-}
+.calendar-dots { margin-top: auto; display: flex; gap: 4px; }
+.calendar-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-muted); }
+.calendar-dot.event { background: var(--color-accent-dark); }
+.calendar-dot.appt  { background: var(--color-accent-2); }
+.calendar-dot.task  { background: var(--color-accent); }
 
-.calendar-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-muted);
-}
-
-.calendar-dot.event { background: var(--color-accent-dark); }  /* ⭐ */
-.calendar-dot.appt  { background: var(--color-accent-2); }     /* 🗓️ */
-.calendar-dot.task  { background: var(--color-accent); }       /* ● */
-
-/* ================================
-   Sidebar content cards
-==================================*/
+/* Sidebar content cards */
 .panel .task {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -178,39 +111,16 @@
   padding: 8px 10px;
 }
 
-/* ================================
-   Legend
-==================================*/
+/* Legend */
 .calendar-legend {
-  margin-top: 8px;
-  flex: 0 0 auto;
-  display: flex;
-  justify-content: center;
-  gap: 1.5rem;
-  font-size: 0.85rem;
-  color: var(--color-muted);
+  margin-top: 8px; flex: 0 0 auto; display: flex; justify-content: center; gap: 1.5rem;
+  font-size: 0.85rem; color: var(--color-muted);
 }
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.legend-swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
+.legend-item { display: flex; align-items: center; gap: 0.4rem; }
+.legend-swatch { width: 10px; height: 10px; border-radius: 50%; }
 .legend-swatch.event { background: var(--color-accent-dark); }
 .legend-swatch.appt  { background: var(--color-accent-2); }
 .legend-swatch.task  { background: var(--color-accent); }
 
-/* ================================
-   Responsive
-==================================*/
-@media (max-width: 1024px) {
-  .calendar-page {
-    grid-template-columns: 1fr;  /* collapse sidebar */
-  }
-}
+/* Responsive */
+@media (max-width: 1024px) { .calendar-page { grid-template-columns: 1fr; } }

@@ -48,10 +48,7 @@ export function parseISO(iso) {
 export function toDisplayDate(iso, tz = 'America/Toronto') {
   if (!iso) return '';
   const [y, m, d] = String(iso).split('-').map(Number);
-
-  // Build a Date anchored at **UTC noon** to avoid TZ rollbacks (midnight UTC is yesterday in Toronto).
   const safe = new Date(Date.UTC(y, (m || 1) - 1, d || 1, 12, 0, 0));
-
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz,
     weekday: 'short',
@@ -59,29 +56,19 @@ export function toDisplayDate(iso, tz = 'America/Toronto') {
     day: '2-digit',
     year: 'numeric'
   });
-  return fmt.format(safe); // e.g., "Wed, Aug 13, 2025"
+  return fmt.format(safe);
 }
 
-
-/** Simple helpers */
 export function addDays(iso, n) {
   const d = parseISO(iso);
   d.setDate(d.getDate() + n);
   return toISODateLocal(d);
 }
-
 export function isSameDay(aISO, bISO) {
   return String(aISO) === String(bISO);
 }
 
-/* ── Compatibility aliases (for older imports) ──────────────────────────── */
-// Older files might import these names. Keep them thin and obvious.
-export function getLocalTodayISO() {
-  return toISODateLocal(new Date());
-}
-export function todayISO() {
-  return toISODateLocal(new Date());
-}
-export function todayISOInTZ(tz = 'America/Toronto') {
-  return toISOInTZ(new Date(), tz);
-}
+/* Compatibility aliases */
+export function getLocalTodayISO() { return toISODateLocal(new Date()); }
+export function todayISO() { return toISODateLocal(new Date()); }
+export function todayISOInTZ(tz = 'America/Toronto') { return toISOInTZ(new Date(), tz); }

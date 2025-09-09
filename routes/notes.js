@@ -73,17 +73,14 @@ router.post('/', async (req, res) => {
 
 /* ---------- DATE BRIDGES (fixes FE calls to /api/note/:date) ---------- */
 /**
- * GET /api/note/:date
- * POST /api/note/:date  { content }
- * These work because server mounts notes router at /api/notes AND compat router mounts it at /api/note.
- * Order matters: date routes must be defined before "/:id".
- */
+// GET /api/notes/:date (YYYY-MM-DD)
+// Return 200 with { ok:true, item:null } if not found (quiet UI)
 router.get('/:date(\\d{4}-\\d{2}-\\d{2})', async (req, res) => {
   try {
     const userId = req.user?.userId;
     const date = req.params.date;
-    const item = await Note.findOne({ ...own(userId), date });
-    if (!item) return res.status(404).json({ error: 'not found' });
+    const item = await Note.findOne({ userId, date });
+    if (!item) return res.json({ ok: true, item: null, content: '' });
     res.json({ ok: true, item, content: item.content });
   } catch (e) {
     console.error('[notes] get by date failed:', e);
