@@ -1,70 +1,43 @@
 // utils/rippleExtractor.js
-// Calmer task extraction with backward-compatible exports.
-//
-// New core:
-//   - extractTasks(text, entryDateISO)
-//   - extractRipplesFromEntry({ text, entryDate, originalContext })
-//
-// Back-compat shims (so you don't have to touch old code):
-//   - extractEntrySuggestions(text, entryDateISO)  -> same as extractTasks
-//   - extractRipples(text, entryDateISO, originalContext) -> ripples array
-//
-// Notes:
-// - Conservative triggers: “need to / have to / must / don’t forget to / remind me to / todo:”
-// - Safe dates: ISO, today/tomorrow, next <weekday>, “by YYYY-MM-DD”
-// - Safe recurrence: every day / every other day / every <n> days / every <weekday>
-// - No invented dates; deduped; max 3 suggestions.
+// Ultra-calm task/ripple extraction with strong-intent gating.
+// Fires only on: need to / have to / must / don't forget to / remind me to / line-start "TODO:"
+// Optional dial: REQUIRE_DUE_OR_RECURRENCE to only accept dated/recurring items.
 
 const WEEKDAYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
 const WEEKDAY_ABBR = ['sun','mon','tue','tues','wed','thu','thur','thurs','fri','sat'];
 
 const MAX_SUGGESTIONS = 3;
-
-// Single tokens that should never be a task alone
 const BORING_SINGLE_WORDS = new Set(['day','today','tomorrow','sometime','later','soon','now','please']);
 
-// Intent triggers (case-insensitive)
-const INTENT_PATTERNS = [
+// ——— enthusiasm dials ———
+const REQUIRE_STRONG_INTENT = true;          // keep this true for calm behavior
+const REQUIRE_DUE_OR_RECURRENCE = false;     // set true to be monk-level strict
+
+const INTENT_PATS = [
   /\b(?:i|we)\s+(?:need|have)\s+to\s+/i,
   /\b(?:i|we)\s+must\s+/i,
-  /\bshould\s+(?:probably\s+)?/i,
   /\bdon['’]t\s+forget\s+to\s+/i,
   /\bremind\s+me\s+to\s+/i,
-  /\btodo\s*:\s*/i,
+  /(?:^|\n)\s*todo\s*:\s*/i
 ];
 
-// Slice a clean action after an intent phrase
-function sliceAction(text, startIdx) {
-  const tail = text.slice(startIdx);
-  const boundary = tail.search(/(?=\.|\?|!|$)|(?=,)|(?=\s+\band\b)|(?=\s+\bthen\b)/i);
-  const raw = boundary === -1 ? tail : tail.slice(0, boundary);
+const HYPOS = [
+  'should','maybe','might','could','if ','if i','if we','wonder if','thinking about','considering','someday','hopefully'
+];
 
-  let action = raw
-    .replace(/^\s*(to\s+)?/i, '')
-    .replace(/\s+(?:please|now|soon|later)\s*$/i, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+const NEGATIONS = ["don't",'do not',"won't",'will not',"can't",'cannot',"shouldn't",'never',' not '];
 
-  if (!action || action.length < 3) return null;
-  if (!/\w/.test(action)) return null;
-  if (!/\s/.test(action) && BORING_SINGLE_WORDS.has(action.toLowerCase())) return null;
+const ACTION_VERBS = [
+  'buy','call','email','text','message',
+  'schedule','book','attend',
+  'clean','wash','wipe','vacuum','mop','water','feed',
+  'pay','renew','submit','file','send','print','scan',
+  'write','read','finish','fix','update','check','review',
+  'install','uninstall','replace',
+  'pick up','drop off','prepare','plan','organize','record','practice','backup','back up'
+];
 
-  return action;
-}
-
-function dedupeByKey(items, keyFn) {
-  const seen = new Set();
-  const out = [];
-  for (const it of items) {
-    const k = keyFn(it);
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push(it);
-  }
-  return out;
-}
-
-/* ─────────── Date helpers (America/Toronto) ─────────── */
+function escapeRegex(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
 
 function toISO(date) {
   const fmt = new Intl.DateTimeFormat('en-CA', {
@@ -72,123 +45,110 @@ function toISO(date) {
     year: 'numeric', month: '2-digit', day: '2-digit'
   });
   const parts = fmt.formatToParts(date);
-  const y = parts.find(p => p.type === 'year').value;
-  const m = parts.find(p => p.type === 'month').value;
-  const d = parts.find(p => p.type === 'day').value;
+  const y = parts.find(p=>p.type==='year').value;
+  const m = parts.find(p=>p.type==='month').value;
+  const d = parts.find(p=>p.type==='day').value;
   return `${y}-${m}-${d}`;
 }
 
-function parseExplicitISO(s) {
-  const m = s.match(/\b(20\d{2})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b/);
-  return m ? m[0] : null;
+function parseExplicitISO(s){const m=s.match(/\b(20\d{2})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b/);return m?m[0]:null;}
+function nextWeekdayISO(fromISO, targetDow){
+  const [Y,M,D]=fromISO.split('-').map(n=>parseInt(n,10));
+  const d=new Date(Date.UTC(Y,M-1,D,12)); const dow=d.getUTCDay();
+  const delta=(targetDow-dow+7)%7||7; d.setUTCDate(d.getUTCDate()+delta); return toISO(d);
+}
+function relativeISO(keyword, fromISO){
+  const [Y,M,D]=fromISO.split('-').map(n=>parseInt(n,10));
+  const b=new Date(Date.UTC(Y,M-1,D,12));
+  if(keyword==='today') return toISO(b);
+  if(keyword==='tomorrow'){b.setUTCDate(b.getUTCDate()+1); return toISO(b);}
+  return null;
 }
 
-function nextWeekdayISO(fromISO, targetDow) {
-  const [Y,M,D] = fromISO.split('-').map(n => parseInt(n,10));
-  const d = new Date(Date.UTC(Y, M-1, D, 12, 0, 0));
-  const dow = d.getUTCDay();
-  const delta = (targetDow - dow + 7) % 7 || 7;
-  d.setUTCDate(d.getUTCDate() + delta);
-  return toISO(d);
-}
+// ——— recurrence (strict) ———
+function parseRecurrence(s){
+  const low=s.toLowerCase();
 
-function relativeISO(keyword, fromISO) {
-  const [Y,M,D] = fromISO.split('-').map(n => parseInt(n,10));
-  const base = new Date(Date.UTC(Y, M-1, D, 12, 0, 0));
-  if (keyword === 'today') return toISO(base);
-  if (keyword === 'tomorrow') {
-    base.setUTCDate(base.getUTCDate() + 1);
-    return toISO(base);
+  const other=low.match(/\bevery\s+other\s+day\b/);
+  if(other) return { rrule:'FREQ=DAILY;INTERVAL=2', label:'every other day' };
+
+  const everyN=low.match(/\bevery\s+(\d{1,2})\s+days?\b/);
+  if(everyN){const n=Math.max(1,Math.min(30,parseInt(everyN[1],10))); return { rrule:`FREQ=DAILY;INTERVAL=${n}`, label:`every ${n} days` };}
+
+  if(/\b(every\s+day|daily)\b/.test(low)) return { rrule:'FREQ=DAILY;INTERVAL=1', label:'every day' };
+
+  for(let i=0;i<WEEKDAYS.length;i++){
+    const wd=WEEKDAYS[i];
+    const ab=WEEKDAY_ABBR.filter(a=>wd.startsWith(a)||a.startsWith(wd.slice(0,3)));
+    const pat=new RegExp(`\\bevery\\s+(?:${wd}|${ab.join('|')})\\b`,'i');
+    if(pat.test(low)){ const by=['SU','MO','TU','WE','TH','FR','SA'][i]; return { rrule:`FREQ=WEEKLY;BYDAY=${by}`, label:`every ${wd}` }; }
   }
   return null;
 }
 
-/* ─────────── Recurrence parsing ─────────── */
-
-function parseRecurrence(chunk) {
-  const s = chunk.toLowerCase();
-
-  if (/\bevery\s+other\s+day\b/.test(s)) {
-    return { rrule: 'FREQ=DAILY;INTERVAL=2', label: 'every other day' };
-  }
-
-  const mN = s.match(/\bevery\s+(\d{1,2})\s+days?\b/);
-  if (mN) {
-    const interval = Math.max(1, Math.min(30, parseInt(mN[1], 10)));
-    return { rrule: `FREQ=DAILY;INTERVAL=${interval}`, label: `every ${interval} days` };
-  }
-
-  if (/\b(every\s+day|daily)\b/.test(s)) {
-    return { rrule: 'FREQ=DAILY;INTERVAL=1', label: 'every day' };
-  }
-
-  for (let i = 0; i < WEEKDAYS.length; i++) {
-    const wd = WEEKDAYS[i];
-    const abbrs = WEEKDAY_ABBR.filter(a => wd.startsWith(a) || a.startsWith(wd.slice(0,3)));
-    const pat = new RegExp(`\\bevery\\s+(?:${wd}|${abbrs.join('|')})\\b`, 'i');
-    if (pat.test(s)) {
-      const byday = ['SU','MO','TU','WE','TH','FR','SA'][i];
-      return { rrule: `FREQ=WEEKLY;BYDAY=${byday}`, label: `every ${wd}` };
-    }
-  }
-
+// ——— due date (strict) ———
+function parseDueDate(s, entryDateISO){
+  const iso=parseExplicitISO(s); if(iso) return iso;
+  const rel=s.toLowerCase().match(/\b(today|tomorrow)\b/); if(rel) return relativeISO(rel[1],entryDateISO);
+  const mNext=s.toLowerCase().match(/\bnext\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)\b/);
+  if(mNext){let wd=mNext[1]; let idx=WEEKDAYS.indexOf(wd); if(idx===-1){const core=wd.slice(0,3); idx=WEEKDAYS.findIndex(w=>w.startsWith(core));} if(idx>=0) return nextWeekdayISO(entryDateISO,idx);}
+  const by=s.match(/\bby\s+(20\d{2}-\d{2}-\d{2})\b/i); if(by) return by[1];
   return null;
 }
 
-/* ─────────── Due date parsing ─────────── */
-
-function parseDueDate(chunk, entryDateISO) {
-  const iso = parseExplicitISO(chunk);
-  if (iso) return iso;
-
-  const rel = chunk.toLowerCase().match(/\b(today|tomorrow)\b/);
-  if (rel) return relativeISO(rel[1], entryDateISO);
-
-  const mNext = chunk.toLowerCase().match(
-    /\bnext\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)\b/
-  );
-  if (mNext) {
-    const wd = mNext[1];
-    let idx = WEEKDAYS.indexOf(wd);
-    if (idx === -1) {
-      const core = wd.slice(0,3);
-      idx = WEEKDAYS.findIndex(w => w.startsWith(core));
-    }
-    if (idx >= 0) return nextWeekdayISO(entryDateISO, idx);
-  }
-
-  const mBy = chunk.match(/\bby\s+(20\d{2}-\d{2}-\d{2})\b/i);
-  if (mBy) return mBy[1];
-
-  return null;
+// ——— text gating ———
+function containsHypo(s){const low=s.toLowerCase();return HYPOS.some(h=>low.includes(h));}
+function hasNegationWindow(action, prefix){const hay=`${prefix} ${action}`.toLowerCase();return NEGATIONS.some(n=>hay.includes(n));}
+function hasActionVerb(action){
+  const low=action.toLowerCase();
+  for(const v of ACTION_VERBS.filter(v=>v.includes(' '))){if(new RegExp(`\\b${escapeRegex(v)}\\b`,'i').test(low)) return true;}
+  for(const v of ACTION_VERBS.filter(v=>!v.includes(' '))){if(new RegExp(`\\b${escapeRegex(v)}(e|ed|es|ing)?\\b`,'i').test(low)) return true;}
+  return false;
 }
 
-/* ─────────── Core extraction ─────────── */
+// ——— action slicing ———
+function sliceAction(fullText,startIdx){
+  const tail=fullText.slice(startIdx);
+  const boundary=tail.search(/(?=\.|\?|!|$)|(?=,)|(?=\s+\band\b)|(?=\s+\bthen\b)|(?=\s+\bbecause\b)|(?=\s+\bsince\b)/i);
+  const raw=boundary===-1?tail:tail.slice(0,boundary);
+  let action=raw.replace(/^\s*(to\s+)?/i,'').replace(/\s+(?:please|now|soon|later)\s*$/i,'').replace(/\s+/g,' ').trim();
+  if(!action||action.length<3) return null;
+  if(!/\w/.test(action)) return null;
+  if(!/\s/.test(action) && BORING_SINGLE_WORDS.has(action.toLowerCase())) return null;
+  return action;
+}
 
+function dedupeByKey(items, keyFn){const seen=new Set();const out=[];for(const it of items){const k=keyFn(it);if(seen.has(k)) continue;seen.add(k);out.push(it);}return out;}
+
+// ——— core ———
 export function extractTasks(text, entryDateISO) {
   if (!text || typeof text !== 'string') return [];
-
+  const date = entryDateISO || toISO(new Date());
   const tasks = [];
 
-  for (const pat of INTENT_PATTERNS) {
-    let m;
-    let idx = 0;
+  for (const pat of INTENT_PATS) {
+    let idx = 0, m;
     while ((m = pat.exec(text.slice(idx))) !== null) {
-      const hitStart = idx + m.index + m[0].length;
-      const action = sliceAction(text, hitStart);
-      idx = idx + m.index + m[0].length;
+      const hitStart = idx + m.index;
+      const after = hitStart + m[0].length;
+      const action = sliceAction(text, after);
+      idx = after;
       if (!action) continue;
 
-      const windowText = text.slice(idx - m[0].length, Math.min(text.length, idx + action.length + 40));
-      const recurrence = parseRecurrence(windowText);
-      const dueDate   = parseDueDate(windowText, entryDateISO);
+      const prefix = text.slice(Math.max(0, hitStart - 40), hitStart);
 
-      let conf = 0.7;
-      if (/should/i.test(m[0])) conf = 0.55;
-      if (/todo\s*:/i.test(m[0])) conf = 0.5;
-      if (/^(the|my|our)\b/i.test(action)) conf -= 0.05;
+      if (REQUIRE_STRONG_INTENT && !m[0]) continue;                 // defensive
+      if (containsHypo(`${prefix} ${action}`)) continue;            // maybe/if/etc
+      if (hasNegationWindow(action, prefix)) continue;              // don't call ...
+      if (!hasActionVerb(action)) continue;                         // must have real verb
 
-      const kind = recurrence ? 'recurringTask' : (dueDate ? 'deadline' : 'suggestedTask');
+      const recurrence = parseRecurrence(action) || parseRecurrence(prefix);
+      const dueDate = parseDueDate(action, date) || parseDueDate(prefix, date);
+
+      if (REQUIRE_DUE_OR_RECURRENCE && !(recurrence || dueDate)) continue;
+
+      let conf = /\bmust\b/i.test(m[0]) ? 0.9 : /\b(?:need|have)\s+to\b/i.test(m[0]) ? 0.8 : 0.6;
+      if (/todo\s*:/i.test(m[0])) conf = Math.min(conf, 0.6);
 
       tasks.push({
         text: action,
@@ -196,41 +156,19 @@ export function extractTasks(text, entryDateISO) {
         recurrence: recurrence ? recurrence.rrule : null,
         recurrenceLabel: recurrence ? recurrence.label : null,
         confidence: Math.max(0.1, Math.min(0.95, conf)),
-        reason: kind
+        reason: recurrence ? 'recurringTask' : (dueDate ? 'deadline' : 'suggestedTask')
       });
     }
   }
 
-  if (tasks.length === 0) {
-    const lines = text.split(/\n+/).map(s => s.trim()).filter(Boolean);
-    for (const line of lines) {
-      if (/^[-*•]\s*(?:\[[ xX]\]\s*)?/i.test(line)) {
-        const action = line.replace(/^[-*•]\s*(?:\[[ xX]\]\s*)?/i, '').trim();
-        if (action && action.length > 2 && !BORING_SINGLE_WORDS.has(action.toLowerCase())) {
-          tasks.push({
-            text: action,
-            dueDate: null,
-            recurrence: null,
-            recurrenceLabel: null,
-            confidence: 0.5,
-            reason: 'bullet'
-          });
-        }
-      }
-    }
-  }
-
   const deduped = dedupeByKey(tasks, t => t.text.toLowerCase());
-  deduped.sort((a, b) => b.confidence - a.confidence);
+  deduped.sort((a,b)=>b.confidence-a.confidence);
   return deduped.slice(0, MAX_SUGGESTIONS);
 }
-
-/* ─────────── Ripples wrapper ─────────── */
 
 export function extractRipplesFromEntry({ text = '', entryDate = null, originalContext = null } = {}) {
   const entryDateISO = entryDate || toISO(new Date());
   const tasks = extractTasks(text, entryDateISO);
-
   const ripples = tasks.map(t => {
     const base = {
       entryDate: entryDateISO,
@@ -239,47 +177,19 @@ export function extractRipplesFromEntry({ text = '', entryDate = null, originalC
       confidence: t.confidence,
       meta: {}
     };
-
-    if (t.recurrence) {
-      base.type = 'recurringTask';
-      base.meta.recurrence = t.recurrence;
-      base.meta.recurrenceLabel = t.recurrenceLabel;
-    } else if (t.dueDate) {
-      base.type = 'deadline';
-      base.meta.dueDate = t.dueDate;
-    } else {
-      base.type = 'suggestedTask';
-    }
-
+    if (t.recurrence) { base.type='recurringTask'; base.meta.recurrence=t.recurrence; base.meta.recurrenceLabel=t.recurrenceLabel; }
+    else if (t.dueDate) { base.type='deadline'; base.meta.dueDate=t.dueDate; }
+    else { base.type='suggestedTask'; }
     return base;
   });
-
   return { tasks, ripples };
 }
 
-/* ─────────── Back-compat named exports ─────────── */
-
-// Old name in your codebase; returns the task suggestions array.
-export function extractEntrySuggestions(text, entryDateISO = null) {
-  const date = entryDateISO || toISO(new Date());
-  return extractTasks(text, date);
-}
-
-// Old name in your codebase; returns only the ripples array.
-export function extractRipples(text, entryDateISO = null, originalContext = null) {
-  const { ripples } = extractRipplesFromEntry({
-    text: text || '',
-    entryDate: entryDateISO || null,
-    originalContext: originalContext || text || ''
-  });
+// back-compat shims
+export function extractEntrySuggestions(text, entryDateISO = null){const d=entryDateISO||toISO(new Date());return extractTasks(text,d);}
+export function extractRipples(text, entryDateISO = null, originalContext = null){
+  const { ripples } = extractRipplesFromEntry({ text: text || '', entryDate: entryDateISO || null, originalContext: originalContext || text || '' });
   return ripples;
 }
 
-/* ─────────── Default export for convenience ─────────── */
-
-export default {
-  extractTasks,
-  extractRipplesFromEntry,
-  extractEntrySuggestions,
-  extractRipples
-};
+export default { extractTasks, extractRipplesFromEntry, extractEntrySuggestions, extractRipples };

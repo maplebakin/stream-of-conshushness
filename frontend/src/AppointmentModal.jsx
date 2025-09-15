@@ -105,3 +105,5 @@ export default function AppointmentModal({ defaultDate, date, onClose, onSaved }
     </div>
   );
 }
+
+

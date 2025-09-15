@@ -4,11 +4,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 
-import TaskList from './adapters/TaskList.default.jsx';
+import TaskList from './TaskList.jsx';
 import EntryQuickAssign from './adapters/EntryQuickAssign.default.jsx';
 import AnalyzeEntryButton from './adapters/AnalyzeEntryButton.default.jsx';
-import EntryModal from './adapters/EntryModal.default.jsx';
-import AppointmentModal from './adapters/AppointmentModal.default.jsx';
+import EntryModal from './EntryModal.jsx';
+import AppointmentModal from './AppointmentModal.jsx';
 
 import DailyRipples from './DailyRipples.jsx';
 import HourlySchedule from './HourlySchedule.jsx';

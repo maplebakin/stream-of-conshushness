@@ -3,6 +3,7 @@ import React, { useState, useEffect, useContext, useMemo } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import { toDisplay, formatRecurrence } from './utils/display.js';
+import TaskModal from './TaskModal.jsx';
 import './RippleReviewUI.css';
 
 const band = (c) => (Number(c) >= 0.66 ? 'high' : Number(c) >= 0.33 ? 'medium' : 'low');
@@ -22,6 +23,59 @@ function todayISOInToronto() {
   return `${p.find(x=>x.type==='year').value}-${p.find(x=>x.type==='month').value}-${p.find(x=>x.type==='day').value}`;
 }
 
+/* ───────────────── client-side sieve ───────────────── */
+const ACTION_VERBS = [
+  'buy','call','email','text','message',
+  'schedule','book','attend',
+  'clean','wash','wipe','vacuum','mop','water','feed',
+  'pay','renew','submit','file','send','print','scan',
+  'write','read','finish','fix','update','check','review',
+  'install','uninstall','replace',
+  'pick up','drop off','prepare','plan','organize','record','practice','backup','back up'
+];
+const FILLER = [
+  /\bidk\b/i, /\bsomething\b/i, /\blet['’]s see\b/i, /\bthat'?s at least\b/i,
+  /\bwell(,|\s)/i, /\byeah\b/i, /\bdramatique\b/i, /\bsemi-?functional\b/i,
+  /^\s*(hmm+|uh+|erm)\b/i
+];
+const BORING_SINGLE_WORDS = new Set(['day','today','tomorrow','sometime','later','soon','now','please']);
+const escapeRx = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function hasActionVerb(text) {
+  const s = String(text || '').toLowerCase();
+  for (const v of ACTION_VERBS.filter(v => v.includes(' '))) {
+    if (new RegExp(`\\b${escapeRx(v)}\\b`, 'i').test(s)) return true;
+  }
+  for (const v of ACTION_VERBS.filter(v => !v.includes(' '))) {
+    if (new RegExp(`\\b${escapeRx(v)}(e|ed|es|ing)?\\b`, 'i').test(s)) return true;
+  }
+  return false;
+}
+function looksLikeJunk(text) {
+  const s = String(text || '').trim();
+  if (!s) return true;
+  if (!/\s/.test(s) && BORING_SINGLE_WORDS.has(s.toLowerCase())) return true;
+  if (s.length < 6) return true;
+  if (FILLER.some(p => p.test(s))) return true;
+  const letters = (s.match(/[A-Za-z\u00C0-\u024F]/g) || []).length;
+  const punct   = (s.match(/[.,!?…]/g) || []).length;
+  if (letters < 8 || punct > letters / 2) return true;
+  return false;
+}
+function isActiony(text) { return !looksLikeJunk(text) && hasActionVerb(text); }
+function getConfidence(r) {
+  if (r.confidence != null) return Number(r.confidence);
+  if (r.score != null) return Number(r.score) / 100;
+  return 1;
+}
+
+/* ───────────────── robust backend actions ───────────────── */
+async function dismissRipple(id, headers) {
+  try { await axios.post(`/api/ripples/${id}/dismiss`, {}, { headers }); return true; } catch {}
+  try { await axios.patch(`/api/ripples/${id}`, { status: 'dismissed' }, { headers }); return true; } catch {}
+  try { await axios.post(`/api/ripples/${id}/status`, { status: 'dismissed' }, { headers }); return true; } catch {}
+  throw new Error('dismiss failed');
+}
+
 /**
  * RippleReviewUI
  * Props:
@@ -34,16 +88,28 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
     () => (token ? { Authorization: `Bearer ${token}` } : {}),
     [token]
   );
-
   const dayISO = useMemo(() => date || todayISOInToronto(), [date]);
 
   const [ripples, setRipples] = useState([]);
   const [filter, setFilter] = useState('pending');
-  const [clusters, setClusters] = useState([]);        // [{ id, name }]
-  const [clusterSel, setClusterSel] = useState({});    // { rippleId: 'Home' }
-  const [drafts, setDrafts] = useState({});            // { rippleId: { dueDate } }
+
+  // strictness dials (persisted)
+  const [hideChatter, setHideChatter] = useState(
+    () => localStorage.getItem('rr_hide_chatter') !== '0'
+  );
+  const [minConf, setMinConf] = useState(() => {
+    const v = Number(localStorage.getItem('rr_min_conf'));
+    return Number.isFinite(v) ? v : 0.66;
+  });
+
+  const [clusters, setClusters] = useState([]);
+  const [clusterSel, setClusterSel] = useState({});
+  const [drafts, setDrafts] = useState({});
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
+
+  // TaskModal control
+  const [taskDraft, setTaskDraft] = useState(null); // { title, dueDate, cluster, rippleId }
 
   useEffect(() => {
     let ignore = false;
@@ -77,9 +143,10 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
     let ignore = false;
     setLoading(true);
     setErr('');
-    axios
-      .get(`/api/ripples/${dayISO}?scan=1`, { headers: authHeaders })
-      .then(res => {
+    (async () => {
+      try {
+        let res = await axios.get(`/api/ripples?date=${dayISO}`, { headers: authHeaders })
+          .catch(() => axios.get(`/api/ripples/${dayISO}`, { headers: authHeaders }));
         if (ignore) return;
         const arr = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.ripples) ? res.data.ripples : []);
         setRipples(arr);
@@ -90,44 +157,74 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
           init[id] = { dueDate: hinted };
         }
         setDrafts(init);
-      })
-      .catch(e => {
-        console.error('Failed to fetch ripples:', e);
-        setErr('Failed to load ripples');
-        setRipples([]);
-        setDrafts({});
-      })
-      .finally(() => setLoading(false));
-
+      } catch (e) {
+        if (!ignore) {
+          console.error('Failed to fetch ripples:', e);
+          setErr('Failed to load ripples');
+          setRipples([]);
+          setDrafts({});
+        }
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    })();
     return () => { ignore = true; };
   }, [token, authHeaders, dayISO]);
 
-  async function act(id, action, clusterName) {
-    try {
-      const dueDate = drafts?.[id]?.dueDate || dayISO;
-      const body =
-        action === 'approve'
-          ? { assignedClusters: clusterName ? [clusterName] : [], dueDate }
-          : {};
+  useEffect(() => { localStorage.setItem('rr_hide_chatter', hideChatter ? '1' : '0'); }, [hideChatter]);
+  useEffect(() => { localStorage.setItem('rr_min_conf', String(minConf)); }, [minConf]);
 
-      // backend uses POST /api/ripples/:id/approve|dismiss
-      await axios.post(`/api/ripples/${id}/${action}`, body, { headers: authHeaders });
+  function startMakeTask(r) {
+    const id = r._id || r.id;
+    const title = r.extractedText || r.text || '';
+    const cluster = clusterSel[id] || '';
+    const hintedDue = r.meta?.dueDate || r.dueDate || dayISO;
+    setTaskDraft({ title, dueDate: hintedDue, cluster, rippleId: id });
+  }
+
+  async function onTaskSavedClose() {
+    if (!taskDraft) return setTaskDraft(null);
+    try {
+      await dismissRipple(taskDraft.rippleId, authHeaders);
+      setRipples(prev => prev.filter(r => (r._id || r.id) !== taskDraft.rippleId));
+    } catch (e) {
+      console.error('Could not auto-dismiss ripple after task save:', e);
+    }
+    setTaskDraft(null);
+  }
+
+  async function actDismiss(id) {
+    try {
+      await dismissRipple(id, authHeaders);
       setRipples(prev => prev.filter(r => (r._id || r.id) !== id));
     } catch (e) {
-      console.error(`Error ${action}ing ripple:`, e);
-      alert(`Could not ${action} ripple. Check console.`);
+      console.error('dismiss error:', e);
+      alert('Could not dismiss ripple.');
     }
   }
 
   const visible = useMemo(() => {
-    return ripples.filter(r => {
+    let arr = ripples;
+
+    // status/confidence band filter
+    arr = arr.filter(r => {
       const status = r.status || 'pending';
       if (filter === 'all') return true;
       if (['pending','approved','dismissed'].includes(filter)) return status === filter;
-      if (['high','medium','low'].includes(filter)) return band(r.confidence) === filter;
+      if (['high','medium','low'].includes(filter)) return band(getConfidence(r)) === filter;
       return true;
     });
-  }, [ripples, filter]);
+
+    // our sieve: verb-required + confidence gate
+    arr = arr.filter(r => {
+      const txt = r.extractedText || r.text || '';
+      const conf = getConfidence(r);
+      if (hideChatter && !isActiony(txt)) return false;
+      return !isNaN(minConf) ? conf >= minConf : true;
+    });
+
+    return arr;
+  }, [ripples, filter, hideChatter, minConf]);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -148,6 +245,32 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
+
+        <button
+          onClick={() => setHideChatter(v => !v)}
+          className={`px-3 py-1 rounded-full text-sm font-medium ${
+            hideChatter ? 'bg-purple-200 text-purple-900' : 'bg-gray-100 text-gray-700'
+          }`}
+          title="Require a real action verb and suppress filler"
+        >
+          Hide chatter: {hideChatter ? 'On' : 'Off'}
+        </button>
+
+        <label className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
+          Min conf:
+          <select
+            className="ml-2 bg-transparent"
+            value={minConf}
+            onChange={e => setMinConf(Number(e.target.value))}
+            title="Minimum confidence to display"
+          >
+            <option value={0}>0%</option>
+            <option value={0.5}>50%</option>
+            <option value={0.66}>66%</option>
+            <option value={0.75}>75%</option>
+            <option value={0.85}>85%</option>
+          </select>
+        </label>
       </div>
 
       {loading && <div className="text-center text-gray-400">Loading ripples…</div>}
@@ -161,7 +284,8 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
 
       {visible.map(r => {
         const id = r._id || r.id;
-        const b = band(r.confidence);
+        const conf = getConfidence(r);
+        const b = band(conf);
         const cluster = clusterSel[id] || '';
         const dueDate = drafts?.[id]?.dueDate || dayISO;
 
@@ -199,18 +323,25 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
                   className="border rounded px-2 py-1"
                   value={dueDate}
                   onChange={e => setDrafts(d => ({ ...d, [id]: { ...(d[id]||{}), dueDate: e.target.value } }))}
-                  title="Due date for the task that will be created"
+                  title="Due date hint"
                 />
 
+                <span className="text-xs text-gray-600 ml-2">conf {Math.round(conf*100)}%</span>
+
                 <button
-                  onClick={() => act(id, 'approve', cluster)}
-                  disabled={!cluster}
-                  className="px-3 py-1 rounded bg-green-100 hover:bg-green-200 text-green-900 text-sm font-medium disabled:opacity-40"
+                  onClick={() => setTaskDraft({
+                    title: r.extractedText || r.text || '',
+                    dueDate,
+                    cluster,
+                    rippleId: id
+                  })}
+                  disabled={false}
+                  className="px-3 py-1 rounded bg-green-100 hover:bg-green-200 text-green-900 text-sm font-medium"
                 >
-                  Approve
+                  Make Task
                 </button>
                 <button
-                  onClick={() => act(id, 'dismiss')}
+                  onClick={() => actDismiss(id)}
                   className="px-3 py-1 rounded bg-red-100 hover:bg-red-200 text-red-900 text-sm font-medium"
                 >
                   Dismiss
@@ -218,13 +349,23 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
               </div>
             ) : (
               <div className="text-sm mt-2 text-gray-500">
-                Status: <span className="font-semibold">{toDisplay(r.status)}</span>
-                {r.assignedCluster && <> — Cluster: <span className="font-semibold">{toDisplay(r.assignedCluster)}</span></>}
+                Status: <span className="font-semibold">{(r.status||'pending')}</span>
               </div>
             )}
           </div>
         );
       })}
+
+      {taskDraft && (
+        <TaskModal
+          isOpen
+          onClose={() => setTaskDraft(null)}
+          onSaved={onTaskSavedClose}
+          defaultTitle={taskDraft.title}
+          defaultDueDate={taskDraft.dueDate}
+          defaultCluster={taskDraft.cluster || ''}
+        />
+      )}
     </div>
   );
 }

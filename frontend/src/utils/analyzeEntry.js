@@ -1,25 +1,28 @@
-// utils/analyzeEntry.js
-import suggestMetadata from './suggestMetadata.js';
+import api from '../api/axiosInstance';
+import { suggestMetadataClient } from './suggestMetadata.client';
 
-/**
- * Lightweight wrapper – pulls tag, mood, and cluster arrays from suggestMetadata
- * and guarantees they’re always arrays (never undefined).
- */
-export function analyzeEntry(content = '') {
-  let result = {};
+// analyzeEntry tries server analysis first. If that fails (offline/dev), it
+// returns a minimal ripple based on the entry text so the UI can proceed.
+export async function analyzeEntry(input) {
   try {
-    result = suggestMetadata(content);
-  } catch (err) {
-    console.warn('analyzeEntry → suggestMetadata failed:', err);
+    const id = typeof input === 'string' ? input : input?._id;
+    if (!id) throw new Error('No entry id provided to analyzeEntry');
+    const { data } = await api.post(`/entries/${id}/analyze`);
+    // expected shape: { ripples: [...] }
+    if (data && Array.isArray(data.ripples)) return data;
+    return { ripples: [] };
+  } catch {
+    const text = typeof input === 'string' ? '' : (input?.text || input?.html || '');
+    const s = suggestMetadataClient(text);
+    return {
+      ripples: [{
+        type: s.type,
+        extractedText: text || '(empty entry)',
+        originalContext: 'offline-heuristic',
+        approved: false
+      }]
+    };
   }
-
-  const {
-    tags = [],
-    moods = [],
-    clusters = [],
-    context = null,
-    confidence = 0,
-  } = result;
-
-  return { tags, moods, clusters, context, confidence };
 }
+
+export default analyzeEntry;

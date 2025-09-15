@@ -3,51 +3,37 @@ import express from 'express';
 import Ripple from '../models/Ripple.js';
 import auth from '../middleware/auth.js';
 
+import extractor from '../utils/rippleExtractor.js';
+import { sieveRipples, isActiony } from '../utils/rippleSieve.js';
+
 const router = express.Router();
 router.use(auth);
 
-const ok   = (res, payload = {}) => res.json({ ok: true, ...payload });
+// ——— helpers ———
+const ok = (res, payload={}) => res.json({ ok:true, ...payload });
 const fail = (res, code, msg) => res.status(code).json({ error: msg });
 
-/* ------------------------ helpers ------------------------ */
-function toDateKey(dateish) {
+function toDateKey(dateish){
   if (typeof dateish === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateish)) return dateish;
   const d = dateish instanceof Date ? dateish : new Date();
   const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
   return `${y}-${m}-${day}`;
 }
 
-// ultra-light heuristic extractor — momentum over poetry
-function extractRipples(text = '') {
-  const chunks = text
-    .split(/[\n\r]+|(?<=[.!?])\s+/g)
-    .map(s => s.trim())
-    .filter(Boolean);
-
-  const verbs = /(buy|call|schedule|email|pay|clean|fix|book|remember|start|finish|send|write|plan|check|update|backup|organize|cook|wash|laundry|groceries|walk|water)/i;
-
-  const picks = [];
-  for (const c of chunks) {
-    if (verbs.test(c) || c.length <= 60 || /^[-*•]\s/.test(c)) {
-      picks.push(c.replace(/^[-*•]\s*/, '').trim());
-    }
-    if (picks.length >= 8) break; // keep it tidy
-  }
-  if (picks.length === 0 && text.trim()) picks.push(text.trim().slice(0, 120));
-  return picks;
+function dedupeByKey(items, keyFn){
+  const seen=new Set(); const out=[];
+  for(const it of items){ const k=keyFn(it); if(seen.has(k)) continue; seen.add(k); out.push(it); }
+  return out;
 }
 
-/* ------------------------ list (daily) ------------------------ */
+// ——— list by day ———
 // GET /api/ripples?date=YYYY-MM-DD[&status=pending|approved|dismissed][&cluster=key]
-// Also accept legacy paths:
-/**   /api/ripples/for-day?date=...   */
-/**   /api/ripples/pending?date=...   */
-router.get(['/ripples', '/ripples/pending', '/ripples/for-day'], async (req, res) => {
-  try {
+router.get(['/ripples', '/ripples/for-day', '/ripples/pending'], async (req,res)=>{
+  try{
     const userId = req.user?.userId || req.user?.id;
-    if (!userId) return fail(res, 401, 'not authorized');
+    if(!userId) return fail(res, 401, 'not authorized');
 
     const dateKey = toDateKey(req.query.date);
     const statusQ = (req.query.status || (req.path.endsWith('/pending') ? 'pending' : undefined));
@@ -57,99 +43,94 @@ router.get(['/ripples', '/ripples/pending', '/ripples/for-day'], async (req, res
     if (statusQ && statusQ !== 'all') q.status = statusQ;
     if (cluster) q.section = cluster;
 
-    const ripples = await Ripple.find(q).sort({ createdAt: -1 }).lean();
-    return res.json(ripples); // plain array
-  } catch (e) {
+    const rows = await Ripple.find(q).sort({ createdAt: -1 }).lean();
+
+    // NOTE: listing does NOT auto-hide non-actiony rows; we show what's saved.
+    return res.json(rows);
+  }catch(e){
     console.error('[ripples] list error:', e);
     return fail(res, 500, 'ripples list failed');
   }
 });
 
-/* ------------------------ path alias ------------------------ */
-// GET /api/ripples/:date  → same as query form (scan, cluster, status are optional)
-router.get('/ripples/:date(\\d{4}-\\d{2}-\\d{2})', async (req, res) => {
-  try {
+// alias: GET /api/ripples/:date
+router.get('/ripples/:date(\\d{4}-\\d{2}-\\d{2})', async (req,res)=>{
+  try{
     const userId = req.user?.userId || req.user?.id;
-    if (!userId) return fail(res, 401, 'not authorized');
+    if(!userId) return fail(res, 401, 'not authorized');
     const { date } = req.params;
     const { cluster, status } = req.query;
+
     const q = { userId, dateKey: date };
     if (cluster) q.section = String(cluster);
     if (status && status !== 'all') q.status = String(status);
+
     const rows = await Ripple.find(q).sort({ createdAt: -1 }).lean();
-    res.json(rows);
-  } catch (e) {
-    console.error('alias /api/ripples/:date failed', e);
-    res.status(500).json({ error: 'ripples alias failed' });
+    return res.json(rows);
+  }catch(e){
+    console.error('[ripples] alias list error:', e);
+    return fail(res, 500, 'ripples list failed');
   }
 });
 
-/* ------------------------ approve/dismiss ------------------------ */
-router.post('/ripples/:id/approve', async (req, res) => {
-  try {
+// ——— list by entry ———
+// GET /api/ripples/by-entry/:entryId   (optional ?date=YYYY-MM-DD)
+router.get('/ripples/by-entry/:entryId', async (req,res)=>{
+  try{
+    const userId = req.user?.userId || req.user?.id;
+    if(!userId) return fail(res, 401, 'not authorized');
+    const { entryId } = req.params;
+    const dateKey = req.query.date ? toDateKey(req.query.date) : undefined;
+
+    const q = { userId, entryId };
+    if (dateKey) q.dateKey = dateKey;
+
+    const rows = await Ripple.find(q).sort({ createdAt: -1 }).lean();
+    return res.json(rows);
+  }catch(e){
+    console.error('[ripples] by-entry error:', e);
+    return fail(res, 500, 'ripples by-entry failed');
+  }
+});
+
+// ——— approve / dismiss ———
+router.post('/ripples/:id/approve', async (req,res)=>{
+  try{
     const userId = req.user?.userId || req.user?.id;
     const { id } = req.params;
-    const doc = await Ripple.findOneAndUpdate(
-      { _id: id, userId },
-      { $set: { status: 'approved' } },
-      { new: true }
-    );
-    if (!doc) return fail(res, 404, 'not found');
+    const doc = await Ripple.findOneAndUpdate({ _id:id, userId }, { $set:{ status:'approved' } }, { new:true });
+    if(!doc) return fail(res, 404, 'not found');
     return ok(res, { ripple: doc });
-  } catch (e) {
+  }catch(e){
     console.error('[ripples] approve error:', e);
     return fail(res, 500, 'approve failed');
   }
 });
 
-router.post('/ripples/:id/dismiss', async (req, res) => {
-  try {
+router.post('/ripples/:id/dismiss', async (req,res)=>{
+  try{
     const userId = req.user?.userId || req.user?.id;
     const { id } = req.params;
-    const doc = await Ripple.findOneAndUpdate(
-      { _id: id, userId },
-      { $set: { status: 'dismissed' } },
-      { new: true }
-    );
-    if (!doc) return fail(res, 404, 'not found');
+    const doc = await Ripple.findOneAndUpdate({ _id:id, userId }, { $set:{ status:'dismissed' } }, { new:true });
+    if(!doc) return fail(res, 404, 'not found');
     return ok(res, { ripple: doc });
-  } catch (e) {
+  }catch(e){
     console.error('[ripples] dismiss error:', e);
     return fail(res, 500, 'dismiss failed');
   }
 });
 
-// generic patch (status, section, score, text)
-router.patch('/ripples/:id', async (req, res) => {
-  try {
+// ——— analyze & create (STRICT) ———
+// POST /api/ripples/analyze  { text, date?, entryId?, section? }
+router.post('/ripples/analyze', async (req,res)=>{
+  try{
     const userId = req.user?.userId || req.user?.id;
-    const { id } = req.params;
-    const allowed = ['status', 'section', 'score', 'text'];
-    const update = {};
-    for (const k of allowed) if (k in req.body) update[k] = req.body[k];
-    const doc = await Ripple.findOneAndUpdate(
-      { _id: id, userId },
-      { $set: update },
-      { new: true }
-    );
-    if (!doc) return fail(res, 404, 'not found');
-    return ok(res, { ripple: doc });
-  } catch (e) {
-    console.error('[ripples] patch error:', e);
-    return fail(res, 500, 'update failed');
-  }
-});
-
-/* ------------------------ analyze → create pending ripples ------------------------ */
-// POST /api/ripples/analyze  (idempotent per day+text)
-router.post('/ripples/analyze', async (req, res) => {
-  try {
-    const userId = req.user?.userId || req.user?.id;
-    if (!userId) return fail(res, 401, 'not authorized');
+    if(!userId) return fail(res, 401, 'not authorized');
 
     let body = req.body || {};
     if (body && typeof body.entryId === 'object' && body.entryId !== null && !Array.isArray(body.entryId)) {
-      body = { ...body, ...body.entryId }; // tolerate { entryId:{ text, date } }
+      // tolerate { entryId:{ text, date } }
+      body = { ...body, ...body.entryId };
       delete body.entryId;
     }
 
@@ -158,52 +139,97 @@ router.post('/ripples/analyze', async (req, res) => {
     if (!text.trim()) return fail(res, 400, 'text required');
 
     const dateKey = toDateKey(body.date);
+    const entryId = typeof body.entryId === 'string' ? body.entryId : undefined;
+    const section = body.section ? String(body.section) : undefined;
 
-    // 1) extract + normalize lines
-    const lines = extractRipples(text);
-    const norm = s => s.toLowerCase().replace(/\s+/g, ' ').trim();
-    const uniqLines = Array.from(new Map(lines.map(s => [norm(s), s])).values()); // de-dupe within request
+    // 1) Extract stingy ripples
+    const { ripples: extracted } = extractor.extractRipplesFromEntry({
+      text,
+      entryDate: dateKey,
+      originalContext: text
+    });
 
-    // 2) find already-existing for same day+text
+    // 2) Server-side sieve to kill chatter completely
+    let ripples = sieveRipples(
+      extracted.map(r => ({
+        type: r.type || 'suggestedTask',
+        text: r.extractedText || r.text || '',
+        entryDate: dateKey,
+        originalContext: r.originalContext || text,
+        meta: r.meta || {},
+        confidence: r.confidence ?? null
+      }))
+    );
+
+    if (!ripples.length) {
+      return res.status(200).json({ ok: true, created: 0, skipped: 0, ripples: [] });
+    }
+
+    // 3) Skip dupes already saved for that date (same text, same entryId if given)
+    const texts = ripples.map(r => r.text);
     const existing = await Ripple.find({
       userId,
       dateKey,
-      text: { $in: uniqLines }
+      text: { $in: texts },
+      ...(entryId ? { entryId } : {})
     }).lean();
 
-    const existingSet = new Set(existing.map(r => norm(r.text)));
+    const existKey = new Set(existing.map(r => `${(r.entryId||'~')}|${r.text.toLowerCase()}`));
 
-    // 3) only insert truly new ones
-    const toInsert = uniqLines
-      .filter(s => !existingSet.has(norm(s)))
-      .map((line, idx) => ({
+    const toInsert = ripples
+      .filter(r => !existKey.has(`${(entryId||'~')}|${r.text.toLowerCase()}`))
+      .map((r, idx) => ({
         userId,
-        entryId: typeof body.entryId === 'string' ? body.entryId : undefined,
+        entryId,
         dateKey,
-        text: line,
-        score: Math.max(0, 100 - idx * 5),
+        section,
+        text: r.text,
+        type: r.type,
         status: 'pending',
+        score: Math.round((r.confidence ?? 0.6) * 100),
         source: 'analyze',
+        meta: r.meta || {}
       }));
 
-    const created = toInsert.length
-      ? await Ripple.insertMany(toInsert, { ordered: false })
-      : [];
+    const created = toInsert.length ? await Ripple.insertMany(toInsert, { ordered:false }) : [];
 
-    // 4) return both (so the caller can show what exists)
-    const ripples = [...existing, ...created].sort((a, b) =>
-      new Date(a.createdAt || 0) - new Date(b.createdAt || 0)
-    );
+    // Return what's now present (existing + created), sorted oldest->newest
+    const allRows = await Ripple.find({
+      userId,
+      dateKey,
+      ...(entryId ? { entryId } : {})
+    }).sort({ createdAt: 1 }).lean();
 
     return res.status(created.length ? 201 : 200).json({
       ok: true,
       created: created.length,
       skipped: existing.length,
-      ripples,
+      ripples: allRows
     });
-  } catch (e) {
+  }catch(e){
     console.error('[ripples] analyze error:', e);
     return fail(res, 500, 'analyze failed');
+  }
+});
+
+// ——— prune junk already saved for a day ———
+// POST /api/ripples/prune  { date: 'YYYY-MM-DD' }
+router.post('/ripples/prune', async (req,res)=>{
+  try{
+    const userId = req.user?.userId || req.user?.id;
+    if(!userId) return fail(res, 401, 'not authorized');
+    const dateKey = toDateKey(req.body?.date || req.query?.date);
+    if(!dateKey) return fail(res, 400, 'invalid date');
+
+    const all = await Ripple.find({ userId, dateKey }).lean();
+    const bad = all.filter(r => !isActiony(r.text || r.extractedText));
+    if (bad.length) {
+      await Ripple.deleteMany({ _id: { $in: bad.map(r => r._id) } });
+    }
+    return ok(res, { date: dateKey, pruned: bad.length, kept: all.length - bad.length });
+  }catch(e){
+    console.error('[ripples] prune error:', e);
+    return fail(res, 500, 'prune failed');
   }
 });
 
