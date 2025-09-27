@@ -3,6 +3,7 @@ import express from 'express';
 import Cluster, { slugifyKey } from '../models/Cluster.js';
 import Task from '../models/Task.js';
 import Entry from '../models/Entry.js';
+import auth from '../middleware/auth.js';
 
 const router = express.Router();
 
