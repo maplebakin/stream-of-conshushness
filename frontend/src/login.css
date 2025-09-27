@@ -24,12 +24,12 @@
 /* Card */
 .auth-card {
   width: min(640px, 100%);
-  background: color-mix(in srgb, var(--color-surface) 50%, transparent);
-  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--color-surface) 88%, white 12%);
+  backdrop-filter: blur(12px);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-elevated);
-  border: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
-  padding: 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 65%, transparent);
+  padding: var(--space-5);
   animation: fadeInUp 0.6s ease both;
 }
 
@@ -87,8 +87,8 @@
 }
 
 .auth-input:focus {
-  border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--color-spool) 55%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-spool) 28%, transparent);
 }
 
 /* Actions */
@@ -109,25 +109,29 @@
 }
 
 .auth-button {
-  border: none;
+  border: 1px solid color-mix(in srgb, var(--color-spool) 55%, transparent);
   border-radius: var(--radius-button);
-  padding: 0.7rem 1rem;
+  padding: 0.75rem 1.1rem;
   font-size: 1rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition: transform 0.05s ease, box-shadow 0.15s ease, background 0.2s ease;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
   background: linear-gradient(
     to bottom,
-    color-mix(in srgb, var(--color-accent) 88%, white 12%),
-    color-mix(in srgb, var(--color-accent-dark) 88%, white 12%)
+    color-mix(in srgb, var(--color-spool) 82%, white 18%),
+    color-mix(in srgb, var(--color-plum) 85%, white 15%)
   );
-  color: #fff;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+  color: var(--color-on-accent);
+  box-shadow: 0 10px 24px rgba(31, 21, 18, 0.18);
 }
 
-.auth-button:hover {
-  filter: saturation(1.02) brightness(1.01);
+.auth-button:hover,
+.auth-button:focus-visible {
+  background: color-mix(in srgb, var(--color-plum) 70%, var(--color-spool) 30%);
+  border-color: color-mix(in srgb, var(--color-plum) 60%, var(--color-spool) 40%);
+  box-shadow: 0 14px 30px rgba(31, 21, 18, 0.22);
+  outline: none;
 }
 
 .auth-button:active {

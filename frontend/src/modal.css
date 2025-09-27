@@ -1,120 +1,204 @@
 /* frontend/src/modal.css */
-/* ──────────────────────────────────────────────────────────────────────────
-   Scoped modal styles (prefix: sc-modal-). Zero bleed, theme-token aware.
-   ────────────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* You can tweak these without touching the CSS below */
-  --sc-modal-backdrop-opacity: 0.42;                /* sweet spot 0.35–0.48 */
-  --sc-modal-radius: var(--radius-card, 12px);
-  --sc-modal-shadow: var(--shadow-soft, 0 16px 50px rgba(0,0,0,0.25));
-  --sc-modal-accent: #8b5cf6;
-  --sc-modal-accent-strong: #7c3aed;               /* added (was missing) */
-  --sc-modal-surface: #f2dffa;                     /* “paper” lilac */
-  --sc-modal-border:  #e7e1ef;
-  --sc-modal-text:    #1f1630;
-  --sc-modal-muted: var(--color-muted, #a99fba);
+  --sc-modal-backdrop-opacity: 0.42;
+  --sc-modal-radius: var(--radius-card);
+  --sc-modal-shadow: var(--shadow-elevated);
+  --sc-modal-accent: var(--color-spool);
+  --sc-modal-accent-strong: color-mix(in srgb, var(--color-spool) 70%, var(--color-plum) 30%);
+  --sc-modal-surface: color-mix(in srgb, var(--color-surface) 92%, white 8%);
+  --sc-modal-border: color-mix(in srgb, var(--color-border) 70%, transparent);
+  --sc-modal-text: var(--color-text);
+  --sc-modal-muted: var(--color-muted);
 }
 
-/* Z-order: backdrop UNDER, shell OVER */
 .sc-modal-backdrop {
-  position: fixed; inset: 0; z-index: 9998;
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
   background: rgba(20, 16, 28, var(--sc-modal-backdrop-opacity));
-  backdrop-filter: none; /* set to blur(2px) if you want glass behind */
-  animation: sc-fade-in 120ms ease-out;
+  backdrop-filter: blur(4px);
+  animation: sc-fade-in 140ms ease-out;
 }
 
 .sc-modal-shell {
-  position: fixed; inset: 0; z-index: 9999;
-  display: grid; place-items: center; padding: 16px; pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  pointer-events: none;
 }
 
 .sc-modal-card {
   pointer-events: auto;
-  width: min(760px, 96vw); max-height: 90dvh; overflow: auto;
+  width: min(760px, 96vw);
+  max-height: 90dvh;
+  overflow: auto;
   border-radius: var(--sc-modal-radius);
   background: var(--sc-modal-surface);
   border: 1px solid var(--sc-modal-border);
   color: var(--sc-modal-text);
-  padding: 16px;
-  animation: sc-pop-in 140ms cubic-bezier(.21,1.02,.73,1);
+  padding: var(--space-4);
+  animation: sc-pop-in 180ms cubic-bezier(.21,1.02,.73,1);
   position: relative;
-  box-shadow:
-    0 18px 50px rgba(0, 0, 0, 0.38),
-    0 5px 16px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--sc-modal-shadow);
 }
 
-/* Accent strip */
 .sc-modal-card::before {
   content: "";
-  position: absolute; inset: 0 0 auto 0; height: 3px;
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
   border-top-left-radius: var(--sc-modal-radius);
   border-top-right-radius: var(--sc-modal-radius);
   background: linear-gradient(90deg, var(--sc-modal-accent), var(--sc-modal-accent-strong));
 }
 
-/* Header */
 .sc-modal-header {
-  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; margin-top: 4px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: 4px;
 }
-.sc-modal-title { margin: 0; font-size: 1.1rem; font-weight: 600; letter-spacing: .2px; color: var(--sc-modal-text); }
+
+.sc-modal-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--sc-modal-text);
+}
+
 .sc-modal-close {
-  border: 1px solid var(--sc-modal-border); background: transparent; color: var(--sc-modal-text);
-  border-radius: 10px; padding: 6px 10px; cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+  border: 1px solid var(--sc-modal-border);
+  background: transparent;
+  color: var(--sc-modal-text);
+  border-radius: var(--radius-button);
+  padding: 0.4rem 0.75rem;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
 }
-.sc-modal-close:hover { background: rgba(0, 0, 0, 0.04); border-color: var(--sc-modal-accent); }
-.sc-modal-close:active { transform: translateY(1px); }
 
-/* Body */
-.sc-modal-body { margin-top: 12px; }
-.sc-field { margin-bottom: 12px; }
-.sc-label { display: block; color: var(--sc-modal-muted); margin-bottom: 6px; font-size: .9rem; }
+.sc-modal-close:hover,
+.sc-modal-close:focus-visible {
+  background: color-mix(in srgb, var(--color-surface) 80%, var(--color-spool) 20%);
+  border-color: color-mix(in srgb, var(--color-spool) 55%, transparent);
+  outline: none;
+}
 
-.sc-input, .sc-textarea {
+.sc-modal-close:active {
+  transform: translateY(1px);
+}
+
+.sc-modal-body {
+  margin-top: var(--space-3);
+}
+
+.sc-field { margin-bottom: var(--space-3); }
+
+.sc-label {
+  display: block;
+  color: var(--sc-modal-muted);
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.sc-input,
+.sc-textarea {
   width: 100%;
   border: 1px solid var(--sc-modal-border);
-  background: #ffffff;
+  background: var(--color-surface);
   color: var(--sc-modal-text);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: var(--radius-input);
+  padding: 0.65rem 0.85rem;
   font: inherit;
-  transition: border-color 120ms ease, box-shadow 120ms ease;
-  box-shadow: 0 1px 0 rgba(0,0,0,0.02) inset;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04) inset;
 }
-.sc-textarea { resize: vertical; min-height: 140px; }
 
-.sc-input:focus, .sc-textarea:focus {
+.sc-textarea {
+  resize: vertical;
+  min-height: 140px;
+}
+
+.sc-input:focus,
+.sc-textarea:focus {
   outline: none;
   border-color: var(--sc-modal-accent);
   box-shadow:
-    0 0 0 3px rgba(139, 92, 246, 0.22),
-    0 1px 0 rgba(0,0,0,0.02) inset;
+    0 0 0 4px color-mix(in srgb, var(--sc-modal-accent) 30%, transparent),
+    0 1px 0 rgba(0, 0, 0, 0.04) inset;
 }
 
-/* Two-column collapse */
-.sc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-@media (max-width: 560px) { .sc-grid { grid-template-columns: 1fr; } }
+.sc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
 
-/* Subtle info line */
-.sc-inline-note { color: var(--sc-modal-muted); font-size: .9rem; margin-top: 6px; }
+.sc-inline-note {
+  color: var(--sc-modal-muted);
+  font-size: 0.9rem;
+  margin-top: var(--space-2);
+}
 
-/* Footer buttons */
-.sc-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.sc-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
 .sc-btn {
-  border-radius: 10px; padding: 10px 14px; font-weight: 600;
-  cursor: pointer; border: 1px solid var(--sc-modal-border);
-  background: transparent; color: var(--sc-modal-text);
-  transition: background 120ms ease, border-color 120ms ease, transform 60ms ease;
+  border-radius: var(--radius-button);
+  padding: 0.55rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--sc-modal-border);
+  background: transparent;
+  color: var(--sc-modal-text);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
 }
-.sc-btn:hover { background: rgba(0, 0, 0, 0.04); }
-.sc-btn:active { transform: translateY(1px); }
-.sc-btn-primary {
-  background: var(--sc-modal-accent); border-color: var(--sc-modal-accent); color: white;
-}
-.sc-btn-primary:hover { background: var(--sc-modal-accent-strong); border-color: var(--sc-modal-accent-strong); }
 
-/* Animations */
-@keyframes sc-fade-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes sc-pop-in { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-@media (prefers-reduced-motion: reduce) { .sc-modal-backdrop, .sc-modal-card { animation: none; } }
+.sc-btn:hover,
+.sc-btn:focus-visible {
+  background: color-mix(in srgb, var(--color-surface) 80%, var(--color-spool) 20%);
+  border-color: color-mix(in srgb, var(--color-spool) 55%, transparent);
+  outline: none;
+}
+
+.sc-btn:active {
+  transform: translateY(1px);
+}
+
+.sc-btn-primary {
+  background: var(--sc-modal-accent);
+  border-color: var(--sc-modal-accent);
+  color: var(--color-on-accent);
+}
+
+.sc-btn-primary:hover,
+.sc-btn-primary:focus-visible {
+  background: var(--sc-modal-accent-strong);
+  border-color: var(--sc-modal-accent-strong);
+  color: var(--color-on-accent);
+}
+
+@keyframes sc-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes sc-pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-modal-backdrop,
+  .sc-modal-card {
+    animation: none;
+  }
+}
