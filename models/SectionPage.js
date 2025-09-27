@@ -6,7 +6,7 @@ const { Schema } = mongoose;
 const sectionPageSchema = new Schema(
   {
     userId:     { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    sectionKey: { type: String, required: true, index: true },   // matches Section.key
+    sectionKey: { type: String, required: true, index: true },   // matches Section.slug
     slug:       { type: String, required: true },                 // derived from title
     title:      { type: String, required: true, trim: true },
     body:       { type: String, default: '' },                    // markdown / html / plain

@@ -5,6 +5,7 @@ import { AuthContext } from '../AuthContext.jsx';
 import TaskList from '../adapters/TaskList.default.jsx';
 import SafeHTML from '../components/SafeHTML.jsx';
 import '../Main.css';
+import './SectionPage.css';
 
 const ALLOWED_TABS = ['journal', 'manual', 'progress', 'gift-guide'];
 
@@ -22,7 +23,12 @@ function normalizePageList(raw = []) {
     .map((p) => ({
       id: p._id || p.id,
       title: p.title || p.name || p.slug || 'Untitled page',
-      slug: p.slug || (p.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''),
+      slug:
+        p.slug ||
+        (p.title || '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, ''),
       icon: p.icon || p.emoji || '',
     }))
     .filter((p) => p.id && p.slug);
@@ -47,6 +53,7 @@ function sortEntries(entries = []) {
 export default function SectionPageRoom() {
   const { sectionSlug, pageSlug, tab } = useParams();
   const activeTab = (tab || 'journal').toLowerCase();
+  const displaySection = (sectionSlug || '').replace(/-/g, ' ');
   const { token, isAuthenticated } = useContext(AuthContext);
 
   const [loading, setLoading] = useState(true);
@@ -157,82 +164,100 @@ export default function SectionPageRoom() {
     return <Navigate to={`/sections/${sectionSlug}/${pageSlug || ''}/journal`} replace />;
   }
 
+  const displayPageTitle = page ? page.title : (pageSlug || '').replace(/-/g, ' ') || 'Page';
+  const displayPageIcon = page?.icon || '📄';
+  const baseTabSlug = pageSlug || pages[0]?.slug || '';
+  const canNavigateTabs = Boolean(baseTabSlug);
+
   return (
-    <div className="page" style={{ display: 'grid', gridTemplateColumns: '260px 1fr 320px', gap: '1rem', alignItems: 'start' }}>
-      <aside className="card" style={{ position: 'sticky', top: 16, height: 'fit-content' }}>
-        <h3 style={{ marginTop: 0, textTransform: 'capitalize' }}>{sectionSlug}</h3>
-        {pages.length === 0 && !loading && <div className="muted">No pages yet.</div>}
+    <div className="sections-page sections-room">
+      <aside className="sections-sidebar">
+        <div className="sidebar-head">
+          <h2>{displaySection || 'Section'}</h2>
+          <span className="sidebar-count">{loading ? '…' : `${pages.length}`}</span>
+        </div>
+
+        {loading && <div className="muted">Loading…</div>}
+        {!loading && pages.length === 0 && <div className="empty">No pages yet. Create one from the section builder.</div>}
+
         {pages.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <nav className="pages-nav">
             {pages.map((p) => {
               const active = p.slug === pageSlug;
               return (
                 <Link
                   key={p.id}
                   to={`/sections/${sectionSlug}/${p.slug}/${activeTab}`}
-                  className={`px-3 py-2 rounded-button ${active ? 'bg-plum text-mist' : 'text-ink hover:bg-thread hover:text-mist'}`}
-                  style={{ borderRadius: 10, textDecoration: 'none' }}
+                  className={`page-nav-item ${active ? 'active' : ''}`}
                 >
-                  {p.icon ? `${p.icon} ` : ''}{p.title}
+                  <span className="emoji" aria-hidden="true">{p.icon || '📄'}</span>
+                  <span>{p.title}</span>
                 </Link>
               );
             })}
-          </div>
+          </nav>
         )}
       </aside>
 
-      <main>
-        <div className="card" style={{ marginBottom: '1rem' }}>
-          <div className="section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <h2 style={{ margin: 0 }}>{page ? page.title : (pageSlug || '').replace(/-/g, ' ')}</h2>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {ALLOWED_TABS.map((tabName) => (
-                <Link
-                  key={tabName}
-                  to={`/sections/${sectionSlug}/${pageSlug || ''}/${tabName}`}
-                  className={`pill ${tabName === activeTab ? '' : 'pill-muted'}`}
-                >
-                  {tabName.replace('-', ' ')}
-                </Link>
-              ))}
+      <main className="sections-main">
+        <div className="sections-detail">
+          <header className="sections-header">
+            <div className="title">
+              <h1>{`${displayPageIcon} ${displayPageTitle}`}</h1>
+              <div className="subtitle">{displaySection || 'Section'} · {pages.length || 'No'} page{pages.length === 1 ? '' : 's'}</div>
             </div>
-          </div>
+            <nav className="tab-group" role="tablist">
+              {ALLOWED_TABS.map((tabName) => {
+                const label = tabName.replace('-', ' ');
+                const className = `tab ${activeTab === tabName ? 'active' : ''} ${canNavigateTabs ? '' : 'disabled'}`;
+                return canNavigateTabs ? (
+                  <Link
+                    key={tabName}
+                    to={`/sections/${sectionSlug}/${baseTabSlug}/${tabName}`}
+                    className={className.trim()}
+                    role="tab"
+                  >
+                    {label}
+                  </Link>
+                ) : (
+                  <span key={tabName} className={className.trim()} role="tab" aria-disabled="true">
+                    {label}
+                  </span>
+                );
+              })}
+            </nav>
+          </header>
 
-          {error && <div className="pill" style={{ background: 'rgba(255,145,145,.12)', borderColor: 'rgba(255,145,145,.35)' }}>{error}</div>}
+          {error && <div className="callout error">{error}</div>}
+          {loading && <div className="loading">Loading…</div>}
 
-          {!loading && !error && !page && pages.length > 0 && (
-            <div className="muted" style={{ marginTop: 8 }}>
-              Select a page from the sidebar to see its journal.
-            </div>
+          {!loading && !page && pages.length > 0 && (
+            <div className="callout">Pick a page from the left to open its journal.</div>
           )}
 
-          {activeTab === 'journal' && (
+          {activeTab === 'journal' && page && (
             <>
-              <form onSubmit={handleAddEntry} style={{ marginTop: 12 }}>
+              <form className="journal-composer" onSubmit={handleAddEntry}>
                 <textarea
-                  className="input"
-                  placeholder={`New journal entry in ${page ? page.title : 'this page'}…`}
+                  placeholder={`New journal entry in ${page.title}…`}
                   value={newText}
                   onChange={(e) => setNewText(e.target.value)}
-                  rows={3}
-                  style={{ width: '100%' }}
+                  rows={4}
                   disabled={!page}
                 />
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                <div className="journal-composer-actions">
                   <button type="submit" className="button" disabled={composing || !newText.trim() || !page}>
-                    {composing ? 'Saving…' : 'Add Entry'}
+                    {composing ? 'Saving…' : 'Add entry'}
                   </button>
                 </div>
               </form>
 
-              <div style={{ marginTop: 12 }}>
-                {loading ? (
-                  <div>Loading…</div>
-                ) : sortedEntries.length === 0 ? (
-                  <div className="muted">No entries yet. Write your first one above.</div>
+              <div className="entries-stack">
+                {sortedEntries.length === 0 ? (
+                  <div className="empty">No entries yet. Write your first one above.</div>
                 ) : (
                   sortedEntries.map((entry) => (
-                    <article className="entry-card" key={entry._id} style={{ paddingTop: 8 }}>
+                    <article className="entry-card" key={entry._id}>
                       <div className="entry-meta">
                         <span className="date">{entry.date}</span>
                         {entry.mood && <span className="pill">{entry.mood}</span>}
@@ -249,49 +274,55 @@ export default function SectionPageRoom() {
             </>
           )}
 
+          {activeTab === 'journal' && !page && !loading && pages.length === 0 && (
+            <div className="empty">Create a page for this section to start journaling.</div>
+          )}
+
           {activeTab !== 'journal' && (
-            <div className="muted" style={{ marginTop: 8 }}>
+            <div className="callout">
               “{activeTab.replace('-', ' ')}” is coming online soon. Capture your notes in Journal for now.
             </div>
           )}
         </div>
       </main>
 
-      <aside className="card" style={{ position: 'sticky', top: 16, height: 'fit-content' }}>
+      <aside className="sections-rail">
         <TaskList
           view="today"
           section={sectionSlug}
-          header={`Today in “${sectionSlug.replace(/-/g, ' ')}”`}
+          header={`Today in “${displaySection || sectionSlug || 'this section'}”`}
           wrap={false}
         />
 
-        <h3 style={{ marginTop: 16 }}>Recent motifs</h3>
-        {sortedEntries.length === 0 ? (
-          <p className="muted">No trends yet.</p>
-        ) : (
-          <>
-            {motifs.tags.length > 0 && (
-              <div style={{ marginBottom: 8 }}>
-                <div className="muted">Top tags</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-                  {motifs.tags.map(({ tag, count }) => (
-                    <span key={tag} className="pill pill-muted">#{tag} ×{count}</span>
-                  ))}
+        <div className="motif-stack">
+          <h3>Recent motifs</h3>
+          {sortedEntries.length === 0 ? (
+            <p className="muted">No trends yet.</p>
+          ) : (
+            <>
+              {motifs.tags.length > 0 && (
+                <div className="motif-group">
+                  <span className="label">Top tags</span>
+                  <div className="motif-pills">
+                    {motifs.tags.map(({ tag, count }) => (
+                      <span key={tag} className="pill pill-muted">#{tag} ×{count}</span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-            {motifs.moods.length > 0 && (
-              <div>
-                <div className="muted">Top moods</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-                  {motifs.moods.map(({ mood, count }) => (
-                    <span key={mood} className="pill">{mood} ×{count}</span>
-                  ))}
+              )}
+              {motifs.moods.length > 0 && (
+                <div className="motif-group">
+                  <span className="label">Top moods</span>
+                  <div className="motif-pills">
+                    {motifs.moods.map(({ mood, count }) => (
+                      <span key={mood} className="pill">{mood} ×{count}</span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </>
-        )}
+              )}
+            </>
+          )}
+        </div>
       </aside>
     </div>
   );

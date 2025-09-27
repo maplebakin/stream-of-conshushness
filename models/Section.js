@@ -1,20 +1,23 @@
 // models/Section.js
 import mongoose from 'mongoose';
 
-const sectionSchema = new mongoose.Schema(
+const { Schema } = mongoose;
+
+const sectionSchema = new Schema(
   {
-    userId    : { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    key       : { type: String, required: true },  // slug-ish, unique per user
-    label     : { type: String, required: true },  // display name
-    color     : { type: String, default: '#5cc2ff' },
-    icon      : { type: String, default: '📚' },
+    ownerId:     { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    title:       { type: String, required: true, trim: true },
+    slug:        { type: String, required: true, trim: true },
     description: { type: String, default: '' },
-    pinned    : { type: Boolean, default: false },
-    order     : { type: Number, default: 0 },
+    icon:        { type: String, default: '' },
+    theme:       { type: Schema.Types.Mixed, default: () => ({}) },
+    layout:      { type: String, enum: ['flow', 'grid', 'kanban', 'tree'], default: 'flow' },
+    public:      { type: Boolean, default: false },
   },
   { timestamps: true }
 );
 
-sectionSchema.index({ userId: 1, key: 1 }, { unique: true });
+sectionSchema.index({ ownerId: 1, slug: 1 }, { unique: true });
+sectionSchema.index({ updatedAt: -1 });
 
 export default mongoose.model('Section', sectionSchema);

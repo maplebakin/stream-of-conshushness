@@ -1,130 +1,224 @@
 // routes/sections.js
 import express from 'express';
 import Section from '../models/Section.js';
-import { escapeRegex } from '../utils/regex.js';
 
 const router = express.Router();
 
+const ALLOWED_LAYOUTS = new Set(['flow', 'grid', 'kanban', 'tree']);
+
 function getUserId(req) {
-  return req.user?.userId || req.user?._id || req.user?.id;
+  return req.user?.userId || req.user?._id || req.user?.id || null;
 }
 
-function sanitizeKey(str) {
-  const s = String(str || '').toLowerCase().trim();
-  return s
-    .replace(/[\s_]+/g, '-')     // spaces/underscores -> dash
-    .replace(/[^a-z0-9-]/g, '')  // strip non-url chars
-    .replace(/-+/g, '-')         // collapse dashes
-    .replace(/^-+|-+$/g, '');    // trim dashes
+function sanitizeSlug(str) {
+  const base = String(str || '').toLowerCase().trim();
+  return base
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
-// GET /api/sections?pin=true|false&limit=50&offset=0&q=foo
-router.get('/', async (req, res) => {
-  try {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-    const { pin, limit = 100, offset = 0, q } = req.query;
-
-    const find = { userId };
-    if (pin === 'true') find.pinned = true;
-    if (q && String(q).trim()) {
-      find.$or = [
-        { key:   new RegExp(escapeRegex(String(q).trim()), 'i') },
-        { label: new RegExp(escapeRegex(String(q).trim()), 'i') },
-        { description: new RegExp(escapeRegex(String(q).trim()), 'i') }
-      ];
+function parseTheme(raw) {
+  if (raw == null) return undefined;
+  if (typeof raw === 'string') {
+    if (!raw.trim()) return undefined;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+      throw new Error('Theme must be a JSON object');
+    } catch (err) {
+      throw new Error('Theme must be valid JSON');
     }
-
-    const lim = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
-    const off = Math.max(parseInt(offset, 10) || 0, 0);
-
-    const list = await Section
-      .find(find)
-      .sort({ pinned: -1, order: 1, label: 1, _id: 1 })
-      .skip(off)
-      .limit(lim)
-      .lean();
-
-    // include aliases for current FE expectations (slug/name/emoji)
-    const shaped = list.map(s => ({
-      ...s,
-      slug: s.key,
-      name: s.label,
-      emoji: s.icon
-    }));
-
-    res.json(shaped);
-  } catch (err) {
-    console.error('GET /api/sections error:', err);
-    res.status(500).json({ error: 'Failed to fetch sections' });
   }
-});
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  throw new Error('Theme must be an object');
+}
 
-// GET /api/sections/:key
-router.get('/:key', async (req, res) => {
-  try {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-    const key = String(req.params.key);
-    const doc = await Section.findOne({ userId, key });
-    if (!doc) return res.status(404).json({ error: 'Section not found' });
-    res.json({ ...doc.toObject(), slug: doc.key, name: doc.label, emoji: doc.icon });
-  } catch (err) {
-    console.error('GET /api/sections/:key error:', err);
-    res.status(500).json({ error: 'Failed to fetch section' });
-  }
-});
+function normalizeLayout(value) {
+  if (!value) return undefined;
+  const normalized = String(value).toLowerCase();
+  if (ALLOWED_LAYOUTS.has(normalized)) return normalized;
+  throw new Error(`Layout must be one of: ${Array.from(ALLOWED_LAYOUTS).join(', ')}`);
+}
+
+function shapeSection(doc) {
+  const base = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+  return {
+    ...base,
+    id: base._id?.toString?.() || base._id,
+    key: base.slug,
+    label: base.title,
+    name: base.title,
+    emoji: base.icon,
+  };
+}
 
 // POST /api/sections
-// body: { key?, label, color?, icon?, description?, pinned?, order? }
 router.post('/', async (req, res) => {
   try {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-    const label = String(req.body?.label || '').trim();
-    if (!label) return res.status(400).json({ error: 'label is required' });
+    const ownerId = getUserId(req);
+    if (!ownerId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const key = sanitizeKey(req.body?.key || label);
-    const color = String(req.body?.color || '#5cc2ff');
-    const icon  = String(req.body?.icon || '📚');
-    const description = String(req.body?.description || '');
-    const pinned = Boolean(req.body?.pinned);
-    const order  = Number.isFinite(req.body?.order) ? Number(req.body.order) : 0;
+    const title = String(req.body?.title || '').trim();
+    if (!title) return res.status(400).json({ error: 'title is required' });
 
-    const doc = await Section.create({ userId, key, label, color, icon, description, pinned, order });
-    res.status(201).json({ ...doc.toObject(), slug: doc.key, name: doc.label, emoji: doc.icon });
+    let slug = sanitizeSlug(req.body?.slug || '');
+    if (!slug) {
+      slug = sanitizeSlug(title);
+    }
+    if (!slug) return res.status(400).json({ error: 'slug is required' });
+
+    const description = typeof req.body?.description === 'string' ? req.body.description : '';
+    const icon = typeof req.body?.icon === 'string' ? req.body.icon : '';
+    const isPublic = Boolean(req.body?.public);
+
+    let theme;
+    try {
+      theme = parseTheme(req.body?.theme);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+
+    let layout;
+    try {
+      layout = normalizeLayout(req.body?.layout);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+
+    const payload = {
+      ownerId,
+      title,
+      slug,
+      description,
+      icon,
+      public: isPublic,
+    };
+    if (theme !== undefined) payload.theme = theme;
+    if (layout) payload.layout = layout;
+
+    const doc = await Section.create(payload);
+    res.status(201).json(shapeSection(doc));
   } catch (err) {
     if (err?.code === 11000) {
-      return res.status(409).json({ error: 'Section key already exists' });
+      return res.status(409).json({ error: 'Section slug already exists for this owner' });
     }
     console.error('POST /api/sections error:', err);
     res.status(500).json({ error: 'Failed to create section' });
   }
 });
 
-// PATCH /api/sections/:id
-router.patch('/:id', async (req, res) => {
+// GET /api/sections
+router.get('/', async (req, res) => {
   try {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const currentUserId = getUserId(req);
+    if (!currentUserId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const requestedOwnerId = req.query.ownerId || currentUserId;
+    if (String(requestedOwnerId) !== String(currentUserId)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const list = await Section.find({ ownerId: requestedOwnerId })
+      .sort({ updatedAt: -1, _id: -1 })
+      .lean();
+
+    res.json(list.map(shapeSection));
+  } catch (err) {
+    console.error('GET /api/sections error:', err);
+    res.status(500).json({ error: 'Failed to fetch sections' });
+  }
+});
+
+// GET /api/sections/:id
+router.get('/:id', async (req, res) => {
+  try {
+    const ownerId = getUserId(req);
+    if (!ownerId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const doc = await Section.findOne({ _id: req.params.id, ownerId });
+    if (!doc) return res.status(404).json({ error: 'Section not found' });
+
+    res.json(shapeSection(doc));
+  } catch (err) {
+    console.error('GET /api/sections/:id error:', err);
+    res.status(500).json({ error: 'Failed to fetch section' });
+  }
+});
+
+// PUT /api/sections/:id
+router.put('/:id', async (req, res) => {
+  try {
+    const ownerId = getUserId(req);
+    if (!ownerId) return res.status(401).json({ error: 'Unauthorized' });
+
     const update = {};
-    ['label','color','icon','description','pinned','order'].forEach(k => {
-      if (k in req.body) update[k] = req.body[k];
-    });
-    if ('key' in req.body) update.key = sanitizeKey(req.body.key);
+
+    if ('title' in req.body) {
+      const title = String(req.body.title || '').trim();
+      if (!title) return res.status(400).json({ error: 'title cannot be empty' });
+      update.title = title;
+    }
+
+    if ('slug' in req.body) {
+      const slug = sanitizeSlug(req.body.slug || '');
+      if (!slug) return res.status(400).json({ error: 'slug cannot be empty' });
+      update.slug = slug;
+    }
+
+    if ('description' in req.body) {
+      update.description = typeof req.body.description === 'string' ? req.body.description : '';
+    }
+
+    if ('icon' in req.body) {
+      update.icon = typeof req.body.icon === 'string' ? req.body.icon : '';
+    }
+
+    if ('public' in req.body) {
+      update.public = Boolean(req.body.public);
+    }
+
+    if ('theme' in req.body) {
+      try {
+        const theme = parseTheme(req.body.theme);
+        if (theme !== undefined) {
+          update.theme = theme;
+        } else {
+          update.theme = {};
+        }
+      } catch (err) {
+        return res.status(400).json({ error: err.message });
+      }
+    }
+
+    if ('layout' in req.body) {
+      try {
+        const layout = normalizeLayout(req.body.layout);
+        update.layout = layout || 'flow';
+      } catch (err) {
+        return res.status(400).json({ error: err.message });
+      }
+    }
+
+    if (!Object.keys(update).length) {
+      return res.status(400).json({ error: 'No updates supplied' });
+    }
 
     const doc = await Section.findOneAndUpdate(
-      { _id: req.params.id, userId },
+      { _id: req.params.id, ownerId },
       update,
-      { new: true }
+      { new: true, runValidators: true }
     );
+
     if (!doc) return res.status(404).json({ error: 'Section not found' });
-    res.json({ ...doc.toObject(), slug: doc.key, name: doc.label, emoji: doc.icon });
+
+    res.json(shapeSection(doc));
   } catch (err) {
     if (err?.code === 11000) {
-      return res.status(409).json({ error: 'Section key already exists' });
+      return res.status(409).json({ error: 'Section slug already exists for this owner' });
     }
-    console.error('PATCH /api/sections/:id error:', err);
+    console.error('PUT /api/sections/:id error:', err);
     res.status(500).json({ error: 'Failed to update section' });
   }
 });
@@ -132,10 +226,12 @@ router.patch('/:id', async (req, res) => {
 // DELETE /api/sections/:id
 router.delete('/:id', async (req, res) => {
   try {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-    const out = await Section.deleteOne({ _id: req.params.id, userId });
-    if (out.deletedCount === 0) return res.status(404).json({ error: 'Section not found' });
+    const ownerId = getUserId(req);
+    if (!ownerId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const result = await Section.deleteOne({ _id: req.params.id, ownerId });
+    if (result.deletedCount === 0) return res.status(404).json({ error: 'Section not found' });
+
     res.sendStatus(204);
   } catch (err) {
     console.error('DELETE /api/sections/:id error:', err);
