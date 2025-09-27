@@ -110,12 +110,17 @@ function analyzeEntrySafe({ text, html, date }) {
   }
 }
 
-function buildSuggestedTasks({ text, date, cluster, section } = {}) {
+function normalizeOptionalString(value) {
+  return typeof value === "string" ? value : "";
+}
+
+function buildSuggestedTasks(options = {}) {
+  const { text, date, cluster, section } = options || {};
   try {
     const tasks = extractEntrySuggestions(text || "", date) || [];
     if (!Array.isArray(tasks) || !tasks.length) return [];
-    const clusterKey = typeof cluster === "string" ? cluster : "";
-    const sectionKey = typeof section === "string" ? section : "";
+    const clusterKey = normalizeOptionalString(cluster);
+    const sectionKey = normalizeOptionalString(section);
     return tasks.slice(0, 25).map((t) => ({
       title: t?.text ? String(t.text).trim() : "",
       dueDate: t?.dueDate ? String(t.dueDate) : "",
@@ -494,6 +499,11 @@ export async function updateEntryWithAutomation({ userId, entryId, updates = {} 
 
   return updated;
 }
+
+export const __testables = {
+  buildSuggestedTasks,
+  normalizeOptionalString,
+};
 
 export default {
   todayISOInTZ,
