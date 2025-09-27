@@ -110,16 +110,18 @@ function analyzeEntrySafe({ text, html, date }) {
   }
 }
 
-function buildSuggestedTasks({ text, date, cluster, section }) {
+function buildSuggestedTasks({ text, date, cluster, section } = {}) {
   try {
     const tasks = extractEntrySuggestions(text || "", date) || [];
     if (!Array.isArray(tasks) || !tasks.length) return [];
+    const clusterKey = typeof cluster === "string" ? cluster : "";
+    const sectionKey = typeof section === "string" ? section : "";
     return tasks.slice(0, 25).map((t) => ({
       title: t?.text ? String(t.text).trim() : "",
       dueDate: t?.dueDate ? String(t.dueDate) : "",
       repeat: t?.recurrence ? String(t.recurrence) : "",
-      cluster: cluster || "",
-      section: section || "",
+      cluster: clusterKey,
+      section: sectionKey,
       status: "new",
     })).filter((t) => t.title);
   } catch (err) {
