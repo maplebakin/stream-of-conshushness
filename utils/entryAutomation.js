@@ -113,7 +113,7 @@ function analyzeEntrySafe({ text, html, date }) {
 function normalizeOptionalString(value) {
   if (typeof value !== "string") return "";
   const normalized = value.trim();
-  return normalized;
+  return normalized || "";
 }
 
 function buildSuggestedTasks(options = {}) {
