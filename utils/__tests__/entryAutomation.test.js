@@ -7,13 +7,19 @@ const { buildSuggestedTasks, normalizeOptionalString } = __testables;
 
 const BASE_DATE = '2024-06-10';
 
-test('normalizeOptionalString trims strings and returns empty string for non-strings', () => {
-  assert.equal(normalizeOptionalString('alpha'), 'alpha');
-  assert.equal(normalizeOptionalString('  padded  '), 'padded');
-  assert.equal(normalizeOptionalString('   '), '');
-  assert.equal(normalizeOptionalString(42), '');
-  assert.equal(normalizeOptionalString(null), '');
-  assert.equal(normalizeOptionalString(undefined), '');
+const normalizeCases = [
+  ['alpha', 'alpha'],
+  ['  padded  ', 'padded'],
+  ['   ', ''],
+  [42, ''],
+  [null, ''],
+  [undefined, ''],
+];
+
+test('normalizeOptionalString trims strings and clears non-strings', () => {
+  for (const [input, expected] of normalizeCases) {
+    assert.equal(normalizeOptionalString(input), expected);
+  }
 });
 
 test('buildSuggestedTasks tolerates missing options', () => {
