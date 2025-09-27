@@ -2,10 +2,8 @@
 import express from 'express';
 import SuggestedTask from '../models/SuggestedTask.js';
 import Task from '../models/Task.js';
-import auth from '../middleware/auth.js';
 
 const router = express.Router();
-router.use(auth);
 
 /* GET /api/suggested-tasks?status=pending */
 router.get('/', async (req, res) => {
