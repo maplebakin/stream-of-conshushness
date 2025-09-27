@@ -61,7 +61,7 @@ function makeClient(headers = {}) {
   const client = axios.create({
     baseURL: '',            // we rewrite config.url instead
     timeout: 15000,
-    withCredentials: true,  // harmless with JWT; needed if you also use cookies
+    withCredentials: false, // align with CORS credentials: false on the server
     headers,
   });
 

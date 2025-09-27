@@ -3,6 +3,8 @@
 // Fires only on: need to / have to / must / don't forget to / remind me to / line-start "TODO:"
 // Optional dial: REQUIRE_DUE_OR_RECURRENCE to only accept dated/recurring items.
 
+import ACTION_VERBS from './rippleVerbs.js';
+
 const WEEKDAYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
 const WEEKDAY_ABBR = ['sun','mon','tue','tues','wed','thu','thur','thurs','fri','sat'];
 
@@ -18,6 +20,9 @@ const INTENT_PATS = [
   /\b(?:i|we)\s+must\s+/i,
   /\bdon['’]t\s+forget\s+to\s+/i,
   /\bremind\s+me\s+to\s+/i,
+  /\bremember\s+to\s+/i,
+  /\bbe\s+sure\s+to\s+/i,
+  /\bgotta\s+/i,
   /(?:^|\n)\s*todo\s*:\s*/i
 ];
 
@@ -27,15 +32,6 @@ const HYPOS = [
 
 const NEGATIONS = ["don't",'do not',"won't",'will not',"can't",'cannot',"shouldn't",'never',' not '];
 
-const ACTION_VERBS = [
-  'buy','call','email','text','message',
-  'schedule','book','attend',
-  'clean','wash','wipe','vacuum','mop','water','feed',
-  'pay','renew','submit','file','send','print','scan',
-  'write','read','finish','fix','update','check','review',
-  'install','uninstall','replace',
-  'pick up','drop off','prepare','plan','organize','record','practice','backup','back up'
-];
 
 function escapeRegex(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
 
@@ -56,6 +52,18 @@ function nextWeekdayISO(fromISO, targetDow){
   const [Y,M,D]=fromISO.split('-').map(n=>parseInt(n,10));
   const d=new Date(Date.UTC(Y,M-1,D,12)); const dow=d.getUTCDay();
   const delta=(targetDow-dow+7)%7||7; d.setUTCDate(d.getUTCDate()+delta); return toISO(d);
+}
+function sameOrNextWeekdayISO(fromISO, targetDow){
+  const [Y,M,D]=fromISO.split('-').map(n=>parseInt(n,10));
+  const d=new Date(Date.UTC(Y,M-1,D,12));
+  const dow=d.getUTCDay();
+  let delta=targetDow-dow;
+  if(delta<0) delta+=7;
+  d.setUTCDate(d.getUTCDate()+delta);
+  return toISO(d);
+}
+function nextWeekStartISO(fromISO){
+  return nextWeekdayISO(fromISO,1); // Monday of the following week
 }
 function relativeISO(keyword, fromISO){
   const [Y,M,D]=fromISO.split('-').map(n=>parseInt(n,10));
@@ -89,9 +97,13 @@ function parseRecurrence(s){
 // ——— due date (strict) ———
 function parseDueDate(s, entryDateISO){
   const iso=parseExplicitISO(s); if(iso) return iso;
-  const rel=s.toLowerCase().match(/\b(today|tomorrow)\b/); if(rel) return relativeISO(rel[1],entryDateISO);
-  const mNext=s.toLowerCase().match(/\bnext\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)\b/);
+  const low=s.toLowerCase();
+  const rel=low.match(/\b(today|tomorrow)\b/); if(rel) return relativeISO(rel[1],entryDateISO);
+  const mNext=low.match(/\bnext\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)\b/);
   if(mNext){let wd=mNext[1]; let idx=WEEKDAYS.indexOf(wd); if(idx===-1){const core=wd.slice(0,3); idx=WEEKDAYS.findIndex(w=>w.startsWith(core));} if(idx>=0) return nextWeekdayISO(entryDateISO,idx);}
+  const mThis=low.match(/\bthis\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat|weekend)\b/);
+  if(mThis){const wd=mThis[1]; if(wd==='weekend'){return sameOrNextWeekdayISO(entryDateISO,6);} let idx=WEEKDAYS.indexOf(wd); if(idx===-1){const core=wd.slice(0,3); idx=WEEKDAYS.findIndex(w=>w.startsWith(core));} if(idx>=0) return sameOrNextWeekdayISO(entryDateISO,idx);}
+  const byNextWeek=/\bby\s+next\s+week\b/.test(low); if(byNextWeek) return nextWeekStartISO(entryDateISO);
   const by=s.match(/\bby\s+(20\d{2}-\d{2}-\d{2})\b/i); if(by) return by[1];
   return null;
 }

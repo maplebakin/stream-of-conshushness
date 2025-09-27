@@ -1,12 +1,11 @@
 // backend/routes/clusters.js
 import express from 'express';
-import auth from '../middleware/auth.js';
 import Cluster, { slugifyKey } from '../models/Cluster.js';
 import Task from '../models/Task.js';
 import Entry from '../models/Entry.js';
+import auth from '../middleware/auth.js';
 
 const router = express.Router();
-router.use(auth);
 
 /* ── Toronto date helpers ───────────────────────────────── */
 function todayISOInToronto(base = new Date()) {
