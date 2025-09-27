@@ -110,11 +110,15 @@ function analyzeEntrySafe({ text, html, date }) {
   }
 }
 
+<<<<<<< HEAD
 <<<<<<< ours
+=======
+>>>>>>> 3e75555f45ebb690c7a5187595704b8d8ba5d8ac
 function buildSuggestedTasks({ text, date, cluster }) {
   try {
     const tasks = extractEntrySuggestions(text || "", date) || [];
     if (!Array.isArray(tasks) || !tasks.length) return [];
+<<<<<<< HEAD
 =======
 function normalizeOptionalString(value) {
   return typeof value === "string" ? value : "";
@@ -128,16 +132,22 @@ function buildSuggestedTasks(options = {}) {
     const clusterKey = normalizeOptionalString(cluster);
     const sectionKey = normalizeOptionalString(section);
 >>>>>>> theirs
+=======
+>>>>>>> 3e75555f45ebb690c7a5187595704b8d8ba5d8ac
     return tasks.slice(0, 25).map((t) => ({
       title: t?.text ? String(t.text).trim() : "",
       dueDate: t?.dueDate ? String(t.dueDate) : "",
       repeat: t?.recurrence ? String(t.recurrence) : "",
+<<<<<<< HEAD
 <<<<<<< ours
       cluster: cluster || "",
 =======
       cluster: clusterKey,
       section: sectionKey,
 >>>>>>> theirs
+=======
+      cluster: cluster || "",
+>>>>>>> 3e75555f45ebb690c7a5187595704b8d8ba5d8ac
       status: "new",
     })).filter((t) => t.title);
   } catch (err) {
@@ -312,11 +322,15 @@ async function generateRipplesAndSuggestions({ entry, text, userId }) {
       userId,
       entryId: entry._id,
       dateKey: entry.date,
+<<<<<<< HEAD
 <<<<<<< ours
       section: entry.cluster || "",
 =======
       section: entry.section || entry.cluster || "",
 >>>>>>> theirs
+=======
+      section: entry.cluster || "",
+>>>>>>> 3e75555f45ebb690c7a5187595704b8d8ba5d8ac
       text: r.text,
       score: Math.round(((r?.confidence ?? 0.6) || 0) * 100),
       status: "pending",
@@ -336,10 +350,13 @@ async function generateRipplesAndSuggestions({ entry, text, userId }) {
       title: doc.text,
       priority: "low",
       cluster: entry.cluster || "",
+<<<<<<< HEAD
 <<<<<<< ours
 =======
       section: entry.section || "",
 >>>>>>> theirs
+=======
+>>>>>>> 3e75555f45ebb690c7a5187595704b8d8ba5d8ac
     };
     const dueDate = isoDateToUTCDate(dueISO);
     if (dueDate) payload.dueDate = dueDate;
@@ -360,6 +377,7 @@ function normalizeEntryForCreate(payload = {}) {
     normalized.html = typeof payload.html === "string" ? payload.html : "";
     normalized.content = typeof payload.content === "string" ? payload.content : normalized.html;
   } else {
+<<<<<<< HEAD
 <<<<<<< ours
     if (!("html" in normalized)) normalized.html = typeof payload.html === "string" ? payload.html : "";
     if (!("content" in normalized)) normalized.content = typeof payload.content === "string" ? payload.content : normalized.html;
@@ -371,6 +389,10 @@ function normalizeEntryForCreate(payload = {}) {
       normalized.content = typeof payload.content === "string" ? payload.content : normalized.html;
     }
 >>>>>>> theirs
+=======
+    if (!("html" in normalized)) normalized.html = typeof payload.html === "string" ? payload.html : "";
+    if (!("content" in normalized)) normalized.content = typeof payload.content === "string" ? payload.content : normalized.html;
+>>>>>>> 3e75555f45ebb690c7a5187595704b8d8ba5d8ac
   }
   if (!("mood" in normalized)) normalized.mood = typeof payload.mood === "string" ? payload.mood : "";
   if (!("cluster" in normalized)) normalized.cluster = typeof payload.cluster === "string" ? payload.cluster : "";
@@ -397,19 +419,25 @@ function normalizeEntryForUpdate(payload = {}, existing = {}) {
       content: Object.prototype.hasOwnProperty.call(payload, "content") ? payload.content : existing.content,
     });
     normalized.text = nextText;
+<<<<<<< HEAD
 <<<<<<< ours
+=======
+>>>>>>> 3e75555f45ebb690c7a5187595704b8d8ba5d8ac
     normalized.html = typeof (Object.prototype.hasOwnProperty.call(payload, "html") ? payload.html : existing.html) === "string"
       ? (Object.prototype.hasOwnProperty.call(payload, "html") ? payload.html : existing.html)
       : "";
     normalized.content = typeof (Object.prototype.hasOwnProperty.call(payload, "content") ? payload.content : existing.content) === "string"
       ? (Object.prototype.hasOwnProperty.call(payload, "content") ? payload.content : existing.content)
       : normalized.html;
+<<<<<<< HEAD
 =======
     const nextHtml = Object.prototype.hasOwnProperty.call(payload, "html") ? payload.html : existing.html;
     const nextContent = Object.prototype.hasOwnProperty.call(payload, "content") ? payload.content : existing.content;
     normalized.html = typeof nextHtml === "string" ? nextHtml : "";
     normalized.content = typeof nextContent === "string" ? nextContent : normalized.html;
 >>>>>>> theirs
+=======
+>>>>>>> 3e75555f45ebb690c7a5187595704b8d8ba5d8ac
   }
   if (Object.prototype.hasOwnProperty.call(payload, "mood")) {
     normalized.mood = typeof payload.mood === "string" ? payload.mood : "";
@@ -448,10 +476,13 @@ export async function createEntryWithAutomation({ userId, payload = {} }) {
     text: normalized.text,
     date: normalized.date,
     cluster: normalized.cluster,
+<<<<<<< HEAD
 <<<<<<< ours
 =======
     section: normalized.section,
 >>>>>>> theirs
+=======
+>>>>>>> 3e75555f45ebb690c7a5187595704b8d8ba5d8ac
   });
 
   const entry = await Entry.create({
@@ -519,10 +550,13 @@ export async function updateEntryWithAutomation({ userId, entryId, updates = {} 
       text: entry.text,
       date: entry.date,
       cluster: entry.cluster,
+<<<<<<< HEAD
 <<<<<<< ours
 =======
       section: entry.section,
 >>>>>>> theirs
+=======
+>>>>>>> 3e75555f45ebb690c7a5187595704b8d8ba5d8ac
     });
   }
 
@@ -538,6 +572,7 @@ export async function updateEntryWithAutomation({ userId, entryId, updates = {} 
   return updated;
 }
 
+<<<<<<< HEAD
 <<<<<<< ours
 =======
 export const __testables = {
@@ -546,6 +581,8 @@ export const __testables = {
 };
 
 >>>>>>> theirs
+=======
+>>>>>>> 3e75555f45ebb690c7a5187595704b8d8ba5d8ac
 export default {
   todayISOInTZ,
   normalizeDate,
