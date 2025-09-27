@@ -1,0 +1,90 @@
+@import "./variables.css";
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-6);
+  background: color-mix(in srgb, var(--color-surface) 90%, rgba(255,255,255,0.6) 10%);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  box-shadow: var(--shadow-border);
+  backdrop-filter: blur(14px);
+}
+
+.app-header__title {
+  margin: 0;
+  font-family: var(--font-echo);
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  color: var(--color-text-strong);
+}
+
+.primary-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.nav-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.95rem;
+  border-radius: var(--radius-button);
+  font-weight: 600;
+  font-family: var(--font-sans);
+  color: color-mix(in srgb, var(--color-vein) 80%, white 20%);
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.nav-pill:hover,
+.nav-pill:focus-visible {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-surface) 80%, var(--color-spool) 20%);
+  border-color: color-mix(in srgb, var(--color-spool) 55%, transparent);
+  outline: none;
+}
+
+.nav-pill--active {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-surface) 60%, var(--color-spool) 40%);
+  border-color: color-mix(in srgb, var(--color-spool) 60%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-spool) 60%, transparent);
+}
+
+.logout-button {
+  border-radius: var(--radius-button);
+  padding: 0.55rem 0.95rem;
+  font-weight: 600;
+  background: transparent;
+  color: var(--color-vein);
+  border: 1px solid color-mix(in srgb, var(--color-border) 65%, transparent);
+  transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.logout-button:hover,
+.logout-button:focus-visible {
+  background: color-mix(in srgb, var(--color-surface) 75%, var(--color-spool) 25%);
+  border-color: color-mix(in srgb, var(--color-spool) 55%, transparent);
+  color: var(--color-ink);
+  outline: none;
+}
+
+@media (max-width: 768px) {
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .primary-nav {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+}

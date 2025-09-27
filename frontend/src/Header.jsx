@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useContext } from 'react';
 import { AuthContext } from './AuthContext.jsx';
 import './Main.css';
+import './Header.css';
 
 function isActivePath(pathname, to) {
   if (to === '/today') {
@@ -30,9 +31,7 @@ export default function Header() {
     return (
       <Link
         to={to}
-        className={`px-4 py-2 rounded-button font-thread transition-all ${
-          active ? 'bg-plum text-mist shadow-soft' : 'text-ink hover:bg-thread hover:text-mist'
-        }`}
+        className={`nav-pill${active ? ' nav-pill--active' : ''}`}
         aria-current={active ? 'page' : undefined}
       >
         {label}
@@ -41,17 +40,14 @@ export default function Header() {
   };
 
   return (
-    <header
-      className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 border-b border-border bg-surface shadow-md"
-      role="banner"
-    >
+    <header className="app-header" role="banner">
       {/* Title */}
-      <h1 className="font-echo text-vein text-2xl sm:text-3xl tracking-tight m-0">
+      <h1 className="app-header__title">
         Stream of Conshushness
       </h1>
 
       {/* Main Nav */}
-      <nav className="flex gap-2 items-center" aria-label="Primary">
+      <nav className="primary-nav" aria-label="Primary navigation">
         <NavItem to="/" label="🌊 Stream" />
         <NavItem to="/today" label="📍 Today" />
         <NavItem to="/calendar" label="📆 Calendar" />
@@ -62,7 +58,7 @@ export default function Header() {
           <button
             type="button"
             onClick={logout}
-            className="px-3 py-2 font-thread text-ink hover:text-vein border border-transparent hover:border-plum rounded-button transition-all"
+            className="logout-button"
           >
             Log Out
           </button>

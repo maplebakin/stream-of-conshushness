@@ -153,7 +153,11 @@ export default function MainPage() {
         </div>
 
         <div className="stream-controls">
-          <div className="today-chip font-glow text-vein" title="Local date">
+          <div
+            className="today-chip font-glow text-vein"
+            title="Local date"
+            aria-live="polite"
+          >
             {toDisplayDate?.(todayISO) || todayISO}
           </div>
 
@@ -161,6 +165,7 @@ export default function MainPage() {
             type="search"
             className="search-input font-glow"
             placeholder="Search text, tags, mood…"
+            aria-label="Search entries"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -169,6 +174,7 @@ export default function MainPage() {
             className="cluster-select font-thread"
             value={clusterFilter}
             onChange={(e) => setClusterFilter(e.target.value)}
+            aria-label="Filter entries by cluster"
           >
             {clusters.map((c) => (
               <option key={c} value={c}>
@@ -191,10 +197,14 @@ export default function MainPage() {
 
       {/* Body */}
       <section className="entry-feed">
-        {loading && <div className="loading font-glow text-vein">Loading entries…</div>}
+        {loading && (
+          <div className="loading font-glow text-vein" role="status" aria-live="polite">
+            Loading entries…
+          </div>
+        )}
 
         {!loading && filtered.length === 0 && (
-          <div className="empty-state">
+          <div className="empty-state" role="status" aria-live="polite">
             <p className="font-glow text-vein">
               {query || clusterFilter !== 'all'
                 ? 'No entries match your filters.'

@@ -1,10 +1,8 @@
 // routes/events.js — Important Events CRUD (ESM) with date/pinned filters and alias fields
 import express from "express";
 import ImportantEvent from "../models/ImportantEvent.js";
-import auth from "../middleware/auth.js";
 
 const router = express.Router();
-router.use(auth);
 
 const isYMD = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
 const toBool = (v) => {

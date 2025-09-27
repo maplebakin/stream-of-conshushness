@@ -1,37 +1,222 @@
 /* frontend/src/base.css */
 
-/* Modern base reset */
+@import "./variables.css";
+
 *,
 *::before,
-*::after { box-sizing: border-box; }
+*::after {
+  box-sizing: border-box;
+}
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
 }
 
-html, body {
+html {
+  font-size: 16px;
+}
+
+body {
   margin: 0;
   padding: 0;
   background: var(--color-background);
   color: var(--color-text);
-  font-family: var(--font-thread);
+  font-family: var(--font-sans);
+  line-height: var(--line-height);
+  letter-spacing: var(--letter-spacing);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* link + focus treatment */
-a { color: var(--color-accent-dark); text-decoration: none; }
-a:hover { text-decoration: underline; }
-
-:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--color-spool) 45%, transparent);
-  outline-offset: 2px;
+::selection {
+  background: color-mix(in srgb, var(--color-spool) 35%, white 65%);
+  color: var(--color-ink-strong);
 }
 
-/* soft hr */
+a {
+  color: var(--color-spool);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover,
+a:focus-visible {
+  color: var(--color-plum);
+  text-decoration: underline;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+input,
+select,
+textarea {
+  border-radius: var(--radius-input);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  padding: 0.5rem 0.75rem;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border-color: var(--color-spool);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-spool) 25%, transparent);
+  outline: none;
+}
+
+button {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+button:focus-visible {
+  outline-offset: 4px;
+}
+
+.button,
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1.15rem;
+  border-radius: var(--radius-button);
+  border: 1px solid color-mix(in srgb, var(--color-plum) 40%, transparent);
+  background: var(--color-plum);
+  color: var(--color-on-accent);
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast), border-color var(--transition-fast);
+  box-shadow: 0 8px 18px rgba(31, 21, 18, 0.12);
+}
+
+.button:hover,
+.button:focus-visible,
+.btn:hover,
+.btn:focus-visible {
+  background: color-mix(in srgb, var(--color-plum) 78%, var(--color-spool) 22%);
+  border-color: color-mix(in srgb, var(--color-plum) 50%, var(--color-spool) 50%);
+  box-shadow: 0 14px 28px rgba(31, 21, 18, 0.18);
+  outline: none;
+}
+
+.button:active,
+.btn:active {
+  transform: translateY(1px);
+}
+
+.button[disabled],
+.btn[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-ghost,
+.button.ghost {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--color-border) 70%, transparent);
+  color: var(--color-vein);
+  box-shadow: none;
+}
+
+.btn-ghost:hover,
+.btn-ghost:focus-visible,
+.button.ghost:hover,
+.button.ghost:focus-visible {
+  background: color-mix(in srgb, var(--color-surface) 85%, var(--color-spool) 15%);
+  border-color: color-mix(in srgb, var(--color-spool) 60%, transparent);
+}
+
+.button.chip,
+.btn.chip {
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface) 88%, white 12%);
+  color: var(--color-vein);
+  border-color: color-mix(in srgb, var(--color-border) 60%, transparent);
+  box-shadow: none;
+}
+
+.button.chip:hover,
+.button.chip:focus-visible,
+.btn.chip:hover,
+.btn.chip:focus-visible {
+  background: color-mix(in srgb, var(--color-surface) 70%, var(--color-spool) 30%);
+  color: var(--color-ink);
+}
+
+.button.danger,
+.btn.danger {
+  background: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger) 70%, transparent);
+  color: var(--color-on-dark);
+}
+
 hr {
   border: 0;
   height: 1px;
   background: linear-gradient(to right, transparent, var(--color-border), transparent);
   margin: var(--space-4) 0;
+}
+
+/* Utility tokens -------------------------------------------------------- */
+.rounded-button {
+  border-radius: var(--radius-button);
+}
+
+.shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
+
+.surface-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+  border: 1px solid var(--color-border);
+}
+
+.surface-muted {
+  background: var(--color-surface-muted);
+}
+
+.text-muted {
+  color: var(--color-muted);
+}
+
+.bg-lantern { background: var(--color-lantern); }
+.bg-plum { background: var(--color-plum); }
+.bg-spool { background: var(--color-spool); }
+.bg-ripple { background: var(--color-ripple); }
+.text-ink { color: var(--color-ink); }
+.text-mist { color: var(--color-on-dark); }
+.text-plum { color: var(--color-plum); }
+.text-vein { color: var(--color-vein); }
+
+/* Motion respect -------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

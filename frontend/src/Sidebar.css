@@ -1,143 +1,92 @@
 @import "./variables.css";
 
-/* sensible default if the header doesn't set one */
-:root { --header-height: 56px; }
+:root { --header-height: 64px; }
 
-/* ───────── Container (right by default) ───────── */
 .section-sidebar {
-  inline-size: 240px;            /* width */
+  inline-size: 260px;
   min-inline-size: 220px;
-  padding: 1.25rem 1rem;
-  border-top-left-radius: var(--radius-card);
-  border-bottom-left-radius: var(--radius-card);
-  border-left: 1px solid rgba(255,255,255,0.08);      /* fallback */
-  background: rgba(24,20,31,0.72);                    /* fallback */
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);                  /* Safari */
-
-  box-shadow: var(--shadow-elevated, 0 10px 30px rgba(0,0,0,.25));
+  padding: var(--space-5) var(--space-4);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-surface) 90%, rgba(255, 255, 255, 0.6) 10%);
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  box-shadow: var(--shadow-soft);
   color: var(--color-text);
 }
 
-/* upgrade to color-mix when available */
-@supports (background: color-mix(in srgb, white 10%, black)) {
-  .section-sidebar {
-    background: color-mix(in srgb, var(--color-surface) 92%, transparent);
-    border-left: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
-  }
-}
-
-/* Position: sit under sticky header */
-.section-sidebar--right {
-  position: sticky;
-  top: var(--header-height);
-  align-self: start;
-}
-
-/* Optional left variant (if you reuse the component) */
+.section-sidebar--right,
 .section-sidebar--left {
   position: sticky;
   top: var(--header-height);
   align-self: start;
-  border-left: 0;
-  border-right: 1px solid rgba(255,255,255,0.08);
-  border-top-right-radius: var(--radius-card);
-  border-bottom-right-radius: var(--radius-card);
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
 }
 
-/* ───────── Inner layout ───────── */
+.section-sidebar--left {
+  border-inline-end: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
 .section-sidebar .sidebar-inner {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-3);
 }
 
-/* Label */
 .sidebar-title {
-  font-family: var(--font-thread, var(--font-serif));
-  font-size: 0.82rem;
-  letter-spacing: 0.08em;
+  font-family: var(--font-thread);
+  font-size: 0.8rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--color-text) 65%, transparent);
-  margin: 0 0 0.35rem;
+  color: color-mix(in srgb, var(--color-vein) 80%, white 20%);
+  margin: 0;
 }
 
-/* Nav list */
 .sidebar-nav {
   list-style: none;
-  margin: 0.25rem 0 0;
+  margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.25rem;
+  gap: var(--space-2);
 }
 
-/* Links → use .nav-link to match your JSX */
 .sidebar-nav .nav-link,
 .sidebar-nav a {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: .5rem;
-  padding: 0.55rem 0.75rem;
-  border-radius: 999px;
+  gap: var(--space-2);
+  padding: 0.5rem 0.85rem;
+  border-radius: var(--radius-button);
+  font-family: var(--font-sans);
+  font-weight: 600;
   text-decoration: none;
-  font-family: var(--font-serif);
-  color: color-mix(in srgb, var(--color-text) 86%, transparent);
-  transition: background 0.2s ease, color 0.2s ease, transform 0.05s ease, box-shadow 0.2s ease;
-  outline: none;
+  color: color-mix(in srgb, var(--color-vein) 85%, white 15%);
+  background: transparent;
+  transition: background-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-/* Hover/focus */
 .sidebar-nav .nav-link:hover,
 .sidebar-nav a:hover {
-  background: color-mix(in srgb, var(--color-surface) 86%, var(--color-accent) 14%);
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-surface) 80%, var(--color-spool) 20%);
 }
 
 .sidebar-nav .nav-link:focus-visible,
 .sidebar-nav a:focus-visible {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 45%, transparent);
+  outline: none;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-spool) 35%, transparent);
 }
 
-/* Active state: pill + subtle left accent bar */
 .sidebar-nav .nav-link.active,
 .sidebar-nav a.active {
-  position: relative;
-  background: color-mix(in srgb, var(--color-surface) 82%, var(--color-accent) 18%);
-  color: var(--color-ink, #0f0e13);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 38%, transparent) inset;
+  background: color-mix(in srgb, var(--color-surface) 65%, var(--color-spool) 35%);
+  color: var(--color-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-spool) 60%, transparent);
 }
 
-.sidebar-nav .nav-link.active::before,
-.sidebar-nav a.active::before {
-  content: "";
-  position: absolute;
-  inset-inline-start: 6px;
-  inline-size: 6px;
-  block-size: 6px;
-  border-radius: 50%;
-  background: var(--color-accent);
-}
-
-/* Press */
-.sidebar-nav .nav-link:active,
-.sidebar-nav a:active {
-  transform: translateY(1px);
-}
-
-/* Separator */
 .sidebar-sep {
   height: 1px;
-  margin: 0.5rem 0;
-  background: linear-gradient(
-    to right,
-    transparent,
-    color-mix(in srgb, var(--color-border) 60%, transparent),
-    transparent
-  );
+  background: linear-gradient(to right, transparent, color-mix(in srgb, var(--color-border) 70%, transparent), transparent);
+  margin: var(--space-3) 0;
 }
 
-/* Responsive: collapse the right sidebar below 1024px (your RoomLayout handles drawers) */
 @media (max-width: 1024px) {
   .section-sidebar--right { display: none; }
 }

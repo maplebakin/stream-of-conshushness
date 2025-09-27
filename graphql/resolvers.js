@@ -1,19 +1,16 @@
 // backend/graphql/resolvers.js
-import Entry          from '../models/Entry.js';
-import Ripple         from '../models/Ripple.js';
-import Task           from '../models/Task.js';
-import SuggestedTask  from '../models/SuggestedTask.js';
+import Entry from '../models/Entry.js';
+import Task from '../models/Task.js';
 
-import analyzeEntry from '../utils/analyzeEntry.js';
-import { extractEntrySuggestions, extractRipples } from '../utils/rippleExtractor.js';
+import {
+  createEntryWithAutomation,
+  updateEntryWithAutomation,
+  clearRippleArtifacts,
+  normalizeDate,
+} from '../utils/entryAutomation.js';
 import { analyzePriority } from '../utils/suggestMetadata.js';
 
 /* ───────────────── helpers ───────────────── */
-const deDupeTags = (raw) => {
-  const arr = Array.isArray(raw) ? raw : raw == null ? [] : String(raw).split(',').map(s => s.trim());
-  return [...new Set(arr.filter(Boolean).map(s => s.toLowerCase()))];
-};
-
 function torontoTodayISO() {
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Toronto',
@@ -25,23 +22,7 @@ function torontoTodayISO() {
   const d = parts.find(p => p.type === 'day')?.value || '01';
   return `${y}-${m}-${d}`;
 }
-function toISODateOnly(val) {
-  if (!val) return torontoTodayISO();
-  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
-  const d = new Date(val);
-  if (Number.isNaN(+d)) return torontoTodayISO();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-const stripHTML = (s = '') => String(s).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-const plainFrom = ({ text, html, content }) => {
-  if (typeof text === 'string' && text.trim()) return text.trim();
-  const src = (typeof content === 'string' && content.trim()) ? content :
-              (typeof html === 'string' && html.trim()) ? html : '';
-  return stripHTML(src);
-};
+const toISODateOnly = (val) => normalizeDate(val);
 
 const sortMap = {
   DATE_DESC   : { date: -1, createdAt: -1 },
@@ -49,31 +30,6 @@ const sortMap = {
   CREATED_DESC: { createdAt: -1 },
   CREATED_ASC : { createdAt:  1 }
 };
-
-async function safeDeleteSuggestedTasks(filter) {
-  try {
-    if (SuggestedTask && typeof SuggestedTask.deleteMany === 'function') {
-      await SuggestedTask.deleteMany(filter);
-    }
-  } catch (e) {
-    console.warn('⚠️ SuggestedTask cleanup skipped:', e.message);
-  }
-}
-
-/* recompute suggestions (non-blocking safety) */
-function computeSuggestionsDraft({ _id, text, html, content, date }) {
-  const analysisContent = content?.trim?.() ? content : (html?.trim?.() ? html : text);
-  let analyzed = { tags: [], contexts: [], confidence: 0 };
-  try { analyzed = analyzeEntry(analysisContent); } catch {}
-  let suggestions = {
-    suggestedTasks: [], suggestedAppointments: [], suggestedEvents: [],
-    suggestedTags: [], suggestedClusters: []
-  };
-  try {
-    suggestions = extractEntrySuggestions({ _id, text, html, content: analysisContent, date }) || suggestions;
-  } catch {}
-  return { analyzed, suggestions };
-}
 
 /* entry preview mapper (for Task.query includeEntries) */
 const previewOf = (e) => {
@@ -162,89 +118,10 @@ const root = {
   /* ─────────── Mutation: createEntry (returns Entry) ─────────── */
   createEntry: async ({ input }, context) => {
     if (!context.user) throw new Error('Unauthorized');
-
-    // Normalize incoming fields
-    const safeDate     = toISODateOnly(input?.date);
-    const safeText     = plainFrom({ text: input?.text, html: input?.html, content: input?.content });
-    const safeHTML     = typeof input?.html === 'string' ? input.html : '';
-    const safeContent  = typeof input?.content === 'string' ? input.content : safeHTML;
-    const safeTagsIn   = deDupeTags(input?.tags);
-
-    // Suggestions + analyzer tags (non-blocking)
-    const { analyzed, suggestions } = computeSuggestionsDraft({
-      _id: null, text: safeText, html: safeHTML, content: safeContent, date: safeDate
+    const entry = await createEntryWithAutomation({
+      userId: context.user.userId,
+      payload: input || {},
     });
-    const mergedTags = deDupeTags([...(safeTagsIn || []), ...(analyzed.tags || [])]);
-
-    const entry = await new Entry({
-      userId : context.user.userId,
-      date   : safeDate,
-      text   : safeText,
-      html   : safeHTML,
-      content: safeContent,
-      mood   : input?.mood || '',
-      cluster: input?.cluster || '',
-      section: input?.section || '',
-      tags   : mergedTags,
-      linkedGoal: input?.linkedGoal ?? null,
-      suggestedTasks: Array.isArray(suggestions.suggestedTasks) ? suggestions.suggestedTasks.slice(0,25) : []
-    }).save();
-
-    // Generate ripples + conservative auto-approvals
-    const extracted = (() => {
-      try { return extractRipples([entry.toObject()]); } catch { return []; }
-    })();
-
-    const autoRipples = extracted.filter(r =>
-      (r.priority === 'high' || r.timeSensitivity === 'immediate') &&
-      (r.confidence ?? 0) >= 0.85
-    ).slice(0, 5);
-
-    const manualRipples = extracted.filter(r => !autoRipples.includes(r));
-
-    // Auto-create Tasks for the auto group
-    for (const r of autoRipples) {
-      const task = await new Task({
-        userId  : context.user.userId,
-        title   : r.extractedText || 'Untitled task',
-        priority: r.priority || 'high',
-        clusters: r.assignedClusters && r.assignedClusters.length ? r.assignedClusters : (r.assignedCluster ? [r.assignedCluster] : []),
-        dueDate : r.dueDate ? toISODateOnly(r.dueDate) : undefined,
-        repeat  : r.recurrence || undefined,
-        sourceRippleId: undefined,
-        sourceEntryId : entry._id
-      }).save();
-      r.status        = 'approved';
-      r.createdTaskId = task._id;
-    }
-
-    // Persist ripples
-    const rippleDocs = [];
-    for (const r of [...autoRipples, ...manualRipples]) {
-      rippleDocs.push(await new Ripple({
-        userId       : context.user.userId,
-        sourceEntryId: entry._id,
-        entryDate    : entry.date,
-        contexts     : Array.isArray(r.contexts) ? r.contexts : [],
-        ...r
-      }).save());
-    }
-
-    // Mirror pending task-like ripples to SuggestedTask (UI review queue)
-    for (const rip of rippleDocs) {
-      const isTasky = ['urgentTask','suggestedTask','procrastinatedTask','recurringTask','deadline'].includes(rip.type);
-      if (rip.status !== 'approved' && isTasky) {
-        await SuggestedTask.create({
-          userId        : rip.userId,
-          sourceRippleId: rip._id,
-          title         : rip.extractedText || 'Untitled task',
-          priority      : rip.priority || 'low',
-          dueDate       : rip.dueDate ? toISODateOnly(rip.dueDate) : undefined,
-          repeat        : rip.recurrence || undefined,
-          cluster       : rip.assignedCluster || null
-        });
-      }
-    }
 
     return entry;
   },
@@ -252,95 +129,13 @@ const root = {
   /* ─────────── Mutation: updateEntry (returns Entry) ─────────── */
   updateEntry: async ({ id, input }, context) => {
     if (!context.user) throw new Error('Unauthorized');
+    const updated = await updateEntryWithAutomation({
+      userId: context.user.userId,
+      entryId: id,
+      updates: input || {},
+    });
 
-    const entry = await Entry.findOne({ _id: id, userId: context.user.userId });
-    if (!entry) throw new Error('Entry not found');
-
-    // Apply incoming fields
-    if ('date' in input)    entry.date    = toISODateOnly(input.date);
-    if ('text' in input || 'html' in input || 'content' in input) {
-      const nextText    = 'text'    in input ? input.text    : entry.text;
-      const nextHTML    = 'html'    in input ? input.html    : entry.html;
-      const nextContent = 'content' in input ? input.content : entry.content;
-      entry.text    = plainFrom({ text: nextText, html: nextHTML, content: nextContent });
-      entry.html    = typeof nextHTML === 'string' ? nextHTML : '';
-      entry.content = typeof nextContent === 'string' ? nextContent : entry.html;
-    }
-    if ('mood' in input)       entry.mood    = input.mood || '';
-    if ('cluster' in input)    entry.cluster = input.cluster || '';
-    if ('section' in input)    entry.section = input.section || '';
-    if ('linkedGoal' in input) entry.linkedGoal = input.linkedGoal ?? null;
-    if ('tags' in input)       entry.tags = deDupeTags(input.tags);
-
-    // Recompute suggestions if core content changed
-    const coreChanged = ('text' in input) || ('html' in input) || ('content' in input) || ('date' in input);
-    if (coreChanged) {
-      const { analyzed, suggestions } = computeSuggestionsDraft({
-        _id: entry._id, text: entry.text, html: entry.html, content: entry.content, date: entry.date
-      });
-      entry.tags = deDupeTags([...(entry.tags || []), ...(analyzed.tags || [])]);
-      entry.suggestedTasks = Array.isArray(suggestions.suggestedTasks) ? suggestions.suggestedTasks.slice(0,25) : [];
-    }
-
-    const updated = await entry.save();
-
-    /* refresh ripples & suggested tasks based on this entry */
-    const oldRipples = await Ripple.find({ sourceEntryId: id, userId: context.user.userId }).select('_id');
-    const oldRippleIds = oldRipples.map(r => r._id);
-    await safeDeleteSuggestedTasks({ userId: context.user.userId, sourceRippleId: { $in: oldRippleIds } });
-    await Ripple.deleteMany({ sourceEntryId: id, userId: context.user.userId });
-
-    const extracted = (() => {
-      try { return extractRipples([updated.toObject()]); } catch { return []; }
-    })();
-
-    const autoRipples = extracted.filter(r =>
-      (r.priority === 'high' || r.timeSensitivity === 'immediate') &&
-      (r.confidence ?? 0) >= 0.85
-    ).slice(0, 5);
-
-    const manualRipples = extracted.filter(r => !autoRipples.includes(r));
-
-    for (const r of autoRipples) {
-      const task = await new Task({
-        userId  : context.user.userId,
-        title   : r.extractedText || 'Untitled task',
-        priority: r.priority || 'high',
-        clusters: r.assignedClusters && r.assignedClusters.length ? r.assignedClusters : (r.assignedCluster ? [r.assignedCluster] : []),
-        dueDate : r.dueDate ? toISODateOnly(r.dueDate) : undefined,
-        repeat  : r.recurrence || undefined,
-        sourceRippleId: undefined,
-        sourceEntryId : updated._id
-      }).save();
-      r.status        = 'approved';
-      r.createdTaskId = task._id;
-    }
-
-    const rippleDocs = [];
-    for (const r of [...autoRipples, ...manualRipples]) {
-      rippleDocs.push(await new Ripple({
-        userId       : context.user.userId,
-        sourceEntryId: updated._id,
-        entryDate    : updated.date,
-        contexts     : Array.isArray(r.contexts) ? r.contexts : [],
-        ...r
-      }).save());
-    }
-
-    for (const rip of rippleDocs) {
-      const isTasky = ['urgentTask','suggestedTask','procrastinatedTask','recurringTask','deadline'].includes(rip.type);
-      if (rip.status !== 'approved' && isTasky) {
-        await SuggestedTask.create({
-          userId        : rip.userId,
-          sourceRippleId: rip._id,
-          title         : rip.extractedText || 'Untitled task',
-          priority      : rip.priority || 'low',
-          dueDate       : rip.dueDate ? toISODateOnly(rip.dueDate) : undefined,
-          repeat        : rip.recurrence || undefined,
-          cluster       : rip.assignedCluster || null
-        });
-      }
-    }
+    if (!updated) throw new Error('Entry not found');
 
     return updated;
   },
@@ -352,11 +147,7 @@ const root = {
     const entry = await Entry.findOneAndDelete({ _id: id, userId: context.user.userId });
     if (!entry) return false;
 
-    // cascade cleanup
-    const ripples = await Ripple.find({ sourceEntryId: id, userId: context.user.userId }).select('_id');
-    const rippleIds = ripples.map(r => r._id);
-    await safeDeleteSuggestedTasks({ userId: context.user.userId, sourceRippleId: { $in: rippleIds } });
-    await Ripple.deleteMany({ sourceEntryId: id, userId: context.user.userId });
+    await clearRippleArtifacts({ userId: context.user.userId, entryId: id });
 
     return true;
   },

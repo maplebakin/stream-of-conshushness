@@ -1,56 +1,107 @@
-/*────────────────────────────────────────────
-  RippleReviewUI.css
-  Styles the global “Ripple Review” inbox
-────────────────────────────────────────────*/
+@import "./variables.css";
 
-/* Container */
-.ripple-review { padding: 1.5rem; max-width: 64rem; margin: 0 auto; }
+.ripple-review {
+  display: grid;
+  gap: var(--space-4);
+}
 
-/* Heading */
-.ripple-review h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem; }
+.filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
 
-/* Filter chip bar */
 .filter-chip {
-  display: inline-block; padding: 0.25rem 0.75rem; font-size: 0.875rem; font-weight: 500;
-  border-radius: 9999px; background: #f3f4f6; color: #374151; cursor: pointer;
-  transition: background-color .15s ease, color .15s ease; margin: 0 0.25rem 0.5rem 0;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 65%, transparent);
+  padding: 0.45rem 0.9rem;
+  background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
+  color: var(--color-vein);
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
-.filter-chip.active { background: #bfdbfe; color: #1e40af; }
 
-/* Ripple card */
+.filter-chip:hover,
+.filter-chip:focus-visible {
+  background: color-mix(in srgb, var(--color-surface) 65%, var(--color-spool) 35%);
+  color: var(--color-ink);
+  border-color: color-mix(in srgb, var(--color-spool) 50%, transparent);
+  outline: none;
+}
+
+.filter-chip.active {
+  background: color-mix(in srgb, var(--color-surface) 55%, var(--color-spool) 45%);
+  color: var(--color-ink);
+  border-color: color-mix(in srgb, var(--color-spool) 70%, transparent);
+}
+
 .ripple-card {
-  padding: 1rem; border: 2px solid #e5e7eb; border-radius: 0.5rem; margin-bottom: 1rem; background: #fafafa;
+  padding: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-surface) 88%, white 12%);
+  box-shadow: var(--shadow-soft);
 }
 
-/* Confidence colour helpers  */
-.bg-green   { background:#ecfdf5; border-color:#d1fae5; }
-.bg-yellow  { background:#fffbeb; border-color:#fef3c7; }
-.bg-gray    { background:#f9fafb; border-color:#e5e7eb; }
+.ripple-card.bg-green { border-color: color-mix(in srgb, var(--color-ripple) 45%, transparent); }
+.ripple-card.bg-yellow { border-color: color-mix(in srgb, var(--color-lantern) 45%, transparent); }
+.ripple-card.bg-gray { border-color: color-mix(in srgb, var(--color-border) 75%, transparent); }
 
-/* Extracted text */
-.ripple-text { color: #1f2937; font-weight: 500; margin-bottom: 0.25rem; }
-
-/* Original context quote */
-.context-quote { font-size: 0.875rem; color: #6b7280; font-style: italic; margin-bottom: 0.5rem; }
-
-/* Select + buttons row */
-.action-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
-
-/* Cluster select */
-.action-row select {
-  padding: 0.25rem 0.5rem; border: 1px solid #d1d5db; border-radius: 0.25rem; font-size: 0.875rem;
+.ripple-text {
+  color: var(--color-text-strong);
+  font-weight: 600;
+  margin-bottom: 0.25rem;
 }
 
-/* Approve / Dismiss buttons */
-.action-btn {
-  padding: 0.25rem 0.75rem; font-size: 0.875rem; font-weight: 500; border-radius: 0.25rem;
-  transition: background-color .15s ease; cursor: pointer; border: none;
+.context-quote {
+  font-size: 0.9rem;
+  color: var(--color-muted);
+  font-style: italic;
+  margin-bottom: 0.5rem;
 }
-.approve-btn { background:#d1fae5; color:#065f46; }
-.approve-btn:hover { background:#a7f3d0; }
-.dismiss-btn { background:#fee2e2; color:#991b1b; }
-.dismiss-btn:hover { background:#fecaca; }
 
-/* Status line */
-.status-line { margin-top: 0.5rem; font-size: 0.875rem; color: #6b7280; }
-.status-line .label { font-weight: 600; }
+.meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  margin-bottom: var(--space-2);
+}
+
+.ripple-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ripple-actions .chip {
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 92%, white 8%);
+  color: var(--color-vein);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.ripple-actions .chip:hover,
+.ripple-actions .chip:focus-visible {
+  background: color-mix(in srgb, var(--color-surface) 70%, var(--color-spool) 30%);
+  color: var(--color-ink);
+  outline: none;
+}
+
+.approve-btn { background: color-mix(in srgb, var(--color-ripple) 30%, white 70%); color: var(--color-success); }
+.approve-btn:hover,
+.approve-btn:focus-visible { background: color-mix(in srgb, var(--color-ripple) 45%, white 55%); color: var(--color-success); }
+
+.dismiss-btn { background: color-mix(in srgb, var(--color-danger) 20%, white 80%); color: var(--color-danger); }
+.dismiss-btn:hover,
+.dismiss-btn:focus-visible { background: color-mix(in srgb, var(--color-danger) 35%, white 65%); color: var(--color-danger); }
+
+.status-line {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
