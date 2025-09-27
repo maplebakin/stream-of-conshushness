@@ -1,157 +1,230 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
-import axios from '../api/axiosInstance';
+import { useContext, useEffect, useMemo, useState } from 'react';
+import axios from '../api/axiosInstance.js';
 import { AuthContext } from '../AuthContext.jsx';
 
-export default function TaskList({ date, header = "Today’s Tasks" }) {
+function todayISO() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function normalizeTask(raw = {}) {
+  if (!raw) return null;
+  const sections = Array.isArray(raw.sections)
+    ? raw.sections.map((s) => String(s))
+    : raw.section
+      ? [String(raw.section)]
+      : [];
+  const clusters = Array.isArray(raw.clusters)
+    ? raw.clusters.map((c) => String(c))
+    : raw.cluster
+      ? [String(raw.cluster)]
+      : [];
+
+  return {
+    _id: raw._id || raw.id,
+    title: raw.title || '(untitled task)',
+    notes: raw.notes || '',
+    dueDate: raw.dueDate || '',
+    completed: !!raw.completed,
+    sections,
+    clusters,
+    priority: Number.isFinite(raw.priority) ? Number(raw.priority) : 0,
+  };
+}
+
+function filterTasks(list, { view, targetDate, section, cluster }) {
+  const filtered = list.filter((task) => {
+    if (!task) return false;
+    if (section && !(task.sections || []).some((s) => s.toLowerCase() === section.toLowerCase())) {
+      return false;
+    }
+    if (cluster && !(task.clusters || []).some((c) => c.toLowerCase() === cluster.toLowerCase())) {
+      return false;
+    }
+
+    const due = task.dueDate || '';
+    switch (view) {
+      case 'today':
+        return !task.completed && due === targetDate;
+      case 'overdue':
+        return !task.completed && due && due < targetDate;
+      case 'upcoming':
+        return !task.completed && due && due > targetDate;
+      case 'unscheduled':
+        return !task.completed && !due;
+      default:
+        return true;
+    }
+  });
+
+  return filtered.sort((a, b) => {
+    if (a.completed !== b.completed) return a.completed ? 1 : -1;
+    if (a.dueDate !== b.dueDate) return (a.dueDate || '').localeCompare(b.dueDate || '');
+    return (a.title || '').localeCompare(b.title || '');
+  });
+}
+
+export default function TaskList({
+  date,
+  view = 'today',
+  header = 'Tasks',
+  section = '',
+  cluster = '',
+  wrap = true,
+}) {
   const { token } = useContext(AuthContext);
+  const targetDate = useMemo(() => date || todayISO(), [date]);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    let cancelled = false;
+    if (!token) {
+      setTasks([]);
+      setLoading(false);
+      return;
+    }
+
+    let ignore = false;
 
     async function fetchTasks() {
       setLoading(true);
+      setError('');
       try {
-        // Try common variants; keep whichever works first.
-        let data = [];
-        try {
-          const r = await axios.get(`/api/tasks?date=${encodeURIComponent(date)}&limit=300&includeCompleted=1`, { headers });
-          data = Array.isArray(r.data) ? r.data : (r.data?.data || []);
-        } catch {
-          try {
-            const r = await axios.get(`/api/tasks/day/${encodeURIComponent(date)}`, { headers });
-            data = Array.isArray(r.data) ? r.data : (r.data?.tasks || []);
-          } catch {
-            const r = await axios.get(`/api/tasks?dueDate=${encodeURIComponent(date)}&limit=300&includeCompleted=1`, { headers });
-            data = Array.isArray(r.data) ? r.data : (r.data?.data || []);
-          }
+        const params = new URLSearchParams();
+        params.set('limit', '300');
+        params.set('includeCompleted', '1');
+        if (view === 'today') {
+          params.set('dueDate', targetDate);
         }
-
-        // Mild normalization
-        const norm = (data || []).map(t => ({
-          _id: t._id || t.id,
-          title: t.title || '(untitled)',
-          notes: t.notes || '',
-          dueDate: t.dueDate || '',
-          completed: !!t.completed,
-          clusters: Array.isArray(t.clusters) ? t.clusters : (t.cluster ? [t.cluster] : []),
-          priority: Number.isFinite(t.priority) ? t.priority : 0,
-        }));
-
-        if (!cancelled) setTasks(norm);
-      } catch (e) {
-        if (!cancelled) setTasks([]);
-        console.warn('[TaskList] fetch failed', e?.response?.data || e.message);
+        if (section) params.set('section', section);
+        if (cluster) params.set('cluster', cluster);
+        const res = await axios.get(`/api/tasks?${params.toString()}`);
+        if (ignore) return;
+        const raw = Array.isArray(res.data)
+          ? res.data
+          : Array.isArray(res.data?.data)
+            ? res.data.data
+            : res.data?.tasks || [];
+        const normalized = raw
+          .map(normalizeTask)
+          .filter((t) => t && t._id);
+        setTasks(normalized);
+      } catch (err) {
+        if (ignore) return;
+        console.warn('[TaskList] fetch failed', err?.response?.data || err.message);
+        setTasks([]);
+        setError(err?.response?.data?.error || 'Failed to load tasks');
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!ignore) setLoading(false);
       }
     }
 
-    if (token && date) fetchTasks();
-    return () => { cancelled = true; };
-  }, [token, date, headers]);
-
-// frontend/src/adapters/TaskList.default.jsx — toggle function
-async function toggleDone(task) {
-  const prev = tasks;
-  const nextList = tasks.map(t => t._id === task._id ? { ...t, completed: !t.completed } : t);
-  setTasks(nextList);
-
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-  // helper — *only used* on fallback when server doesn't spawn
-  function localSpawnIfNeeded() {
-    if (!task.rrule || !task.dueDate || task.completed) return; // only on first completion
-    const nextDue = nextFromRRule(task.rrule, task.dueDate);    // same helper logic as server (daily/weekly/monthly)
-    if (!nextDue) return;
-    const clone = {
-      title: task.title,
-      notes: task.notes || '',
-      rrule: task.rrule || '',
-      clusters: task.clusters || [],
-      sections: task.sections || [],
-      dueDate: nextDue,
-      priority: task.priority || 0,
+    fetchTasks();
+    return () => {
+      ignore = true;
     };
-    return axios.post('/api/tasks', clone, { headers });
-  }
+  }, [token, targetDate, view]);
 
-  try {
-    // Preferred: backend route that also spawns next
-    const resp = await axios.patch(`/api/tasks/${task._id}/toggle`, {}, { headers });
-    const spawned = resp?.data?.next;
-    if (spawned) {
-      // If next due is visible today on this list, insert it
-      setTasks(cur => {
-        const already = cur.some(t => t._id === spawned._id);
-        return already ? cur : [...cur, spawned];
-      });
-    }
-  } catch {
+  const filtered = useMemo(
+    () => filterTasks(tasks, { view, targetDate, section, cluster }),
+    [tasks, view, targetDate, section, cluster],
+  );
+
+  async function toggle(task) {
+    if (!token) return;
+    const previous = tasks;
+    setTasks((current) => current.map((t) => (t._id === task._id ? { ...t, completed: !t.completed } : t)));
+
     try {
-      // Fallback: just update completed; then spawn locally if needed
-      await axios.patch(`/api/tasks/${task._id}`, { completed: !task.completed }, { headers });
-      await localSpawnIfNeeded();
-    } catch (e2) {
-      setTasks(prev); // revert on error
-      console.warn('[TaskList] toggle failed', e2?.response?.data || e2.message);
-      alert('Could not update task.');
+      const resp = await axios.patch(`/api/tasks/${task._id}/toggle`);
+      const updated = normalizeTask(resp?.data?.task || resp?.data || { ...task, completed: !task.completed });
+      const spawned = resp?.data?.next ? normalizeTask(resp.data.next) : null;
+
+      setTasks((current) => {
+        const base = current.map((t) => (t._id === updated._id ? updated : t));
+        if (spawned && !base.some((t) => t._id === spawned._id)) {
+          return [...base, spawned];
+        }
+        return base;
+      });
+    } catch (errToggle) {
+      try {
+        await axios.patch(`/api/tasks/${task._id}`, { completed: !task.completed });
+        setTasks((current) => current.map((t) => (t._id === task._id ? { ...t, completed: !t.completed } : t)));
+      } catch (errFallback) {
+        console.warn('[TaskList] toggle failed', errToggle?.response?.data || errToggle.message, errFallback?.response?.data || errFallback.message);
+        setTasks(previous);
+        setError('Could not update task');
+      }
     }
   }
-}
 
-
-
-  return (
-    <div className="card">
-      <div className="section-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+  const body = (
+    <>
+      <div className="section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <h3 className="font-thread text-vein" style={{ margin: 0 }}>{header}</h3>
-        <span className="muted" style={{ fontSize: '.9rem' }}>{date}</span>
+        <span className="muted" style={{ fontSize: '.9rem' }}>{targetDate}</span>
       </div>
 
-      {loading && <div className="muted">Loading tasks…</div>}
-      {!loading && tasks.length === 0 && <div className="muted">No tasks for this day.</div>}
+      {!token && <div className="muted">Sign in to see tasks.</div>}
+      {token && error && <div className="muted" role="alert">{error}</div>}
+      {token && loading && <div className="muted">Loading tasks…</div>}
+      {token && !loading && filtered.length === 0 && <div className="muted">No tasks match this view.</div>}
 
-      {!loading && tasks.length > 0 && (
-        <ul className="task-list" style={{ listStyle:'none', padding:0, margin:0, display:'grid', gap:8 }}>
-          {tasks.map(t => (
+      {token && !loading && filtered.length > 0 && (
+        <ul className="task-list" style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
+          {filtered.map((task) => (
             <li
-              key={t._id}
-              className={`task-row ${t.completed ? 'is-completed' : ''}`}
-              style={{ display:'grid', gridTemplateColumns:'auto 1fr auto', alignItems:'start', gap:10, padding:'10px 12px', border:'1px solid var(--border, #e6e6ea)', borderRadius:10, background:'var(--card, #fff)' }}
+              key={task._id}
+              className={`task-row ${task.completed ? 'is-completed' : ''}`}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'auto 1fr auto',
+                alignItems: 'start',
+                gap: 10,
+                padding: '10px 12px',
+                border: '1px solid var(--border, #e6e6ea)',
+                borderRadius: 10,
+                background: 'var(--card, #fff)',
+              }}
             >
-              <label style={{ display:'flex', alignItems:'flex-start', gap:10, cursor:'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
                 <input
                   type="checkbox"
-                  checked={t.completed}
-                  onChange={() => toggleDone(t)}
-                  aria-label={t.completed ? 'Mark task incomplete' : 'Mark task complete'}
+                  checked={task.completed}
+                  onChange={() => toggle(task)}
+                  aria-label={task.completed ? 'Mark task incomplete' : 'Mark task complete'}
                 />
               </label>
 
               <div className="task-main" style={{ minWidth: 0 }}>
-                <div className={`task-title ${t.completed ? 'line' : ''}`} style={{ fontWeight:600, wordBreak:'break-word' }}>
-                  {t.title}
+                <div className={`task-title ${task.completed ? 'line' : ''}`} style={{ fontWeight: 600, wordBreak: 'break-word' }}>
+                  {task.title}
                 </div>
-                {t.notes && (
-                  <div className={`task-notes ${t.completed ? 'muted' : ''}`} style={{ fontSize:'.92rem', marginTop:4, opacity:t.completed ? .6 : .9 }}>
-                    {t.notes}
+                {task.notes && (
+                  <div className={`task-notes ${task.completed ? 'muted' : ''}`} style={{ fontSize: '.92rem', marginTop: 4, opacity: task.completed ? 0.6 : 0.9 }}>
+                    {task.notes}
                   </div>
                 )}
-                <div className="task-meta" style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:6 }}>
-                  {t.dueDate && <span className="pill pill-muted">due {t.dueDate}</span>}
-                  {t.clusters?.length > 0 && <span className="pill">{t.clusters.join(' • ')}</span>}
+                <div className="task-meta" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                  {task.dueDate && <span className="pill pill-muted">due {task.dueDate}</span>}
+                  {task.clusters?.length > 0 && <span className="pill">{task.clusters.join(' • ')}</span>}
+                  {task.sections?.length > 0 && <span className="pill pill-muted">{task.sections.join(' • ')}</span>}
                 </div>
               </div>
 
-              {/* right-side spacer / future actions */}
               <div />
             </li>
           ))}
         </ul>
       )}
-    </div>
+    </>
   );
+
+  if (!wrap) return body;
+  return <div className="card">{body}</div>;
 }

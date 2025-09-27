@@ -1,49 +1,84 @@
 :root {
+  color-scheme: light;
+
   /* Core palette */
-  --color-mist: #c6b6bd;        /* background haze */
-  --color-ink: #262322;         /* primary text */
-  --color-vein: #4b4d4b;        /* muted neutral */
-  --color-lantern: #a9654b;     /* warm accent */
-  --color-ripple: #92ad94;      /* gentle green */
-  --color-spool: #9a8ca5;       /* lavender thread */
-  --color-plum: #5d4e5f;        /* deep accent */
-  --color-border: #6a7c8a;      /* soft steel */
-
-  --color-bg: var(--color-mist);
-  --color-surface: #e5dce6;
-  --color-text: var(--color-ink);
-  --color-muted: var(--color-vein);
-  --color-accent: var(--color-ripple);
-  --color-accent-2: var(--color-spool);
-  --color-accent-dark: var(--color-plum);
-  --color-background: var(--color-bg);
-
-  /* Extras / highlights */
-  --color-petal: #e7d8e8;
-  --color-ghost: #f4f1f5;
-  --color-shadow: rgba(38, 35, 34, 0.15);
+  --color-mist: #f6f0ea;        /* ambient background */
+  --color-ink: #1f1512;         /* primary text */
+  --color-ink-strong: #140d0a;  /* headings */
+  --color-vein: #5f4b43;        /* muted neutral */
+  --color-lantern: #f2a65e;     /* warm accent */
+  --color-ripple: #4f7c6d;      /* gentle green */
+  --color-spool: #6d63c0;       /* lavender accent */
+  --color-plum: #4b3f72;        /* deep plum */
+  --color-thread: #7267d8;      /* radiant indigo */
+  --color-border: #d4c6bd;      /* soft outline */
 
   /* Surfaces */
-  --color-card: var(--color-surface);
+  --color-background: var(--color-mist);
+  --color-surface: #ffffff;
+  --color-surface-muted: #efe4d9;
+  --color-surface-soft: #f8f2eb;
+  --color-surface-elevated: #fffdf9;
+  --color-overlay: rgba(255, 254, 250, 0.8);
+  --color-surface-2: var(--color-surface-muted);
+  --color-surface-quiet: color-mix(in srgb, var(--color-surface) 86%, white 14%);
 
   /* Type */
-  --font-thread: "EB Garamond", Georgia, serif;
-  --font-glow: "Libre Baskerville", serif;
-  --font-echo: "Dancing Script", cursive;
-  --font-sans: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  --color-text: var(--color-ink);
+  --color-text-strong: var(--color-ink-strong);
+  --color-muted: color-mix(in srgb, var(--color-vein) 80%, white 20%);
+  --color-on-accent: #fbf9ff;
+  --color-on-dark: #fffdfc;
 
-  /* Radii & shadow */
-  --radius: 12px;
-  --radius-card: var(--radius);
-  --radius-input: 6px;
-  --radius-button: 6px;
-  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.1);
+  /* Accent aliases (legacy compatibility) */
+  --color-bg: var(--color-background);
+  --color-accent: var(--color-spool);
+  --color-accent-2: var(--color-ripple);
+  --color-accent-dark: var(--color-plum);
+
+  /* Status */
+  --color-success: #2f6f4e;
+  --color-warning: #a15c12;
+  --color-danger: #b3261e;
+  --color-info: #395fb7;
+
+  /* Focus + selection */
+  --focus-ring: color-mix(in srgb, var(--color-spool) 70%, white 30%);
+  --focus-ring-muted: color-mix(in srgb, var(--color-ripple) 65%, white 35%);
+
+  /* Shadow + depth */
+  --shadow-soft: 0 14px 34px rgba(31, 21, 18, 0.12);
+  --shadow-elevated: 0 18px 45px rgba(31, 21, 18, 0.16);
+  --shadow-border: inset 0 0 0 1px rgba(31, 21, 18, 0.05);
+
+  /* Radii */
+  --radius: 14px;
+  --radius-card: 18px;
+  --radius-input: 10px;
+  --radius-button: 999px;
 
   /* Spacing scale */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
-  --space-5: 20px;   /* added for daily page */
+  --space-5: 20px;
   --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* Typography */
+  --font-thread: "EB Garamond", "Iowan Old Style", Georgia, serif;
+  --font-glow: "Libre Baskerville", "Times New Roman", serif;
+  --font-echo: "Dancing Script", "Brush Script MT", cursive;
+  --font-sans: "Inter", "Inter var", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: var(--font-thread);
+  --font-handwritten: var(--font-echo);
+
+  --line-height: 1.55;
+  --letter-spacing: 0.01em;
+
+  /* Motion */
+  --transition-base: 180ms ease;
+  --transition-fast: 120ms ease;
 }

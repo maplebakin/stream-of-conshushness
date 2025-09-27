@@ -1,11 +1,14 @@
 // server/routes/tasks.js
 import express from 'express';
-import authenticateToken from '../middleware/auth.js';
 import Task from '../models/Task.js';
 
 const router = express.Router();
 
 /* ---------------------- helpers ---------------------- */
+function getUserId(req) {
+  return req.user?.userId || req.user?._id || req.user?.id || null;
+}
+
 function parseBool(v, def = false) {
   if (v == null) return def;
   const s = String(v).toLowerCase();
@@ -20,7 +23,8 @@ function clamp(n, lo, hi) {
 /* Core lister wrapped so it never explodes */
 async function listTasksCore(req, res) {
   try {
-    const userId = req.user.userId;
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const {
       date,            // alias of dueDate
       dueDate,
@@ -29,6 +33,7 @@ async function listTasksCore(req, res) {
       completed,       // explicit completed=true/false overrides includeCompleted
       limit,
       offset,
+      section,
     } = req.query;
 
     const q = { userId };
@@ -36,7 +41,8 @@ async function listTasksCore(req, res) {
     const dayISO = dueDate || date;
     if (dayISO) q.dueDate = dayISO;
 
-    if (cluster) q.clusters = cluster;
+    if (cluster) q.clusters = String(cluster);
+    if (section) q.sections = String(section);
 
     if (completed !== undefined) {
       q.completed = parseBool(completed);
@@ -59,10 +65,10 @@ async function listTasksCore(req, res) {
 /* ---------------------- routes ---------------------- */
 
 // GET /api/tasks
-router.get('/', authenticateToken, listTasksCore);
+router.get('/', listTasksCore);
 
 // Alias: GET /api/tasks/day/:date  (includes completed by default)
-router.get('/day/:date', authenticateToken, async (req, res) => {
+router.get('/day/:date', async (req, res) => {
   try {
     req.query.dueDate = req.params.date;
     if (req.query.includeCompleted == null) req.query.includeCompleted = '1';
@@ -76,7 +82,8 @@ router.get('/day/:date', authenticateToken, async (req, res) => {
 // PATCH/PUT /api/tasks/:id
 async function updateTask(req, res) {
   try {
-    const userId = req.user.userId;
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const { id } = req.params;
     const up = {};
     for (const k of ['title','notes','dueDate','completed','priority','clusters','sections','rrule']) {
@@ -94,13 +101,14 @@ async function updateTask(req, res) {
     res.status(500).json({ error: 'update failed' });
   }
 }
-router.patch('/:id', authenticateToken, updateTask);
-router.put('/:id', authenticateToken, updateTask);
+router.patch('/:id', updateTask);
+router.put('/:id', updateTask);
 
 // Toggle + spawn next if recurring (validation-safe)
-router.patch('/:id/toggle', authenticateToken, async (req, res) => {
+router.patch('/:id/toggle', async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const { id } = req.params;
 
     // Load minimal fields we need for recurrence, but don't save this doc.
@@ -148,9 +156,10 @@ router.patch('/:id/toggle', authenticateToken, async (req, res) => {
 });
 
 // POST /api/tasks (create)
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     let { title, notes, dueDate, priority = 0, clusters = [], sections = [], rrule = '' } = req.body || {};
     title = typeof title === 'string' ? title.trim() : '';
     if (!title) return res.status(400).json({ error: 'title required' });
@@ -176,9 +185,10 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // DELETE /api/tasks/:id  → hard delete a single task
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const { id } = req.params;
     const doc = await Task.findOneAndDelete({ _id: id, userId });
     if (!doc) return res.status(404).json({ error: 'Not found' });
@@ -190,9 +200,10 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 });
 
 // POST /api/tasks/bulk-delete  → hard delete many by id
-router.post('/bulk-delete', authenticateToken, async (req, res) => {
+router.post('/bulk-delete', async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter(Boolean) : [];
     if (ids.length === 0) return res.status(400).json({ error: 'ids required' });
     const r = await Task.deleteMany({ _id: { $in: ids }, userId });

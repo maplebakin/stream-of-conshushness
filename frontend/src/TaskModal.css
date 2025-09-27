@@ -1,39 +1,39 @@
+@import "./variables.css";
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: #0006;
+  background: rgba(20, 16, 28, 0.45);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: var(--space-6);
   z-index: 1000;
 }
 
 .modal {
-  background: var(--color-surface);
+  background: color-mix(in srgb, var(--color-surface) 92%, white 8%);
   color: var(--color-text);
   max-width: 600px;
   width: 100%;
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-soft);
-  padding: var(--space-4);
-  z-index: 1010;
+  box-shadow: var(--shadow-elevated);
+  padding: var(--space-5);
   position: relative;
   overflow-y: auto;
   max-height: 90vh;
-  font-family: var(--font-serif);
 }
 
 .modal h2 {
   margin-top: 0;
-  font-size: 1.3rem;
+  font-size: 1.35rem;
   font-family: var(--font-thread);
-  color: var(--color-vein);
+  color: var(--color-text-strong);
 }
 
 .entry-form {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: var(--space-3);
 }
 
@@ -41,60 +41,50 @@
   font-weight: 600;
   font-size: 0.95rem;
   color: var(--color-text);
-  margin-bottom: 0.2rem;
-  font-family: var(--font-thread);
+  margin-bottom: 0.25rem;
 }
 
 .entry-form input,
-.entry-form textarea {
+.entry-form textarea,
+.entry-form select {
   width: 100%;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border);
+  padding: 0.6rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
   border-radius: var(--radius-input);
-  background: var(--color-bg);
+  background: var(--color-surface);
   color: var(--color-text);
-  font-family: var(--font-glow);
+  font-family: var(--font-sans);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.entry-form input:focus-visible,
+.entry-form textarea:focus-visible,
+.entry-form select:focus-visible {
+  border-color: var(--color-spool);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-spool) 25%, transparent);
+  outline: none;
 }
 
 .entry-form textarea {
   resize: vertical;
-  min-height: 80px;
+  min-height: 120px;
 }
 
 .two-col {
-  display: flex;
+  display: grid;
   gap: var(--space-3);
-}
-
-.two-col > div {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
 .modal-buttons {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: var(--space-3);
-  margin-top: var(--space-2);
+  margin-top: var(--space-4);
 }
 
-.modal-buttons button {
-  padding: 0.5rem 1rem;
-  font-family: var(--font-thread);
-  font-weight: 500;
-  border-radius: var(--radius-button);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.modal-buttons button:hover {
-  background: var(--color-bg);
-}
-
-.modal-buttons button[disabled] {
-  opacity: 0.5;
-  cursor: not-allowed;
+.modal-buttons .button,
+.modal-buttons .btn {
+  font-family: var(--font-sans);
 }

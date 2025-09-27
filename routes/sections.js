@@ -1,11 +1,9 @@
 // routes/sections.js
 import express from 'express';
 import Section from '../models/Section.js';
-import auth from '../middleware/auth.js';
 import { escapeRegex } from '../utils/regex.js';
 
 const router = express.Router();
-router.use(auth);
 
 function getUserId(req) {
   return req.user?.userId || req.user?._id || req.user?.id;
@@ -24,6 +22,7 @@ function sanitizeKey(str) {
 router.get('/', async (req, res) => {
   try {
     const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const { pin, limit = 100, offset = 0, q } = req.query;
 
     const find = { userId };
@@ -65,6 +64,7 @@ router.get('/', async (req, res) => {
 router.get('/:key', async (req, res) => {
   try {
     const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const key = String(req.params.key);
     const doc = await Section.findOne({ userId, key });
     if (!doc) return res.status(404).json({ error: 'Section not found' });
@@ -80,6 +80,7 @@ router.get('/:key', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const label = String(req.body?.label || '').trim();
     if (!label) return res.status(400).json({ error: 'label is required' });
 
@@ -105,6 +106,7 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   try {
     const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const update = {};
     ['label','color','icon','description','pinned','order'].forEach(k => {
       if (k in req.body) update[k] = req.body[k];
@@ -131,6 +133,7 @@ router.patch('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const out = await Section.deleteOne({ _id: req.params.id, userId });
     if (out.deletedCount === 0) return res.status(404).json({ error: 'Section not found' });
     res.sendStatus(204);

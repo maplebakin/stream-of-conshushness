@@ -1,6 +1,6 @@
 // src/ManageSections.jsx
 import { useState, useEffect, useContext, useMemo } from 'react';
-import axios from './api/axiosInstance';
+import axios from './api/axiosInstance.js';
 import { AuthContext } from './AuthContext.jsx';
 import Header from './Header.jsx';
 import './Main.css';
@@ -91,7 +91,7 @@ export default function ManageSections() {
     try {
       const body = { key, label, icon: newIcon, pinned: true, order: 0 };
       const res = await axios.post('/api/sections', body, { headers });
-      const created = normalizeSection(res.data) || body;
+      const created = normalizeSection(res.data) || { ...body, id: res.data?._id };
       setSections(prev => [...prev, created]);
       setNewLabel('');
       setNewIcon('📚');
@@ -127,46 +127,22 @@ export default function ManageSections() {
     const maybeNewKey = slugifyKey(nextLabel);
     setSaving(true);
 
-    // try modern route first
     try {
       const body = { label: nextLabel, icon: editIcon, pinned: editPinned, order: editOrder };
-      // allow key change if label changed enough to change slug
       if (maybeNewKey !== original.key) body.key = maybeNewKey;
 
       const res = await axios.patch(`/api/sections/${encodeURIComponent(original.id)}`, body, { headers });
       const updated = normalizeSection(res.data) || {
-        ...original, ...body, key: body.key || original.key
+        ...original,
+        ...body,
+        key: body.key || original.key,
       };
       setSections(prev => prev.map(s => (s.key === original.key ? updated : s)));
       note('Saved');
       cancelEdit();
-      return;
     } catch (errModern) {
-      // fall through to legacy rename if server doesn't support the PUT route
-      if (errModern?.response?.status !== 404) {
-        console.warn('Update failed', errModern?.response?.data || errModern.message);
-        alert(errModern?.response?.data?.error || 'Could not save section');
-        setSaving(false);
-        return;
-      }
-    }
-
-
-      // best-effort client update
-      const updated = {
-        ...original,
-        label: nextLabel,
-        key: maybeNewKey,
-        icon: editIcon,
-        pinned: editPinned,
-        order: editOrder,
-      };
-      setSections(prev => prev.map(s => (s.key === original.key ? updated : s)));
-      note('Saved (legacy)');
-      cancelEdit();
-    } catch (errLegacy) {
-      console.warn('Legacy rename failed', errLegacy?.response?.data || errLegacy.message);
-      alert(errLegacy?.response?.data?.error || 'Could not save section');
+      console.warn('Update failed', errModern?.response?.data || errModern.message);
+      alert(errModern?.response?.data?.error || 'Could not save section');
     } finally {
       setSaving(false);
     }
@@ -177,7 +153,7 @@ export default function ManageSections() {
     const warn = `Delete “${s.label}”? This may remove or orphan associated entries/pages.`;
     if (!window.confirm(warn)) return;
     try {
-      await axios.delete(`/api/sections/${encodeURIComponent(s.key)}`, { headers });
+      await axios.delete(`/api/sections/${encodeURIComponent(s.id || s._id || s.key)}`, { headers });
       setSections(prev => prev.filter(x => x.key !== s.key));
       note('Deleted');
     } catch (e) {

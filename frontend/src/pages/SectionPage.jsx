@@ -1,11 +1,11 @@
 // frontend/src/pages/SectionPage.jsx
 import { useParams } from 'react-router-dom';
 import { useState, useEffect, useContext, useMemo } from 'react';
-import axios from '../api/axiosInstance';
+import axios from '../api/axiosInstance.js';
 import { AuthContext } from '../AuthContext.jsx';
 import TaskList from '../adapters/TaskList.default.jsx';
 import '../Main.css';
-import SafeHTML from '../components/SafeHTML.jsx'; // (top of file)
+import SafeHTML from '../components/SafeHTML.jsx';
 
 export default function SectionPage() {
   const params = useParams();
@@ -38,8 +38,19 @@ export default function SectionPage() {
         if (!cancelled) setEntries(Array.isArray(entryRes.data) ? entryRes.data : []);
 
         // Custom pages for this section
-        const pagesRes = await axios.get(`/api/section-pages/${encodeURIComponent(sectionKey)}`);
-        if (!cancelled) setPages(Array.isArray(pagesRes.data) ? pagesRes.data : []);
+        const pagesRes = await axios.get(`/api/section-pages/by-section/${encodeURIComponent(sectionKey)}`);
+        const rawPages = Array.isArray(pagesRes.data?.items)
+          ? pagesRes.data.items
+          : Array.isArray(pagesRes.data)
+            ? pagesRes.data
+            : [];
+        const normalizedPages = rawPages.map((p) => ({
+          _id: p._id || p.id,
+          slug: p.slug || '',
+          title: p.title || p.name || 'Untitled page',
+          icon: p.icon || p.emoji || '📄',
+        })).filter((p) => p._id && p.slug);
+        if (!cancelled) setPages(normalizedPages);
       } catch (e) {
         console.warn('SectionPage fetch error:', e?.response?.data || e.message);
         if (!cancelled) {
@@ -119,27 +130,25 @@ export default function SectionPage() {
             entries.length === 0 ? (
               <p className="muted">No entries yet for this section.</p>
             ) : (
-              entries.map(e => (
-                <article className="entry-card" key={e._id}>
+              entries.map((entry) => (
+                <article className="entry-card" key={entry._id}>
                   <div className="entry-meta">
-                    <span className="date">{e.date}</span>
-                    {e.mood && <span className="pill">{e.mood}</span>}
-                    {Array.isArray(e.tags) && e.tags.slice(0,5).map((t,i) => (
+                    <span className="date">{entry.date}</span>
+                    {entry.mood && <span className="pill">{entry.mood}</span>}
+                    {Array.isArray(entry.tags) && entry.tags.slice(0,5).map((t,i) => (
                       <span key={i} className="pill pill-muted">#{t}</span>
                     ))}
                   </div>
-                  
-
-<SafeHTML
-  className="entry-text"
-  html={
-    (entry?.html && entry.html.length)
-      ? entry.html
-      : (typeof entry?.content === 'string' && /<[^>]+>/.test(entry.content))
-        ? entry.content
-        : (entry?.text ?? '').replaceAll('\n', '<br/>')
-  }
-/>
+                  <SafeHTML
+                    className="entry-text"
+                    html={
+                      entry?.html && entry.html.length
+                        ? entry.html
+                        : (typeof entry?.content === 'string' && /<[^>]+>/.test(entry.content))
+                          ? entry.content
+                          : (entry?.text ?? '').replaceAll('\n', '<br/>')
+                    }
+                  />
                 </article>
               ))
             )
@@ -154,10 +163,10 @@ export default function SectionPage() {
             <p className="muted">No pages yet.</p>
           ) : (
             <ul className="unstyled">
-              {pages.map(p => (
+              {pages.map((p) => (
                 <li key={p._id}>
                   <a className="link" href={`/sections/${encodeURIComponent(sectionKey)}/${encodeURIComponent(p.slug)}`}>
-                    {p.icon || '📄'} {p.title}
+                    {p.icon} {p.title}
                   </a>
                 </li>
               ))}
@@ -169,11 +178,7 @@ export default function SectionPage() {
       {/* Sidebar: tasks in this section */}
       {token && (
         <aside className="sidebar">
-          <div className="card">
-            <h3 style={{ marginTop: 0 }}>Tasks in “{title}”</h3>
-            {/* TaskList now supports `section` filtering */}
-            <TaskList view="today" section={sectionKey} />
-          </div>
+          <TaskList view="today" section={sectionKey} header={`Tasks in “${title}”`} />
         </aside>
       )}
     </div>
