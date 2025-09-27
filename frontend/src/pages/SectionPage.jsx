@@ -1,184 +1,315 @@
 // frontend/src/pages/SectionPage.jsx
-import { useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useState, useEffect, useContext, useMemo } from 'react';
 import axios from '../api/axiosInstance.js';
 import { AuthContext } from '../AuthContext.jsx';
 import TaskList from '../adapters/TaskList.default.jsx';
 import '../Main.css';
 import SafeHTML from '../components/SafeHTML.jsx';
+import './SectionPage.css';
+
+const VIEW_TABS = [
+  { key: 'entries', label: 'Entries' },
+  { key: 'pages', label: 'Pages' },
+];
+
+function sortEntries(entries = []) {
+  const list = Array.isArray(entries) ? [...entries] : [];
+  return list.sort((a, b) => {
+    const aKey = a?.createdAt || a?.updatedAt || `${a?.date ?? ''}T00:00:00`;
+    const bKey = b?.createdAt || b?.updatedAt || `${b?.date ?? ''}T00:00:00`;
+    return aKey > bKey ? -1 : aKey < bKey ? 1 : 0;
+  });
+}
+
+function renderEntryHtml(entry) {
+  if (entry?.html && entry.html.trim()) return entry.html;
+  if (typeof entry?.content === 'string' && /<[^>]+>/.test(entry.content)) return entry.content;
+  return (entry?.text ?? '').replace(/\n/g, '<br/>');
+}
 
 export default function SectionPage() {
+  const navigate = useNavigate();
   const params = useParams();
-  // Accept either /sections/:key (new) or /sections/:sectionName (old)
-  const sectionKey = (params.key || params.sectionName || '').toLowerCase();
+  const routeKey = (params.key || params.sectionName || '').toLowerCase();
 
   const { token } = useContext(AuthContext);
+
   const [entries, setEntries] = useState([]);
   const [pages, setPages] = useState([]);
   const [allSections, setAllSections] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  // entries-first filter toggles (default: entries on)
-  const [showEntries, setShowEntries] = useState(true);
+  const [loadingSections, setLoadingSections] = useState(true);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [error, setError] = useState('');
+  const [activePane, setActivePane] = useState('entries');
+  const [activeKey, setActiveKey] = useState(routeKey);
 
   useEffect(() => {
-    let cancelled = false;
+    setActiveKey(routeKey);
+  }, [routeKey]);
 
-    async function run() {
-      setLoading(true);
+  useEffect(() => {
+    if (!token) {
+      setLoadingSections(false);
+      setEntries([]);
+      setPages([]);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    let ignore = false;
+
+    async function loadSections() {
+      setLoadingSections(true);
       try {
-        // Always fetch the list so landing can render something when no key
-        const sec = await axios.get('/api/sections');
-        if (!cancelled) setAllSections(Array.isArray(sec.data) ? sec.data : []);
+        const res = await axios.get('/api/sections');
+        if (ignore) return;
+        setAllSections(Array.isArray(res.data) ? res.data : []);
+      } catch (e) {
+        if (!ignore) {
+          console.warn('Section list failed:', e?.response?.data || e.message);
+          setAllSections([]);
+        }
+      } finally {
+        if (!ignore) setLoadingSections(false);
+      }
+    }
 
-        if (!sectionKey) return; // landing mode only
+    loadSections();
+    return () => {
+      ignore = true;
+    };
+  }, [token]);
 
-        // Entries for this section
-        const entryRes = await axios.get(`/api/entries?section=${encodeURIComponent(sectionKey)}&limit=100`);
-        if (!cancelled) setEntries(Array.isArray(entryRes.data) ? entryRes.data : []);
+  useEffect(() => {
+    if (!token || !activeKey) {
+      setEntries([]);
+      setPages([]);
+      return;
+    }
 
-        // Custom pages for this section
-        const pagesRes = await axios.get(`/api/section-pages/by-section/${encodeURIComponent(sectionKey)}`);
+    let ignore = false;
+    async function loadDetail() {
+      setLoadingDetail(true);
+      setError('');
+      try {
+        const entryRes = await axios.get(`/api/entries?section=${encodeURIComponent(activeKey)}&limit=100`);
+        if (!ignore) setEntries(Array.isArray(entryRes.data) ? entryRes.data : []);
+
+        const pagesRes = await axios.get(`/api/section-pages/by-section/${encodeURIComponent(activeKey)}`);
         const rawPages = Array.isArray(pagesRes.data?.items)
           ? pagesRes.data.items
           : Array.isArray(pagesRes.data)
             ? pagesRes.data
             : [];
-        const normalizedPages = rawPages.map((p) => ({
-          _id: p._id || p.id,
-          slug: p.slug || '',
-          title: p.title || p.name || 'Untitled page',
-          icon: p.icon || p.emoji || '📄',
-        })).filter((p) => p._id && p.slug);
-        if (!cancelled) setPages(normalizedPages);
+        const normalizedPages = rawPages
+          .map((p) => ({
+            _id: p._id || p.id,
+            slug: p.slug || '',
+            title: p.title || p.name || 'Untitled page',
+            icon: p.icon || p.emoji || '📄',
+          }))
+          .filter((p) => p._id && p.slug);
+        if (!ignore) setPages(normalizedPages);
       } catch (e) {
-        console.warn('SectionPage fetch error:', e?.response?.data || e.message);
-        if (!cancelled) {
-          if (!sectionKey) setAllSections([]);
+        if (!ignore) {
+          console.warn('Section detail failed:', e?.response?.data || e.message);
           setEntries([]);
           setPages([]);
+          setError('We could not load this section right now.');
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!ignore) setLoadingDetail(false);
       }
     }
 
-    if (token) run();
-    return () => { cancelled = true; };
-  }, [token, sectionKey]);
+    loadDetail();
+    return () => {
+      ignore = true;
+    };
+  }, [token, activeKey]);
 
-  const title = sectionKey ? sectionKey.replace(/-/g, ' ') : 'Sections';
+  useEffect(() => {
+    setActivePane('entries');
+  }, [activeKey]);
 
-  const sortedSections = useMemo(() => {
+  const normalizedSections = useMemo(() => {
     return (allSections || [])
-      .map(s => ({
-        key: s.key || s.slug || '',
-        label: s.label || s.name || s.key || '',
-        emoji: s.icon || s.emoji || '📚',
+      .map((s) => ({
+        key: (s.key || s.slug || '').toLowerCase(),
+        label: s.label || s.name || s.key || 'Untitled section',
+        icon: s.icon || s.emoji || '📚',
+        color: s.color || s.themeColor || 'var(--color-thread, #6b6bff)',
         pinned: !!s.pinned,
         order: Number.isFinite(s.order) ? s.order : 0,
+        summary: s.summary || s.description || '',
+        tagline: s.tagline || s.subtitle || '',
       }))
-      .filter(s => s.key)
-      .sort((a,b) => (a.pinned !== b.pinned) ? (a.pinned ? -1:1) : (a.order - b.order) || a.label.localeCompare(b.label));
+      .filter((s) => s.key)
+      .sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        if (a.order !== b.order) return a.order - b.order;
+        return a.label.localeCompare(b.label);
+      });
   }, [allSections]);
 
-  if (!sectionKey) {
-    // Landing view
-    return (
-      <div className="page">
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <h2 style={{ margin: 0 }}>{title}</h2>
-          </div>
-          {loading ? (
-            <div>Loading…</div>
-          ) : sortedSections.length === 0 ? (
-            <p className="muted">No sections yet. Create one in the Clusters view or via API.</p>
-          ) : (
-            <ul className="unstyled" style={{ columns: 2, columnGap: 16, maxWidth: 720 }}>
-              {sortedSections.map(s => (
-                <li key={s.key} style={{ breakInside: 'avoid', marginBottom: 8 }}>
-                  <a href={`/sections/${encodeURIComponent(s.key)}`} className="link">
-                    <span style={{ marginRight: 6 }}>{s.emoji}</span>{s.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-    );
+  const activeSection = useMemo(
+    () => normalizedSections.find((s) => s.key === activeKey) || null,
+    [normalizedSections, activeKey],
+  );
+
+  const sortedEntries = useMemo(() => sortEntries(entries), [entries]);
+  const title = activeSection ? activeSection.label : 'Sections';
+
+  function handleSelect(section) {
+    if (!section?.key) return;
+    setActiveKey(section.key);
+    navigate(`/sections/${encodeURIComponent(section.key)}`);
   }
 
-  // Detail view
+  const loading = loadingSections || (activeKey ? loadingDetail : false);
+
   return (
-    <div className="page two-col with-sidebar">
-      <main className="content">
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <h2 style={{ margin: 0, textTransform: 'capitalize' }}>{title}</h2>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className={`pill ${showEntries ? '' : 'pill-muted'}`} onClick={() => setShowEntries(v => !v)}>
-                Entries
-              </button>
-              <a className="pill" href={`/sections/${encodeURIComponent(sectionKey)}#pages`}>Pages</a>
-            </div>
-          </div>
-          {loading ? (
-            <div>Loading…</div>
-          ) : showEntries ? (
-            entries.length === 0 ? (
-              <p className="muted">No entries yet for this section.</p>
-            ) : (
-              entries.map((entry) => (
-                <article className="entry-card" key={entry._id}>
-                  <div className="entry-meta">
-                    <span className="date">{entry.date}</span>
-                    {entry.mood && <span className="pill">{entry.mood}</span>}
-                    {Array.isArray(entry.tags) && entry.tags.slice(0,5).map((t,i) => (
-                      <span key={i} className="pill pill-muted">#{t}</span>
-                    ))}
-                  </div>
-                  <SafeHTML
-                    className="entry-text"
-                    html={
-                      entry?.html && entry.html.length
-                        ? entry.html
-                        : (typeof entry?.content === 'string' && /<[^>]+>/.test(entry.content))
-                          ? entry.content
-                          : (entry?.text ?? '').replaceAll('\n', '<br/>')
-                    }
-                  />
-                </article>
-              ))
-            )
-          ) : null}
+    <div className="sections-page">
+      <aside className="sections-sidebar">
+        <div className="sidebar-head">
+          <h2>Sections</h2>
+          <span className="sidebar-count">{loadingSections ? '…' : `${normalizedSections.length}`}</span>
         </div>
 
-        <div className="card" id="pages">
-          <h3 style={{ marginTop: 0 }}>Pages</h3>
-          {loading ? (
-            <div>Loading…</div>
-          ) : pages.length === 0 ? (
-            <p className="muted">No pages yet.</p>
-          ) : (
-            <ul className="unstyled">
-              {pages.map((p) => (
-                <li key={p._id}>
-                  <a className="link" href={`/sections/${encodeURIComponent(sectionKey)}/${encodeURIComponent(p.slug)}`}>
-                    {p.icon} {p.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        {loadingSections && <div className="muted">Loading…</div>}
+
+        {!loadingSections && normalizedSections.length === 0 && (
+          <div className="empty">No sections yet. Clusters can auto-create them for you.</div>
+        )}
+
+        <ul className="section-list">
+          {normalizedSections.map((section) => {
+            const active = section.key === activeKey;
+            return (
+              <li key={section.key} className={`section-item ${active ? 'active' : ''}`}>
+                <button type="button" className="section-link" onClick={() => handleSelect(section)}>
+                  <span className="color-dot" style={{ background: section.color }} />
+                  <span className="icon">{section.icon}</span>
+                  <span className="label">{section.label}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </aside>
+
+      <main className="sections-main">
+        {!activeKey && (
+          <div className="sections-landing">
+            <div className="sections-hero">
+              <h1>Sections keep your story organised</h1>
+              <p>
+                Every cluster can have one or more sections. Pick one from the left to see its journal entries, pages and
+                tasks.
+              </p>
+            </div>
+
+            {normalizedSections.length > 0 && (
+              <div className="sections-grid">
+                {normalizedSections.slice(0, 6).map((section) => (
+                  <button
+                    key={section.key}
+                    type="button"
+                    className="section-card"
+                    onClick={() => handleSelect(section)}
+                  >
+                    <span className="emoji" aria-hidden="true">{section.icon}</span>
+                    <div className="card-body">
+                      <h3>{section.label}</h3>
+                      <p>{section.tagline || section.summary || 'Track entries, notes and rituals for this area.'}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeKey && (
+          <div className="sections-detail">
+            <header className="sections-header">
+              <div className="title">
+                <h1>{activeSection ? `${activeSection.icon} ${activeSection.label}` : title}</h1>
+                {activeSection?.tagline && <div className="subtitle">{activeSection.tagline}</div>}
+              </div>
+              <div className="tab-group" role="tablist">
+                {VIEW_TABS.map(({ key, label }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    className={`tab ${activePane === key ? 'active' : ''}`}
+                    onClick={() => setActivePane(key)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </header>
+
+            {activeSection?.summary && <p className="section-summary">{activeSection.summary}</p>}
+
+            {error && <div className="callout error">{error}</div>}
+
+            {loading && !error && <div className="loading">Loading…</div>}
+
+            {!loading && !error && activePane === 'entries' && (
+              <div className="entries-stack">
+                {sortedEntries.length === 0 ? (
+                  <div className="empty">No entries yet. Capture your first reflection for this section.</div>
+                ) : (
+                  sortedEntries.map((entry) => (
+                    <article key={entry._id} className="entry-card">
+                      <div className="entry-meta">
+                        <span className="date">{entry.date}</span>
+                        {entry.mood && <span className="pill">{entry.mood}</span>}
+                        {Array.isArray(entry.tags) &&
+                          entry.tags.slice(0, 5).map((tag, idx) => (
+                            <span key={idx} className="pill pill-muted">#{tag}</span>
+                          ))}
+                      </div>
+                      <SafeHTML className="entry-text" html={renderEntryHtml(entry)} />
+                    </article>
+                  ))
+                )}
+              </div>
+            )}
+
+            {!loading && !error && activePane === 'pages' && (
+              <div className="pages-grid" id="pages">
+                {pages.length === 0 ? (
+                  <div className="empty">No pages yet for this section.</div>
+                ) : (
+                  pages.map((page) => (
+                    <Link
+                      key={page._id}
+                      to={`/sections/${encodeURIComponent(activeKey)}/${encodeURIComponent(page.slug)}`}
+                      className="page-chip"
+                    >
+                      <span className="emoji" aria-hidden="true">{page.icon}</span>
+                      <div>
+                        <h3>{page.title}</h3>
+                        <span>Open room →</span>
+                      </div>
+                    </Link>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
-      {/* Sidebar: tasks in this section */}
       {token && (
-        <aside className="sidebar">
-          <TaskList view="today" section={sectionKey} header={`Tasks in “${title}”`} />
+        <aside className="sections-rail">
+          <TaskList view="today" section={activeKey || undefined} header={activeKey ? `Today in “${title}”` : 'Today'} />
         </aside>
       )}
     </div>
