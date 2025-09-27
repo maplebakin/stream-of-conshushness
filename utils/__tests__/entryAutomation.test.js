@@ -7,9 +7,11 @@ const { buildSuggestedTasks, normalizeOptionalString } = __testables;
 
 const BASE_DATE = '2024-06-10';
 
+// Unified cases from both branches
 const normalizeCases = [
   ['alpha', 'alpha'],
   ['  padded  ', 'padded'],
+  ['', ''],
   ['   ', ''],
   [42, ''],
   [null, ''],

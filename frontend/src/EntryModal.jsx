@@ -147,7 +147,9 @@ export default function EntryModal({
             </div>
 
             <div className="sc-modal-footer">
-              <button type="submit" className="button bg-lantern text-ink">Save</button>
+              <button type="submit" className="button bg-lantern text-ink" disabled={saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
               <button type="button" className="button" onClick={onClose}>Cancel</button>
             </div>
           </form>

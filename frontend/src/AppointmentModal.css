@@ -1,0 +1,94 @@
+/* Appointment modal — minimal, matches your EntryModal vibe */
+
+:root {
+  --border: var(--color-border, #e5e7eb);
+  --ink: var(--color-text, #111827);
+  --bg: var(--color-background, #ffffff);
+  --muted: var(--color-muted, #6b7280);
+  --accent: var(--color-accent, #e9d5ff);
+}
+
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.35);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+}
+
+.modal {
+  position: fixed; inset: 0;
+  display: grid; place-items: center;
+  z-index: 1001;
+}
+
+.modal .modal-header,
+.modal .modal-footer {
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+.modal .modal-header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: .5rem; margin-bottom: .75rem;
+}
+
+.modal .modal-footer {
+  border-top: 1px solid var(--border);
+  padding-top: .75rem; margin-top: 1rem; gap: .5rem;
+  justify-content: flex-end;
+}
+
+.modal .modal-body label { display: block; margin-bottom: .5rem; }
+
+.modal .modal-body input[type="text"],
+.modal .modal-body input[type="time"],
+.modal .modal-body input[type="date"],
+.modal .modal-body select,
+.modal .modal-body textarea,
+.modal .modal-body input:not([type]),
+.modal .modal-body .input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: .5rem;
+  padding: .5rem .6rem;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.modal .modal-body textarea { min-height: 90px; resize: vertical; }
+
+.modal .modal-body .repeat-block .repeat-grid select,
+.modal .modal-body .repeat-block .repeat-grid input[type="number"] {
+  width: 100%;
+}
+
+.modal .modal-body .repeat-block button {
+  font: inherit;
+}
+
+.modal .modal-card {
+  width: min(720px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  background: var(--bg);
+  color: var(--ink);
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  padding: 1rem;
+  box-shadow: 0 10px 28px rgba(0,0,0,.12);
+}
+
+.modal h3 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.modal button {
+  border: 1px solid var(--border);
+  border-radius: .5rem;
+  background: #fff;
+  padding: .4rem .7rem;
+  cursor: pointer;
+}
+
+.modal button:hover { background: #fafafa; }
+.modal .modal-close { font-size: 1.2rem; line-height: 1; }
