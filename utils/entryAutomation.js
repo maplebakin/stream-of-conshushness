@@ -335,8 +335,12 @@ function normalizeEntryForCreate(payload = {}) {
     normalized.html = typeof payload.html === "string" ? payload.html : "";
     normalized.content = typeof payload.content === "string" ? payload.content : normalized.html;
   } else {
-    if (!("html" in normalized)) normalized.html = typeof payload.html === "string" ? payload.html : "";
-    if (!("content" in normalized)) normalized.content = typeof payload.content === "string" ? payload.content : normalized.html;
+    if (!("html" in normalized)) {
+      normalized.html = typeof payload.html === "string" ? payload.html : "";
+    }
+    if (!("content" in normalized)) {
+      normalized.content = typeof payload.content === "string" ? payload.content : normalized.html;
+    }
   }
   if (!("mood" in normalized)) normalized.mood = typeof payload.mood === "string" ? payload.mood : "";
   if (!("cluster" in normalized)) normalized.cluster = typeof payload.cluster === "string" ? payload.cluster : "";
@@ -363,12 +367,10 @@ function normalizeEntryForUpdate(payload = {}, existing = {}) {
       content: Object.prototype.hasOwnProperty.call(payload, "content") ? payload.content : existing.content,
     });
     normalized.text = nextText;
-    normalized.html = typeof (Object.prototype.hasOwnProperty.call(payload, "html") ? payload.html : existing.html) === "string"
-      ? (Object.prototype.hasOwnProperty.call(payload, "html") ? payload.html : existing.html)
-      : "";
-    normalized.content = typeof (Object.prototype.hasOwnProperty.call(payload, "content") ? payload.content : existing.content) === "string"
-      ? (Object.prototype.hasOwnProperty.call(payload, "content") ? payload.content : existing.content)
-      : normalized.html;
+    const nextHtml = Object.prototype.hasOwnProperty.call(payload, "html") ? payload.html : existing.html;
+    const nextContent = Object.prototype.hasOwnProperty.call(payload, "content") ? payload.content : existing.content;
+    normalized.html = typeof nextHtml === "string" ? nextHtml : "";
+    normalized.content = typeof nextContent === "string" ? nextContent : normalized.html;
   }
   if (Object.prototype.hasOwnProperty.call(payload, "mood")) {
     normalized.mood = typeof payload.mood === "string" ? payload.mood : "";
