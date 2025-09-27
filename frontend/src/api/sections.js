@@ -1,31 +1,42 @@
 import api from './axiosInstance.js';
 
-
-export async function listSections(params) {
-const { data } = await api.get('/api/sections', { params });
-return data;
+function normalize(response) {
+  if (!response) return null;
+  const data = Array.isArray(response.data) || typeof response.data === 'object'
+    ? response.data
+    : response;
+  return data;
 }
 
+export async function listSections(params = {}) {
+  const res = await api.get('/api/sections', { params });
+  return normalize(res);
+}
 
 export async function getSection(key) {
-const { data } = await api.get(`/api/sections/${encodeURIComponent(key)}`);
-return data;
+  const res = await api.get(`/api/sections/${encodeURIComponent(key)}`);
+  return normalize(res);
 }
-
 
 export async function createSection(payload) {
-const { data } = await api.post('/api/sections', payload);
-return data;
+  const res = await api.post('/api/sections', payload);
+  return normalize(res);
 }
-
 
 export async function updateSection(id, payload) {
-const { data } = await api.patch(`/api/sections/${id}`, payload);
-return data;
+  const res = await api.patch(`/api/sections/${encodeURIComponent(id)}`, payload);
+  return normalize(res);
 }
-
 
 export async function deleteSection(id) {
-const { data } = await api.delete(`/api/sections/${id}`);
-return data;
+  await api.delete(`/api/sections/${encodeURIComponent(id)}`);
+  return true;
 }
+
+export default {
+  listSections,
+  getSection,
+  createSection,
+  updateSection,
+  deleteSection,
+};

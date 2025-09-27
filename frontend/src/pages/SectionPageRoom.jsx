@@ -1,13 +1,13 @@
-// frontend/src/pages/SectionPageRoom.jsx
-import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { useParams, Link, Navigate } from 'react-router-dom';
-import axios from '../api/axiosInstance';
+import { useContext, useEffect, useMemo, useState } from 'react';
+import { Link, Navigate, useParams } from 'react-router-dom';
+import axios from '../api/axiosInstance.js';
 import { AuthContext } from '../AuthContext.jsx';
 import TaskList from '../adapters/TaskList.default.jsx';
+import SafeHTML from '../components/SafeHTML.jsx';
 import '../Main.css';
-import SafeHTML from '../components/SafeHTML.jsx'; // (top of file)
 
-/* -------------------------- Tiny helpers -------------------------- */
+const ALLOWED_TABS = ['journal', 'manual', 'progress', 'gift-guide'];
+
 function todayISO() {
   const now = new Date();
   const y = now.getFullYear();
@@ -15,154 +15,165 @@ function todayISO() {
   const d = String(now.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
-function buildEntryTimeline(entries) {
-  const items = (Array.isArray(entries) ? entries : []).map(e => ({
-    type: 'entry',
-    id: e._id,
-    timelineDate: e.createdAt || e.date || '1970-01-01',
-    data: e
-  }));
-  items.sort((a, b) => (a.timelineDate > b.timelineDate ? -1 : a.timelineDate < b.timelineDate ? 1 : 0));
-  return items;
+
+function normalizePageList(raw = []) {
+  const arr = Array.isArray(raw) ? raw : [];
+  return arr
+    .map((p) => ({
+      id: p._id || p.id,
+      title: p.title || p.name || p.slug || 'Untitled page',
+      slug: p.slug || (p.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''),
+      icon: p.icon || p.emoji || '',
+    }))
+    .filter((p) => p.id && p.slug);
 }
 
-/* ------------------------------ Page ------------------------------ */
+function renderEntryHtml(entry) {
+  if (entry?.html && entry.html.trim()) return entry.html;
+  if (typeof entry?.content === 'string' && /<[^>]+>/.test(entry.content)) return entry.content;
+  return (entry?.text ?? '').replace(/\n/g, '<br/>');
+}
+
+function sortEntries(entries = []) {
+  const list = Array.isArray(entries) ? [...entries] : [];
+  list.sort((a, b) => {
+    const aKey = a?.createdAt || a?.updatedAt || `${a?.date ?? ''}T00:00:00`;
+    const bKey = b?.createdAt || b?.updatedAt || `${b?.date ?? ''}T00:00:00`;
+    return aKey > bKey ? -1 : aKey < bKey ? 1 : 0;
+  });
+  return list;
+}
+
 export default function SectionPageRoom() {
-  const { token } = useContext(AuthContext);
   const { sectionSlug, pageSlug, tab } = useParams();
   const activeTab = (tab || 'journal').toLowerCase();
-  const allowedTabs = ['journal', 'manual', 'progress', 'gift-guide'];
+  const { token, isAuthenticated } = useContext(AuthContext);
 
-  // Left spine (pages list), current page record, and page-scoped entries
+  const [loading, setLoading] = useState(true);
   const [pages, setPages] = useState([]);
   const [page, setPage] = useState(null);
   const [entries, setEntries] = useState([]);
-
-  const [loading, setLoading] = useState(true);
-  const [composing, setComposing] = useState(false);
+  const [error, setError] = useState('');
   const [newText, setNewText] = useState('');
+  const [composing, setComposing] = useState(false);
 
   useEffect(() => {
-    if (!token || !sectionSlug || !pageSlug) return;
+    if (!token || !sectionSlug) return;
+    let ignore = false;
 
-    const run = async () => {
+    async function load() {
       setLoading(true);
+      setError('');
       try {
-        // 1) Left spine: pages under this section
-        let list = [];
-        try {
-          const res = await axios.get(`/api/section-pages?section=${encodeURIComponent(sectionSlug)}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          list = Array.isArray(res.data) ? res.data : [];
-        } catch {
-          const res = await axios.get(`/api/section-pages/${encodeURIComponent(sectionSlug)}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          list = Array.isArray(res.data) ? res.data : [];
-        }
+        const res = await axios.get(`/api/section-pages/by-section/${encodeURIComponent(sectionSlug)}`);
+        const list = normalizePageList(res.data?.items || res.data);
+        if (ignore) return;
+        setPages(list);
 
-        const normalized = list.map(p => ({
-          id: p._id,
-          title: p.title || p.name || p.slug || 'Untitled',
-          slug: p.slug || (p.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
-          emoji: p.emoji || p.icon || ''
-        }));
-        setPages(normalized);
+        const found = list.find((p) => p.slug === pageSlug) || null;
+        setPage(found);
 
-        // 2) Resolve current page by slug from the list (no separate fetch needed)
-        const found = normalized.find(p => p.slug === pageSlug);
-        setPage(found || null);
-
-        // 3) Entries scoped to this page (only if page found)
-        if (found) {
-          const resE = await axios.get(`/api/entries?sectionPageId=${encodeURIComponent(found.id)}&limit=100`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          setEntries(Array.isArray(resE.data) ? resE.data : []);
-        } else {
+        if (!found) {
           setEntries([]);
+          return;
         }
-      } catch (e) {
-        console.warn('SectionPageRoom load failed:', e?.response?.data || e.message);
-      } finally {
-        setLoading(false);
-      }
-    };
 
-    run();
+        const entryRes = await axios.get(`/api/entries?sectionPageId=${encodeURIComponent(found.id)}&limit=100`);
+        if (ignore) return;
+        const entryList = Array.isArray(entryRes.data) ? entryRes.data : [];
+        setEntries(entryList);
+      } catch (err) {
+        if (ignore) return;
+        console.warn('SectionPageRoom load failed:', err?.response?.data || err.message);
+        setPages([]);
+        setEntries([]);
+        setError(err?.response?.data?.error || 'Failed to load section page');
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      ignore = true;
+    };
   }, [token, sectionSlug, pageSlug]);
 
-  // Redirect if someone hits a bad tab
-  if (!allowedTabs.includes(activeTab)) {
-    return <Navigate to={`/sections/${sectionSlug}/${pageSlug}/journal`} replace />;
-  }
-
-  // Build timeline (entries-first only for now)
-  const timeline = useMemo(() => buildEntryTimeline(entries), [entries]);
-
-  // Quick add entry (auto-binds sectionPageId!)
   async function handleAddEntry(e) {
     e.preventDefault();
     if (!page || !newText.trim()) return;
     try {
       setComposing(true);
-      const resp = await axios.post(
-        '/api/entries',
-        { text: newText, sectionPageId: page.id },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const payload = {
+        text: newText,
+        section: sectionSlug,
+        sectionPageId: page.id,
+        date: todayISO(),
+      };
+      const resp = await axios.post('/api/entries', payload);
+      setEntries((prev) => [resp.data, ...prev]);
       setNewText('');
-      // optimistic prepend
-      setEntries(prev => [resp.data, ...prev]);
     } catch (err) {
       console.warn('Add entry failed:', err?.response?.data || err.message);
+      setError(err?.response?.data?.error || 'Could not create entry');
     } finally {
       setComposing(false);
     }
   }
 
-  // Motifs from last 30 entries (simple client aggregate)
+  const sortedEntries = useMemo(() => sortEntries(entries), [entries]);
   const motifs = useMemo(() => {
-    const recent = entries.slice(0, 30);
+    const recent = sortedEntries.slice(0, 30);
     const tagCounts = {};
     const moodCounts = {};
-    for (const e of recent) {
-      if (Array.isArray(e.tags)) e.tags.forEach(t => (tagCounts[t] = (tagCounts[t] || 0) + 1));
-      if (e.mood) moodCounts[e.mood] = (moodCounts[e.mood] || 0) + 1;
+    for (const entry of recent) {
+      if (Array.isArray(entry.tags)) {
+        for (const tag of entry.tags) {
+          if (!tag) continue;
+          tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+        }
+      }
+      if (entry.mood) {
+        moodCounts[entry.mood] = (moodCounts[entry.mood] || 0) + 1;
+      }
     }
-    const topTags = Object.entries(tagCounts).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([tag,count])=>({tag,count}));
-    const topMoods = Object.entries(moodCounts).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([mood,count])=>({mood,count}));
-    return { tags: topTags, moods: topMoods };
-  }, [entries]);
+    return {
+      tags: Object.entries(tagCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .map(([tag, count]) => ({ tag, count })),
+      moods: Object.entries(moodCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([mood, count]) => ({ mood, count })),
+    };
+  }, [sortedEntries]);
 
-  const gridStyle = {
-    display: 'grid',
-    gridTemplateColumns: '260px 1fr 320px',
-    gap: '1rem',
-    alignItems: 'start'
-  };
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
 
-  const pageTitle = page ? page.title : pageSlug.replace(/-/g, ' ');
+  if (!ALLOWED_TABS.includes(activeTab)) {
+    return <Navigate to={`/sections/${sectionSlug}/${pageSlug || ''}/journal`} replace />;
+  }
 
   return (
-    <div className="page" style={gridStyle}>
-      {/* Left spine: pages under section */}
+    <div className="page" style={{ display: 'grid', gridTemplateColumns: '260px 1fr 320px', gap: '1rem', alignItems: 'start' }}>
       <aside className="card" style={{ position: 'sticky', top: 16, height: 'fit-content' }}>
         <h3 style={{ marginTop: 0, textTransform: 'capitalize' }}>{sectionSlug}</h3>
-        {pages.length === 0 ? (
-          <div className="muted">No pages yet.</div>
-        ) : (
+        {pages.length === 0 && !loading && <div className="muted">No pages yet.</div>}
+        {pages.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {pages.map(p => {
+            {pages.map((p) => {
               const active = p.slug === pageSlug;
               return (
                 <Link
                   key={p.id}
-                  to={`/sections/${sectionSlug}/${p.slug}/journal`}
+                  to={`/sections/${sectionSlug}/${p.slug}/${activeTab}`}
                   className={`px-3 py-2 rounded-button ${active ? 'bg-plum text-mist' : 'text-ink hover:bg-thread hover:text-mist'}`}
+                  style={{ borderRadius: 10, textDecoration: 'none' }}
                 >
-                  {p.emoji ? `${p.emoji} ` : ''}{p.title}
+                  {p.icon ? `${p.icon} ` : ''}{p.title}
                 </Link>
               );
             })}
@@ -170,40 +181,45 @@ export default function SectionPageRoom() {
         )}
       </aside>
 
-      {/* Center: header + tabs + (journal) feed */}
       <main>
         <div className="card" style={{ marginBottom: '1rem' }}>
           <div className="section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <h2 style={{ margin: 0 }}>{pageTitle}</h2>
-
-            {/* Tabs */}
+            <h2 style={{ margin: 0 }}>{page ? page.title : (pageSlug || '').replace(/-/g, ' ')}</h2>
             <div style={{ display: 'flex', gap: 8 }}>
-              {['journal','manual','progress','gift-guide'].map(t => (
+              {ALLOWED_TABS.map((tabName) => (
                 <Link
-                  key={t}
-                  to={`/sections/${sectionSlug}/${pageSlug}/${t}`}
-                  className={`pill ${t === activeTab ? '' : 'pill-muted'}`}
+                  key={tabName}
+                  to={`/sections/${sectionSlug}/${pageSlug || ''}/${tabName}`}
+                  className={`pill ${tabName === activeTab ? '' : 'pill-muted'}`}
                 >
-                  {t.replace('-', ' ')}
+                  {tabName.replace('-', ' ')}
                 </Link>
               ))}
             </div>
           </div>
 
-          {/* Journal tab: quick add + feed */}
+          {error && <div className="pill" style={{ background: 'rgba(255,145,145,.12)', borderColor: 'rgba(255,145,145,.35)' }}>{error}</div>}
+
+          {!loading && !error && !page && pages.length > 0 && (
+            <div className="muted" style={{ marginTop: 8 }}>
+              Select a page from the sidebar to see its journal.
+            </div>
+          )}
+
           {activeTab === 'journal' && (
             <>
               <form onSubmit={handleAddEntry} style={{ marginTop: 12 }}>
                 <textarea
                   className="input"
-                  placeholder={`New journal entry in ${pageTitle}…`}
+                  placeholder={`New journal entry in ${page ? page.title : 'this page'}…`}
                   value={newText}
-                  onChange={e => setNewText(e.target.value)}
+                  onChange={(e) => setNewText(e.target.value)}
                   rows={3}
                   style={{ width: '100%' }}
+                  disabled={!page}
                 />
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-                  <button type="submit" className="button" disabled={composing || !newText.trim()}>
+                  <button type="submit" className="button" disabled={composing || !newText.trim() || !page}>
                     {composing ? 'Saving…' : 'Add Entry'}
                   </button>
                 </div>
@@ -212,30 +228,20 @@ export default function SectionPageRoom() {
               <div style={{ marginTop: 12 }}>
                 {loading ? (
                   <div>Loading…</div>
-                ) : entries.length === 0 ? (
+                ) : sortedEntries.length === 0 ? (
                   <div className="muted">No entries yet. Write your first one above.</div>
                 ) : (
-                  buildEntryTimeline(entries).map(item => (
-                    <article className="entry-card" key={item.id} style={{ paddingTop: 8 }}>
+                  sortedEntries.map((entry) => (
+                    <article className="entry-card" key={entry._id} style={{ paddingTop: 8 }}>
                       <div className="entry-meta">
-                        <span className="date">{item.data.date}</span>
-                        {item.data.mood && <span className="pill">{item.data.mood}</span>}
-                        {Array.isArray(item.data.tags) &&
-                          item.data.tags.slice(0,5).map((t,i) => (
-                            <span key={i} className="pill pill-muted">#{t}</span>
+                        <span className="date">{entry.date}</span>
+                        {entry.mood && <span className="pill">{entry.mood}</span>}
+                        {Array.isArray(entry.tags) &&
+                          entry.tags.slice(0, 5).map((tag, idx) => (
+                            <span key={idx} className="pill pill-muted">#{tag}</span>
                           ))}
                       </div>
-                      
-<SafeHTML
-  className="entry-text"
-  html={
-    (entry?.html && entry.html.length)
-      ? entry.html
-      : (typeof entry?.content === 'string' && /<[^>]+>/.test(entry.content))
-        ? entry.content
-        : (entry?.text ?? '').replaceAll('\n', '<br/>')
-  }
-/>
+                      <SafeHTML className="entry-text" html={renderEntryHtml(entry)} />
                     </article>
                   ))
                 )}
@@ -243,29 +249,24 @@ export default function SectionPageRoom() {
             </>
           )}
 
-          {/* Placeholder content for other tabs (MVP) */}
           {activeTab !== 'journal' && (
             <div className="muted" style={{ marginTop: 8 }}>
-              “{activeTab.replace('-', ' ')}” tab is coming online soon. For now, use Journal to capture notes.
+              “{activeTab.replace('-', ' ')}” is coming online soon. Capture your notes in Journal for now.
             </div>
           )}
         </div>
       </main>
 
-      {/* Right: Today’s tasks for this section + motifs */}
       <aside className="card" style={{ position: 'sticky', top: 16, height: 'fit-content' }}>
-        <h3 style={{ marginTop: 0 }}>Today in “{sectionSlug}”</h3>
-        {/* TaskList adapter filters by section via ?section=; quick-add seeds sections: [sectionSlug] */}
-        {token ? (
-          <div style={{ marginBottom: 16 }}>
-            <TaskList view="today" section={sectionSlug} />
-          </div>
-        ) : (
-          <p className="muted">Sign in to see tasks for this section.</p>
-        )}
+        <TaskList
+          view="today"
+          section={sectionSlug}
+          header={`Today in “${sectionSlug.replace(/-/g, ' ')}”`}
+          wrap={false}
+        />
 
-        <h3 style={{ marginTop: 8 }}>Recent motifs</h3>
-        {entries.length === 0 ? (
+        <h3 style={{ marginTop: 16 }}>Recent motifs</h3>
+        {sortedEntries.length === 0 ? (
           <p className="muted">No trends yet.</p>
         ) : (
           <>

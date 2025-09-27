@@ -13,6 +13,7 @@ const suggestedTaskSchema = new mongoose.Schema(
     dueDate   : { type: Date },          // populated by chrono parser if present
     repeat    : { type: String },        // 'weekly', 'monthly', etc.
     cluster   : { type: String },
+    section   : { type: String },
 
     /* review state */
     status    : { type: String, enum: ['pending','accepted','rejected'], default: 'pending' }

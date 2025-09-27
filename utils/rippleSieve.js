@@ -1,15 +1,7 @@
 // utils/rippleSieve.js
 // Rejects vague chatter. Allows only clearly actionable text with a real verb.
 
-const ACTION_VERBS = [
-  'buy','call','email','text','message',
-  'schedule','book','attend',
-  'clean','wash','wipe','vacuum','mop','water','feed',
-  'pay','renew','submit','file','send','print','scan',
-  'write','read','finish','fix','update','check','review',
-  'install','uninstall','replace',
-  'pick up','drop off','prepare','plan','organize','record','practice','backup','back up'
-];
+import ACTION_VERBS from './rippleVerbs.js';
 
 const BORING_SINGLE_WORDS = new Set(['day','today','tomorrow','sometime','later','soon','now','please']);
 

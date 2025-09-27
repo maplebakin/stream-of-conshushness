@@ -1,41 +1,63 @@
-/* DailyRipples.css — Streamthread Signature Style */
+@import "./variables.css";
 
-.ripple-box { margin-top: 1.25rem; }
-
-/* Fallback structure if Tailwind isn't fully loaded */
-.ripple-item {
-  display: flex; flex-direction: column; gap: 0.5rem;
-  padding: 0.75rem; border-radius: 0.5rem;
-  border: 1px solid var(--color-border, rgba(0,0,0,0.06));
-  background-color: var(--color-surface, #fff8f4);
+.daily-ripples {
+  background: color-mix(in srgb, var(--color-surface) 90%, rgba(255,255,255,0.65) 10%);
+  border: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
+  border-radius: var(--radius-card);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-soft);
 }
 
-.ripple-text { font-family: var(--font-glow, serif); font-size: 0.95rem; line-height: 1.4; }
+.daily-ripples h2 {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-thread);
+  color: var(--color-text-strong);
+}
 
-.ripple-actions { display: flex; gap: 0.5rem; }
+.daily-ripples .ripple-card {
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  background: color-mix(in srgb, var(--color-surface) 85%, white 15%);
+  box-shadow: var(--shadow-border);
+}
 
-.ripple-empty { font-style: italic; opacity: 0.6; }
+.daily-ripples .ripple-card + .ripple-card {
+  margin-top: var(--space-3);
+}
 
-/* pill chips */
-.chip {
-  padding: 0.25rem 0.6rem;
+.daily-ripples .chip {
+  border: 1px solid color-mix(in srgb, var(--color-border) 65%, transparent);
   border-radius: 999px;
-  border: 1px solid var(--color-border, #ddd);
-  background: var(--color-lantern, #f6f6f8);
-  font-size: 0.8rem; line-height: 1rem;
-  transition: transform .06s ease, background .15s ease, color .15s ease;
+  padding: 0.35rem 0.85rem;
+  background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
+  color: var(--color-vein);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
 }
-.chip:hover { transform: translateY(-1px); }
-.chip--active {
-  background: var(--color-accent-dark, #6b5cff);
-  color: var(--color-ghost, #fff);
-  border-color: transparent;
+
+.daily-ripples .chip:hover,
+.daily-ripples .chip:focus-visible {
+  background: color-mix(in srgb, var(--color-surface) 70%, var(--color-spool) 30%);
+  color: var(--color-ink);
 }
-.chip-input {
-  border: 1px dashed var(--color-border, #ddd);
-  background: transparent;
-  border-radius: 999px;
-  padding: 0.25rem 0.6rem;
-  font-size: 0.8rem;
-  min-width: 9rem;
+
+.daily-ripples .chip--active {
+  background: color-mix(in srgb, var(--color-surface) 60%, var(--color-spool) 40%);
+  color: var(--color-ink);
+  border-color: color-mix(in srgb, var(--color-spool) 55%, transparent);
+}
+
+.daily-ripples .ripple-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.daily-ripples .empty {
+  padding: var(--space-4);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-surface) 88%, white 12%);
+  color: var(--color-muted);
+  text-align: center;
 }

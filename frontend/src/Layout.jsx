@@ -14,13 +14,15 @@ export default function Layout() {
   const linkClass = ({ isActive }) =>
     `nav-link${isActive ? ' active' : ''}`;
 
+  const bodyClass = `app-body${hideRightSidebar ? ' no-right-sidebar' : ''}`;
+
   return (
     <div className={`app-layout ${hideRightSidebar ? 'no-right-sidebar' : ''}`}>
       {/* Sticky site header */}
       <Header />
 
       {/* Main body with optional right sidebar */}
-      <div className="app-body">
+      <div className={bodyClass}>
         <main className="app-main">
           <section className="app-content">
             <Outlet />
@@ -28,7 +30,10 @@ export default function Layout() {
         </main>
 
         {!hideRightSidebar && (
-          <aside className="section-sidebar section-sidebar--right">
+          <aside
+            className="section-sidebar section-sidebar--right"
+            aria-label="Secondary navigation"
+          >
             <div className="sidebar-inner">
               <h2 className="sidebar-title">Navigate</h2>
               <ul className="sidebar-nav">

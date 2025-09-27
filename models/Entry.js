@@ -7,6 +7,7 @@ const SuggestedTaskSchema = new Schema({
   dueDate : { type: String, default: "" },  // YYYY-MM-DD
   repeat  : { type: String, default: "" },
   cluster : { type: String, default: "" },
+  section : { type: String, default: "" },
   status  : { type: String, enum: ["new","accepted","dismissed"], default: "new" }
 }, { _id: false });
 

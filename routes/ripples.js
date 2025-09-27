@@ -1,13 +1,11 @@
 // routes/ripples.js
 import express from 'express';
 import Ripple from '../models/Ripple.js';
-import auth from '../middleware/auth.js';
 
 import extractor from '../utils/rippleExtractor.js';
 import { sieveRipples, isActiony } from '../utils/rippleSieve.js';
 
 const router = express.Router();
-router.use(auth);
 
 // ——— helpers ———
 const ok = (res, payload={}) => res.json({ ok:true, ...payload });

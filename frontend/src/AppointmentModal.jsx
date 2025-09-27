@@ -1,109 +1,150 @@
-import React, { useContext, useEffect, useState } from 'react';
-import axios from './api/axiosInstance.js';
+// frontend/src/AppointmentModal.jsx
+import React, { useState, useContext } from 'react';
+import './AppointmentModal.css'; // 👈 keep this
 import { AuthContext } from './AuthContext.jsx';
-import './modal.css';
+import RepeatFields from './components/RepeatFields.jsx';
+// if you have a ClusterPicker already, keep this import; otherwise comment it out
+import ClusterPicker from './components/ClusterPicker.jsx';
 
-export default function AppointmentModal({ defaultDate, date, onClose, onSaved }) {
+function todayISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const da = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${da}`;
+}
+
+export default function AppointmentModal({ onClose, onSaved, defaultCluster = '' }) {
   const { token } = useContext(AuthContext);
 
-  // Accept both prop names for compatibility
-  const dateISO = date || defaultDate || new Date().toISOString().slice(0, 10);
-
-  const [title, setTitle] = useState('');
-  const [timeStart, setTimeStart] = useState('');   // "HH:mm" or ''
-  const [timeEnd, setTimeEnd] = useState('');       // optional
+  // base fields
+  const [title, setTitle] = useState('New Appointment');
+  const [date, setDate] = useState(todayISO());
+  const [timeStart, setTimeStart] = useState('');
+  const [timeEnd, setTimeEnd] = useState('');
   const [location, setLocation] = useState('');
-  const [notes, setNotes] = useState('');
-  const [cluster, setCluster] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [details, setDetails] = useState('');
+  const [cluster, setCluster] = useState(defaultCluster);
 
-  useEffect(() => {
-    setError('');
-  }, [title, timeStart, timeEnd, location, notes, cluster]);
+  // repeat state
+  const [repeatOn, setRepeatOn] = useState(false);
+  const [freq, setFreq] = useState('WEEKLY');
+  const [interval, setInterval] = useState(1);
+  const [byday, setByday] = useState(['MO']);
+  const [startDate, setStartDate] = useState(todayISO());
+  const [until, setUntil] = useState('');
 
-  const stop = (e) => e.stopPropagation();
+  async function createAppointment() {
+    const body = {
+      title,
+      timeStart: timeStart || null,
+      timeEnd: timeEnd || null,
+      location,
+      details,
+      cluster,
+    };
 
-  async function create(e) {
-    e.preventDefault();
-    if (!title.trim()) {
-      setError('Please enter a title.');
-      return;
+    if (repeatOn) {
+      let r = `FREQ=${freq};INTERVAL=${Math.max(1, parseInt(interval, 10) || 1)}`;
+      if (freq === 'WEEKLY' && byday.length) r += `;BYDAY=${byday.join(',')}`;
+      if (until) r += `;UNTIL=${until}`;
+      body.rrule = r;
+      body.startDate = startDate;
+    } else {
+      body.date = date;
     }
-    setBusy(true);
+
+    const res = await fetch('/api/appointments', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e?.error || 'Failed to create appointment');
+    }
+    return res.json();
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault();
     try {
-      const payload = {
-        title: title.trim(),
-        date: dateISO,
-        timeStart: timeStart || null,
-        timeEnd: timeEnd || null,
-        location: location.trim(),
-        notes: notes.trim(),
-        cluster: cluster.trim() || null,
-      };
-
-      await axios.post('/api/appointments', payload, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-
-      onSaved?.();
+      const appt = await createAppointment();
+      onSaved?.(appt);
       onClose?.();
     } catch (err) {
-      console.error('Create appointment failed:', err);
-      setError(err?.response?.data?.error || 'Failed to create appointment.');
-    } finally {
-      setBusy(false);
+      alert(err.message);
     }
   }
 
   return (
-    <div className="modal-backdrop" onClick={busy ? undefined : onClose}>
-      <div className="modal" onClick={stop} role="dialog" aria-modal="true" aria-labelledby="appt-title">
-        <h3 id="appt-title">New Appointment – {dateISO}</h3>
-
-        {error && <div className="error-banner">{error}</div>}
-
-        <form onSubmit={create}>
-          <label>Title *</label>
-          <input
-            type="text"
-            value={title}
-            onChange={e=>setTitle(e.target.value)}
-            placeholder="Dentist, School call…"
-            required
-            autoFocus
-          />
-
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-            <div>
-              <label>Start time</label>
-              <input type="time" value={timeStart} onChange={e=>setTimeStart(e.target.value)} />
-            </div>
-            <div>
-              <label>End time (optional)</label>
-              <input type="time" value={timeEnd} onChange={e=>setTimeEnd(e.target.value)} />
-            </div>
+    <div className="modal-backdrop">
+      <div className="modal">
+        <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="appt-title">
+          <div className="modal-header">
+            <h3 id="appt-title">Appointment</h3>
+            <button className="modal-close" onClick={onClose} aria-label="Close">×</button>
           </div>
 
-          <label>Location</label>
-          <input type="text" value={location} onChange={e=>setLocation(e.target.value)} placeholder="Clinic, phone, online…" />
+          <form className="modal-body" onSubmit={onSubmit}>
+            <label>
+              <div>Title</div>
+              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title" required />
+            </label>
 
-          <label>Notes</label>
-          <input type="text" value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Anything useful…" />
+            {!repeatOn && (
+              <label>
+                <div>Date</div>
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
+              </label>
+            )}
 
-          <label>Cluster (optional)</label>
-          <input type="text" value={cluster} onChange={e=>setCluster(e.target.value)} placeholder="Home, Colton…" />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <label>
+                <div>Start</div>
+                <input type="time" value={timeStart} onChange={e => setTimeStart(e.target.value)} />
+              </label>
+              <label>
+                <div>End</div>
+                <input type="time" value={timeEnd} onChange={e => setTimeEnd(e.target.value)} />
+              </label>
+            </div>
 
-          <div style={{display:'flex', gap:8, marginTop:12}}>
-            <button type="button" className="button" onClick={onClose} disabled={busy}>Cancel</button>
-            <button type="submit" className="button button-primary" disabled={busy}>
-              {busy ? 'Adding…' : 'Add'}
-            </button>
-          </div>
-        </form>
+            <label>
+              <div>Location</div>
+              <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Where?" />
+            </label>
+
+            <label>
+              <div>Details</div>
+              <textarea value={details} onChange={e => setDetails(e.target.value)} rows={3} />
+            </label>
+
+            {/* If you don't have ClusterPicker yet, replace with a plain input */}
+            <label>
+              <div>Cluster</div>
+              <ClusterPicker value={cluster} onChange={setCluster} />
+            </label>
+
+            <RepeatFields
+              enabled={repeatOn} setEnabled={setRepeatOn}
+              freq={freq} setFreq={setFreq}
+              interval={interval} setInterval={setInterval}
+              byday={byday} setByday={setByday}
+              startDate={startDate} setStartDate={setStartDate}
+              until={until} setUntil={setUntil}
+            />
+
+            <div className="modal-footer">
+              <button type="button" onClick={onClose}>Cancel</button>
+              <button type="submit">Save</button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
 }
-
-
