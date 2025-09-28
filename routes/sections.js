@@ -192,15 +192,29 @@ router.get('/activity', async (req, res) => {
     }
 
     const slugs = sections.map((section) => section.slug).filter(Boolean);
-    const sectionIds = sections
-      .map((section) => section._id)
-      .filter((id) => mongoose.Types.ObjectId.isValid(id))
-      .map((id) => new mongoose.Types.ObjectId(id));
 
+    const sectionIds = [];
+    const sectionIdStrings = new Set();
     const slugById = new Map();
+
     for (const section of sections) {
-      if (section?._id && section?.slug) {
-        slugById.set(String(section._id), section.slug);
+      const { _id: rawId, slug } = section || {};
+      if (!slug || !rawId) continue;
+
+      const idString = String(rawId);
+
+      if (!slugById.has(idString)) {
+        slugById.set(idString, slug);
+      }
+
+      if (!sectionIdStrings.has(idString)) {
+        sectionIdStrings.add(idString);
+
+        if (mongoose.Types.ObjectId.isValid(rawId)) {
+          const objectId =
+            rawId instanceof mongoose.Types.ObjectId ? rawId : new mongoose.Types.ObjectId(rawId);
+          sectionIds.push(objectId);
+        }
       }
     }
     if (!slugs.length) {
@@ -223,6 +237,9 @@ router.get('/activity', async (req, res) => {
     const entryOrClauses = [];
     if (slugs.length) entryOrClauses.push({ section: { $in: slugs } });
     if (sectionIds.length) entryOrClauses.push({ sectionId: { $in: sectionIds } });
+    if (sectionIdStrings.size) {
+      entryOrClauses.push({ sectionId: { $in: Array.from(sectionIdStrings) } });
+    }
 
     if (entryOrClauses.length === 1) {
       Object.assign(entryMatch, entryOrClauses[0]);
