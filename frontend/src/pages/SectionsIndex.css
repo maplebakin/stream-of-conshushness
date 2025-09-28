@@ -20,6 +20,71 @@
   margin: 0;
 }
 
+.sections-index__filters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.sections-index__search-input {
+  width: min(100%, 420px);
+  padding: 0.65rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font: inherit;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.sections-index__search-input:focus {
+  outline: none;
+  border-color: rgba(155, 135, 245, 0.6);
+  background: rgba(155, 135, 245, 0.12);
+}
+
+.sections-index__search-input:disabled {
+  opacity: 0.6;
+}
+
+.sections-index__quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sections-index__filter-button {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font: inherit;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.sections-index__filter-button:hover:not(:disabled) {
+  background: rgba(155, 135, 245, 0.15);
+  border-color: rgba(155, 135, 245, 0.35);
+}
+
+.sections-index__filter-button.is-active {
+  background: rgba(155, 135, 245, 0.22);
+  border-color: rgba(155, 135, 245, 0.6);
+  color: #fff;
+}
+
+.sections-index__filter-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.sections-index__activity-hint {
+  font-size: 0.85rem;
+}
+
 .sections-index__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -80,6 +145,23 @@
   color: var(--color-muted, rgba(200, 205, 214, 0.75));
 }
 
+.sections-index__meta-description {
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: var(--color-muted, rgba(200, 205, 214, 0.75));
+  max-height: 3.2em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.sections-index__meta-activity {
+  font-size: 0.85rem;
+  color: var(--color-thread, #9b87f5);
+}
+
 .sections-index__actions {
   display: flex;
   justify-content: flex-end;
@@ -127,5 +209,13 @@
 
   .sections-index__grid {
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+
+  .sections-index__filters {
+    align-items: stretch;
+  }
+
+  .sections-index__search-input {
+    width: 100%;
   }
 }
