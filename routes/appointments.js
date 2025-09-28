@@ -3,6 +3,7 @@ import express from 'express';
 import Appointment from '../models/Appointment.js';
 import auth from '../middleware/auth.js';
 import { expandDatesInRange } from '../utils/recurrence.js';
+import { normalizeClusterIds, resolveClusterIdForOwner } from '../utils/clusterIds.js';
 
 const router = express.Router();
 router.use(auth);
@@ -34,6 +35,15 @@ router.post('/', async (req, res) => {
     if (!userId) return res.status(401).json({ error: 'Access denied' });
 
     const b = req.body || {};
+    let clusterIds = normalizeClusterIds(b.clusters);
+    if (!clusterIds.length && b.clusterId) {
+      const resolved = await resolveClusterIdForOwner(userId, b.clusterId);
+      if (resolved) clusterIds = [resolved];
+    } else if (!clusterIds.length && b.cluster) {
+      const resolved = await resolveClusterIdForOwner(userId, b.cluster);
+      if (resolved) clusterIds = [resolved];
+    }
+
     const base = {
       userId,
       title   : String(b.title || '').trim(),
@@ -47,6 +57,7 @@ router.post('/', async (req, res) => {
       location: b.location || '',
       details : b.details || '',
       cluster : b.cluster || '',
+      clusters: clusterIds,
       tz      : b.tz || 'America/Toronto',
     };
 
@@ -78,6 +89,24 @@ router.get('/', async (req, res) => {
     const userId = req.user?.id || req.user?._id || req.user?.userId;
     if (!userId) return res.status(401).json({ error: 'Access denied' });
 
+    const clusterFilters = [];
+    if (req.query.cluster) {
+      clusterFilters.push({ cluster: String(req.query.cluster) });
+    }
+
+    let resolvedClusterId = null;
+    if (req.query.clusterId) {
+      resolvedClusterId = await resolveClusterIdForOwner(userId, req.query.clusterId);
+      if (!resolvedClusterId) return res.json([]);
+      clusterFilters.push({ clusters: resolvedClusterId });
+    }
+
+    const applyClusterFilters = (base = {}) => {
+      if (!clusterFilters.length) return base;
+      if (clusterFilters.length === 1) return { ...base, ...clusterFilters[0] };
+      return { ...base, $or: clusterFilters };
+    };
+
     const from = isISO(req.query.from) ? req.query.from : null;
     const to   = isISO(req.query.to) ? req.query.to : null;
     if (!from && !to) {
@@ -96,7 +125,7 @@ router.get('/', async (req, res) => {
     const T = req.query.to;
 
     // 1) load one-offs in range
-    const rangeQ = { userId };
+    const rangeQ = applyClusterFilters({ userId });
     if (F && T) rangeQ.date = { $gte: F, $lte: T };
     else if (F) rangeQ.date = { $gte: F };
     else if (T) rangeQ.date = { $lte: T };
@@ -109,7 +138,7 @@ router.get('/', async (req, res) => {
     // 2) expand series if requested
     let virtuals = [];
     if (String(req.query.includeSeries || '1') !== '0') {
-      const seriesQ = { userId, rrule: { $ne: '' } };
+      const seriesQ = applyClusterFilters({ userId, rrule: { $ne: '' } });
       // Narrow by series bounds: startDate ≤ T and (until null or until ≥ F)
       if (T) seriesQ.startDate = { $lte: T };
       if (F) seriesQ.$or = [{ until: null }, { until: { $gte: F } }, { until: '' }];
@@ -133,6 +162,7 @@ router.get('/', async (req, res) => {
             location : s.location || '',
             details  : s.details || '',
             cluster  : s.cluster || '',
+            clusters : Array.isArray(s.clusters) ? s.clusters : [],
             entryId  : s.entryId || null,
             isRecurring: true,
             seriesId: s._id,

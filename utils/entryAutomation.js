@@ -4,6 +4,7 @@ import ImportantEvent from "../models/ImportantEvent.js";
 import Appointment from "../models/Appointment.js";
 import Ripple from "../models/Ripple.js";
 import SuggestedTask from "../models/SuggestedTask.js";
+import { normalizeClusterIds } from "./clusterIds.js";
 
 import analyzeEntry from "./analyzeEntry.js";
 import { extractEntrySuggestions, extractRipplesFromEntry } from "./rippleExtractor.js";
@@ -375,6 +376,7 @@ function normalizeEntryForCreate(payload = {}) {
   }
   if (!("mood" in normalized)) normalized.mood = typeof payload.mood === "string" ? payload.mood : "";
   if (!("cluster" in normalized)) normalized.cluster = typeof payload.cluster === "string" ? payload.cluster : "";
+  if (!("clusters" in normalized)) normalized.clusters = normalizeClusterIds(payload.clusters);
   if (!("section" in normalized)) normalized.section = typeof payload.section === "string" ? payload.section : "";
   if (!("sectionId" in normalized)) normalized.sectionId = toObjectIdOrNull(payload.sectionId);
   if (!("tags" in normalized)) normalized.tags = deDupeTags(payload.tags);
@@ -414,6 +416,9 @@ function normalizeEntryForUpdate(payload = {}, existing = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(payload, "cluster")) {
     normalized.cluster = typeof payload.cluster === "string" ? payload.cluster : "";
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, "clusters")) {
+    normalized.clusters = normalizeClusterIds(payload.clusters);
   }
   if (Object.prototype.hasOwnProperty.call(payload, "section")) {
     normalized.section = typeof payload.section === "string" ? payload.section : "";
@@ -464,6 +469,7 @@ export async function createEntryWithAutomation({ userId, payload = {} }) {
     content: normalized.content,
     mood: normalized.mood,
     cluster: normalized.cluster,
+    clusters: normalized.clusters,
     section: normalized.section,
     sectionId: normalized.sectionId,
     pinned: normalized.pinned,
@@ -501,6 +507,9 @@ export async function updateEntryWithAutomation({ userId, entryId, updates = {} 
   }
   if (Object.prototype.hasOwnProperty.call(normalized, "cluster")) {
     entry.cluster = normalized.cluster || "";
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, "clusters")) {
+    entry.clusters = normalizeClusterIds(normalized.clusters);
   }
   if (Object.prototype.hasOwnProperty.call(normalized, "section")) {
     entry.section = normalized.section || "";

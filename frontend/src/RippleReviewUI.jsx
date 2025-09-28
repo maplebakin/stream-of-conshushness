@@ -4,6 +4,7 @@ import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import { toDisplay, formatRecurrence } from './utils/display.js';
 import TaskModal from './TaskModal.jsx';
+import { normalizeClusterList } from './utils/clusterHelpers.js';
 import './RippleReviewUI.css';
 
 const band = (c) => (Number(c) >= 0.66 ? 'high' : Number(c) >= 0.33 ? 'medium' : 'low');
@@ -132,13 +133,8 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
       try {
         const res = await axios.get('/api/clusters', { headers: authHeaders });
         if (ignore) return;
-        const list = Array.isArray(res.data) ? res.data : [];
-        setClusters(
-          list.map(c => ({
-            id: c.key || c._id || c.id || (c.label || 'cluster'),
-            name: c.label || c.name || c.key || 'Cluster'
-          }))
-        );
+        const list = normalizeClusterList(res);
+        setClusters(list.map((c) => ({ id: c.slug, name: c.name })));
       } catch {
         if (!ignore) {
           setClusters([

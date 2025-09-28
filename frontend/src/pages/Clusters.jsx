@@ -2,18 +2,9 @@ import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
-
-function slugifyKey(s = '') {
-  return String(s).toLowerCase().trim().replace(/[^\p{Letter}\p{Number}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 64);
-}
-function normalizeClusters(resOrData) {
-  const d = resOrData?.data ?? resOrData;
-  if (Array.isArray(d)) return d;
-  if (Array.isArray(d?.data)) return d.data;          // backend: { data: [...] }
-  if (Array.isArray(d?.clusters)) return d.clusters;  // legacy
-  if (Array.isArray(d?.data?.clusters)) return d.data.clusters;
-  return [];
-}
+import { normalizeClusterList, slugifyCluster } from '../utils/clusterHelpers.js';
+import '../Main.css';
+import './Clusters.css';
 
 export default function Clusters() {
   const { token } = useContext(AuthContext);
@@ -28,23 +19,9 @@ export default function Clusters() {
     setErr('');
     try {
       const r = await axios.get('/api/clusters', { headers });
-      const list = normalizeClusters(r);
-      const normalized = list.map(c => ({
-        _id: c._id,
-        key: (c.key || c.slug || slugifyKey(c.label || c.name || '')).toLowerCase(),
-        label: c.label || c.name || c.key || 'Untitled',
-        color: c.color || '#9b87f5',
-        icon: c.icon || '🗂️',
-        pinned: !!c.pinned,
-        order: Number.isFinite(c.order) ? c.order : 0,
-        updatedAt: c.updatedAt || c.createdAt || new Date().toISOString()
-      })).filter(c => c.key);
-
-      normalized.sort((a, b) =>
-        (a.pinned !== b.pinned) ? (a.pinned ? -1 : 1)
-        : (a.order - b.order) || a.label.localeCompare(b.label)
-      );
-      setClusters(normalized);
+      const list = normalizeClusterList(r);
+      const sorted = [...list].sort((a, b) => a.name.localeCompare(b.name));
+      setClusters(sorted);
     } catch (e) {
       setErr(e?.response?.data?.error || e.message || 'Failed to load clusters.');
       setClusters([]);
@@ -58,7 +35,7 @@ export default function Clusters() {
     if (!name.trim()) return;
     setLoading(true); setErr('');
     try {
-      await axios.post('/api/clusters', { key: slugifyKey(name), label: name, color }, { headers });
+      await axios.post('/api/clusters', { name: name.trim(), slug: slugifyCluster(name), color }, { headers });
       setName(''); setColor('#9ecae1');
       await load();
     } catch (e2) {
@@ -69,40 +46,81 @@ export default function Clusters() {
   }
 
   return (
-    <div className="page" style={{ padding: 16 }}>
-      <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', gap:12 }}>
-        <h2 style={{ margin:0 }}>Clusters</h2>
-        <button className="pill" onClick={load}>Refresh</button>
-      </div>
-
-      <form onSubmit={create} style={{ display:'flex', gap:8, margin:'12px 0' }}>
-        <input value={name} onChange={e=>setName(e.target.value)} placeholder="New cluster name" required />
-        <input type="color" value={color} onChange={e=>setColor(e.target.value)} />
-        <button disabled={loading}>{loading ? 'Adding…' : 'Add'}</button>
-      </form>
-
-      {err && <div style={{ color:'crimson', marginBottom:8 }}>{err}</div>}
-
-      {!clusters.length ? (
-        <div className="card">No clusters yet. Create your first one above.</div>
-      ) : (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(240px,1fr))', gap:12 }}>
-          {clusters.map(c => (
-            <Link
-              key={c._id || c.key}
-              to={`/clusters/${encodeURIComponent(c.key)}`}
-              className="card"
-              style={{ textDecoration:'none', color:'inherit', boxShadow:'0 1px 4px rgba(0,0,0,.08)' }}
-            >
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <div style={{ width:14, height:14, borderRadius:999, background:c.color }} />
-                <strong>{c.icon ? `${c.icon} ` : ''}{c.label}</strong>
-              </div>
-              <small className="muted">updated {new Date(c.updatedAt).toLocaleString()}</small>
-            </Link>
-          ))}
+    <div className="page clusters-page">
+      <header className="page-header clusters-toolbar">
+        <div>
+          <h1 className="page-title">Clusters</h1>
+          <p className="page-subtitle">Group goals, tasks, and notes by focus area.</p>
         </div>
-      )}
+        <div className="clusters-toolbar__actions">
+          <button type="button" className="pill" onClick={load} disabled={loading}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
+      </header>
+
+      <section className="card clusters-panel" aria-labelledby="cluster-create-heading">
+        <div className="stack">
+          <div>
+            <h2 id="cluster-create-heading" className="card-title">Create a cluster</h2>
+            <p className="card-meta">Name your cluster and choose a color to quickly spot it across the workspace.</p>
+          </div>
+          <form className="clusters-form" onSubmit={create}>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="New cluster name"
+              aria-label="Cluster name"
+              required
+            />
+            <input
+              type="color"
+              value={color}
+              aria-label="Cluster color"
+              onChange={(e) => setColor(e.target.value)}
+            />
+            <button type="submit" className="button" disabled={loading}>
+              {loading ? 'Adding…' : 'Add cluster'}
+            </button>
+          </form>
+        </div>
+
+        {err && (
+          <div className="alert error" role="alert">
+            {err}
+          </div>
+        )}
+
+        {!clusters.length ? (
+          <div className="clusters-empty">No clusters yet. Create your first one above.</div>
+        ) : (
+          <div className="clusters-grid" role="list">
+            {clusters.map((c) => {
+              const stamp = c.updatedAt || c.createdAt;
+              const stampLabel = stamp ? new Date(stamp).toLocaleString() : 'just now';
+              const icon = c.icon || '🗂️';
+              return (
+                <Link
+                  key={c.id || c.slug}
+                  to={`/clusters/${encodeURIComponent(c.slug)}`}
+                  className="cluster-card"
+                  style={{ '--cluster-color': c.color || 'var(--color-spool)' }}
+                  role="listitem"
+                >
+                  <div className="cluster-card__head">
+                    <span className="cluster-card__icon" aria-hidden="true">{icon}</span>
+                    <div className="stack">
+                      <span className="text-strong">{c.name}</span>
+                      <span className="cluster-card__meta">#{c.slug}</span>
+                    </div>
+                  </div>
+                  <span className="cluster-card__meta">Updated {stampLabel}</span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
