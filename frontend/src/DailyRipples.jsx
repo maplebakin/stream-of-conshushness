@@ -90,17 +90,23 @@ async function dismissRipple(id, headers) {
   try {
     await axios.post(`/api/ripples/${id}/dismiss`, {}, { headers });
     return true;
-  } catch {}
+  } catch (error) {
+    console.warn('[DailyRipples] POST /dismiss failed, trying fallback', error);
+  }
   // 2) PATCH status
   try {
     await axios.patch(`/api/ripples/${id}`, { status: 'dismissed' }, { headers });
     return true;
-  } catch {}
+  } catch (error) {
+    console.warn('[DailyRipples] PATCH status fallback failed, trying next', error);
+  }
   // 3) POST /status
   try {
     await axios.post(`/api/ripples/${id}/status`, { status: 'dismissed' }, { headers });
     return true;
-  } catch {}
+  } catch (error) {
+    console.warn('[DailyRipples] POST status fallback failed', error);
+  }
   throw new Error('dismiss failed');
 }
 

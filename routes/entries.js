@@ -29,14 +29,45 @@ router.get("/", async (req, res) => {
     const q = { userId };
 
     if (req.query.date) q.date = normalizeDate(req.query.date);
+    if (req.query.startDate || req.query.endDate) {
+      const range = {};
+      if (req.query.startDate) range.$gte = normalizeDate(req.query.startDate);
+      if (req.query.endDate) range.$lte = normalizeDate(req.query.endDate);
+      q.date = range;
+    }
     if (req.query.cluster) q.cluster = String(req.query.cluster);
-    if (req.query.section) q.section = String(req.query.section);
+
+    const sectionFilters = [];
+    if (req.query.section && String(req.query.section).trim()) {
+      sectionFilters.push({ section: String(req.query.section).trim() });
+    }
+    if (req.query.sectionId && ObjectId.isValid(req.query.sectionId)) {
+      sectionFilters.push({ sectionId: new ObjectId(req.query.sectionId) });
+    }
+    if (sectionFilters.length === 1) {
+      Object.assign(q, sectionFilters[0]);
+    } else if (sectionFilters.length > 1) {
+      q.$or = sectionFilters;
+    }
     if (req.query.sectionPageId && ObjectId.isValid(req.query.sectionPageId)) {
       q.sectionPageId = new ObjectId(req.query.sectionPageId);
     }
+    if (req.query.mood) q.mood = String(req.query.mood);
+    if (req.query.tag) q.tags = String(req.query.tag);
+    if (req.query.pinned !== undefined) {
+      const pinned = String(req.query.pinned).toLowerCase();
+      if (["1", "true", "yes"].includes(pinned)) q.pinned = true;
+      else if (["0", "false", "no"].includes(pinned)) q.pinned = false;
+    }
+
+    if (req.query.cursor && ObjectId.isValid(req.query.cursor)) {
+      q._id = { $lt: new ObjectId(req.query.cursor) };
+    }
 
     const limit = Math.min(Math.max(parseInt(req.query.limit || "100", 10), 1), 500);
-    const rows = await Entry.find(q).sort({ date: -1, createdAt: -1 }).limit(limit);
+    const rows = await Entry.find(q)
+      .sort({ pinned: -1, date: -1, createdAt: -1, _id: -1 })
+      .limit(limit);
     res.json(rows);
   } catch (e) {
     console.error("GET /entries error", e);

@@ -86,16 +86,33 @@ async function updateTask(req, res) {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const { id } = req.params;
     const up = {};
-    for (const k of ['title','notes','dueDate','completed','priority','clusters','sections','rrule']) {
+    for (const k of ['title','notes','dueDate','completed','priority','clusters','sections','rrule','status']) {
       if (req.body[k] !== undefined) up[k] = req.body[k];
     }
     if (typeof up.title === 'string') {
       up.title = up.title.trim();
       if (!up.title) return res.status(400).json({ error: 'title required' });
     }
-    const doc = await Task.findOneAndUpdate({ _id: id, userId }, { $set: up }, { new: true });
+    const doc = await Task.findOne({ _id: id, userId });
     if (!doc) return res.status(404).json({ error: 'Not found' });
-    res.json(doc);
+
+    if (up.title !== undefined) doc.title = up.title;
+    if (up.notes !== undefined) doc.notes = typeof up.notes === 'string' ? up.notes : '';
+    if (up.dueDate !== undefined) doc.dueDate = up.dueDate || null;
+    if (up.priority !== undefined) doc.priority = Number.isFinite(Number(up.priority)) ? Number(up.priority) : 0;
+    if (up.clusters !== undefined) doc.clusters = Array.isArray(up.clusters) ? up.clusters : [];
+    if (up.sections !== undefined) doc.sections = Array.isArray(up.sections) ? up.sections : [];
+    if (up.rrule !== undefined) doc.rrule = typeof up.rrule === 'string' ? up.rrule : '';
+    if (up.completed !== undefined) doc.completed = !!up.completed;
+    if (up.status !== undefined) {
+      const allowed = ['todo', 'doing', 'done'];
+      if (allowed.includes(String(up.status))) {
+        doc.status = String(up.status);
+      }
+    }
+
+    const saved = await doc.save();
+    res.json(saved);
   } catch (e) {
     console.error('[tasks] update failed:', e);
     res.status(500).json({ error: 'update failed' });
@@ -121,10 +138,12 @@ router.patch('/:id/toggle', async (req, res) => {
     const nowCompleted = !task.completed;
 
     // Atomic flip WITHOUT running model validation on unrelated fields
+    const status = nowCompleted ? 'done' : (task.status === 'done' ? 'todo' : task.status || 'todo');
+    const completedAt = nowCompleted ? new Date() : null;
     const updated = await Task.findOneAndUpdate(
       { _id: id, userId },
-      { $set: { completed: nowCompleted } },
-      { new: true, runValidators: false } // ← important
+      { $set: { completed: nowCompleted, status, completedAt } },
+      { new: true, runValidators: true }
     ).lean();
 
     // If we just completed and it's recurring, spawn the next
@@ -144,6 +163,7 @@ router.patch('/:id/toggle', async (req, res) => {
           sections: Array.isArray(task.sections) ? task.sections : [],
           rrule: task.rrule,
           completed: false,
+          status: 'todo',
         });
       }
     }
@@ -160,9 +180,12 @@ router.post('/', async (req, res) => {
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-    let { title, notes, dueDate, priority = 0, clusters = [], sections = [], rrule = '' } = req.body || {};
+    let { title, notes, dueDate, priority = 0, clusters = [], sections = [], rrule = '', status = 'todo' } = req.body || {};
     title = typeof title === 'string' ? title.trim() : '';
     if (!title) return res.status(400).json({ error: 'title required' });
+
+    const allowedStatuses = ['todo', 'doing', 'done'];
+    const safeStatus = allowedStatuses.includes(status) ? status : 'todo';
 
     const doc = await Task.create({
       userId,
@@ -174,6 +197,7 @@ router.post('/', async (req, res) => {
       sections: sections || [],
       rrule,
       completed: false,
+      status: safeStatus === 'done' ? 'done' : safeStatus,
     });
     res.status(201).json(doc);
   } catch (e) {

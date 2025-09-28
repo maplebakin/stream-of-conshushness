@@ -104,8 +104,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
         { headers: authHeaders }
       );
     } catch (e) {
-      // Non-fatal; task is created/moved even if link fails
-      // console.warn('Link-to-entry failed:', e?.response?.data || e.message);
+      console.warn('Link-to-entry failed:', e?.response?.data || e.message, e);
     }
   }
 

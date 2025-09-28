@@ -25,19 +25,28 @@ const USER_KEY  = 'auth_user';
 
 // read token/user from localStorage (if present)
 function readToken() {
-  try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; }
+  try {
+    return localStorage.getItem(TOKEN_KEY) || '';
+  } catch (error) {
+    console.warn('[axiosInstance] Failed to read token from storage', error);
+    return '';
+  }
 }
 function writeToken(token) {
   try {
     if (token) localStorage.setItem(TOKEN_KEY, token);
     else localStorage.removeItem(TOKEN_KEY);
-  } catch {}
+  } catch (error) {
+    console.warn('[axiosInstance] Failed to persist token', error);
+  }
 }
 function writeUser(user) {
   try {
     if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
     else localStorage.removeItem(USER_KEY);
-  } catch {}
+  } catch (error) {
+    console.warn('[axiosInstance] Failed to persist user payload', error);
+  }
 }
 
 export function getToken() { return readToken(); }
@@ -98,7 +107,11 @@ function makeClient(headers = {}) {
         if (/missing token|invalid token|expired/i.test(msg)) {
           setToken('', null);
         }
-        try { window.dispatchEvent(new CustomEvent('auth:unauthorized')); } catch {}
+        try {
+          window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+        } catch (error) {
+          console.warn('[axiosInstance] Failed to dispatch auth:unauthorized event', error);
+        }
       }
       return Promise.reject(err);
     }
