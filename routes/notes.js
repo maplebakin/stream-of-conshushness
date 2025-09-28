@@ -2,6 +2,7 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import Note from '../models/Note.js';
+import { normalizeClusterIds, resolveClusterIdForOwner } from '../utils/clusterIds.js';
 
 const router = express.Router();
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -16,18 +17,29 @@ const isYMD = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 function own(userId) { return { userId }; }
 
 // Build a doc that satisfies the Note schema
-function normalizeNoteInput(body = {}, userId) {
+function normalizeNoteInput(body = {}, userId, resolvedClusterIds = []) {
   const dateRaw = body.date || body.day || body.ymd || body.dateISO;
   let date = isYMD(dateRaw) ? dateRaw : ymdInToronto();
   const content =
     body.content ?? body.text ?? body.body ?? body.html ?? body.markdown ?? '';
   const cluster = body.cluster ?? body.section ?? body.category;
   const entryId = body.entryId && mongoose.isValidObjectId(body.entryId) ? body.entryId : undefined;
+  const hasClustersKey = Object.prototype.hasOwnProperty.call(body, 'clusters');
+  const normalizedClusterIds = resolvedClusterIds.length
+    ? resolvedClusterIds
+    : hasClustersKey
+      ? normalizeClusterIds(body.clusters)
+      : [];
 
   const out = { ...body, userId, date, content };
   if (cluster !== undefined) out.cluster = cluster;
+  if (hasClustersKey || resolvedClusterIds.length) out.clusters = normalizedClusterIds;
+  if (Object.prototype.hasOwnProperty.call(body, 'clusterId') && !resolvedClusterIds.length) {
+    out.clusters = normalizedClusterIds;
+  }
   if (entryId) out.entryId = entryId;
   delete out.owner; delete out.user; delete out.createdBy;
+  delete out.clusterId; delete out.clusterIds;
   return out;
 }
 
@@ -42,6 +54,22 @@ router.get('/', async (req, res) => {
     if (req.query.entryId && mongoose.isValidObjectId(req.query.entryId)) {
       q.entryId = req.query.entryId;
     }
+    const clusterFilters = [];
+    if (req.query.cluster) {
+      clusterFilters.push({ cluster: String(req.query.cluster) });
+    }
+    if (req.query.clusterId) {
+      const resolved = await resolveClusterIdForOwner(userId, req.query.clusterId);
+      if (!resolved) {
+        return res.json({ ok: true, count: 0, items: [] });
+      }
+      clusterFilters.push({ clusters: resolved });
+    }
+    if (clusterFilters.length === 1) {
+      Object.assign(q, clusterFilters[0]);
+    } else if (clusterFilters.length > 1) {
+      q.$or = clusterFilters;
+    }
     const items = await Note.find(q).sort({ updatedAt: -1, createdAt: -1 }).limit(500).lean();
     res.json({ ok: true, count: items.length, items });
   } catch (e) {
@@ -53,7 +81,15 @@ router.get('/', async (req, res) => {
 // POST /api/notes — create
 router.post('/', async (req, res) => {
   const userId = req.user?.userId;
-  const doc = normalizeNoteInput(req.body, userId);
+  let clusterIds = normalizeClusterIds(req.body?.clusters);
+  if (!clusterIds.length && req.body?.clusterId) {
+    const resolved = await resolveClusterIdForOwner(userId, req.body.clusterId);
+    if (resolved) clusterIds = [resolved];
+  } else if (!clusterIds.length && req.body?.cluster) {
+    const resolved = await resolveClusterIdForOwner(userId, req.body.cluster);
+    if (resolved) clusterIds = [resolved];
+  }
+  const doc = normalizeNoteInput(req.body, userId, clusterIds);
   try {
     const created = await Note.create(doc);
     return res.status(201).json({ ok: true, item: created });
@@ -92,7 +128,15 @@ router.post('/:date(\\d{4}-\\d{2}-\\d{2})', async (req, res) => {
   try {
     const userId = req.user?.userId;
     const date = req.params.date;
-    const updates = normalizeNoteInput({ ...req.body, date }, userId);
+    let clusterIds = normalizeClusterIds(req.body?.clusters);
+    if (!clusterIds.length && req.body?.clusterId) {
+      const resolved = await resolveClusterIdForOwner(userId, req.body.clusterId);
+      if (resolved) clusterIds = [resolved];
+    } else if (!clusterIds.length && req.body?.cluster) {
+      const resolved = await resolveClusterIdForOwner(userId, req.body.cluster);
+      if (resolved) clusterIds = [resolved];
+    }
+    const updates = normalizeNoteInput({ ...req.body, date }, userId, clusterIds);
     const item = await Note.findOneAndUpdate(
       { ...own(userId), date },
       { $set: updates, $currentDate: { updatedAt: true } },
@@ -128,7 +172,15 @@ router.patch('/:id', async (req, res) => {
     const { id } = req.params;
     if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' });
     const userId = req.user?.userId;
-    const updates = normalizeNoteInput(req.body || {}, userId);
+    let clusterIds = normalizeClusterIds(req.body?.clusters);
+    if (!clusterIds.length && req.body?.clusterId) {
+      const resolved = await resolveClusterIdForOwner(userId, req.body.clusterId);
+      if (resolved) clusterIds = [resolved];
+    } else if (!clusterIds.length && req.body?.cluster) {
+      const resolved = await resolveClusterIdForOwner(userId, req.body.cluster);
+      if (resolved) clusterIds = [resolved];
+    }
+    const updates = normalizeNoteInput(req.body || {}, userId, clusterIds);
     delete updates.userId;
 
     const item = await Note.findOneAndUpdate(

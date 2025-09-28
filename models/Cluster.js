@@ -1,8 +1,7 @@
-// models/Cluster.js
 import mongoose from 'mongoose';
 
-function slugifyKey(s = '') {
-  return String(s)
+function slugifyClusterSlug(value = '') {
+  return String(value)
     .toLowerCase()
     .trim()
     .replace(/[^\p{Letter}\p{Number}]+/gu, '-')
@@ -12,29 +11,51 @@ function slugifyKey(s = '') {
 
 const clusterSchema = new mongoose.Schema(
   {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    key:    { type: String, required: true },  // canonical, lowercased slug
-    label:  { type: String, required: true },
-    color:  { type: String, default: '#9b87f5' },
-    icon:   { type: String, default: '🗂️' },
-    description: { type: String, default: '' },
-    pinned: { type: Boolean, default: true },
-    order:  { type: Number, default: 0 },
+    ownerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true
+    },
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    slug: {
+      type: String,
+      required: true
+    },
+    color: {
+      type: String,
+      default: '#9b87f5'
+    },
+    icon: {
+      type: String,
+      default: '🗂️'
+    }
   },
   { timestamps: true }
 );
 
-// Always store a canonical key
-clusterSchema.pre('validate', function(next) {
-  if (this.key) this.key = slugifyKey(this.key);
+clusterSchema.pre('validate', function clusterPreValidate(next) {
+  if (this.name) {
+    this.name = this.name.trim();
+  }
+
+  const slugSource = this.slug || this.name;
+  if (slugSource) {
+    this.slug = slugifyClusterSlug(slugSource);
+  }
+
+  if (!this.slug) {
+    this.invalidate('slug', 'Slug is required.');
+  }
+
   next();
 });
 
-// Unique per user, case-insensitive (collation handles case-insensitive dupes)
-clusterSchema.index(
-  { userId: 1, key: 1 },
-  { unique: true, collation: { locale: 'en', strength: 2 } }
-);
+clusterSchema.index({ ownerId: 1, slug: 1 }, { unique: true });
 
 export default mongoose.model('Cluster', clusterSchema);
-export { slugifyKey };
+export { slugifyClusterSlug };

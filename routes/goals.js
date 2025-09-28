@@ -1,13 +1,35 @@
 import express from 'express';
 import auth from '../middleware/auth.js';
 import Goal from '../models/Goal.js';
+import { normalizeClusterIds, resolveClusterIdForOwner } from '../utils/clusterIds.js';
 
 const router = express.Router();
 
 // GET all goals for the user
 router.get('/', auth, async (req, res) => {
   try {
-    const goals = await Goal.find({ userId: req.user.userId }).sort({ createdAt: -1 });
+    const filters = { userId: req.user.userId };
+    const clusterFilters = [];
+
+    if (req.query.cluster) {
+      clusterFilters.push({ cluster: req.query.cluster });
+    }
+
+    if (req.query.clusterId) {
+      const resolved = await resolveClusterIdForOwner(req.user.userId, req.query.clusterId);
+      if (!resolved) {
+        return res.json([]);
+      }
+      clusterFilters.push({ clusters: resolved });
+    }
+
+    if (clusterFilters.length === 1) {
+      Object.assign(filters, clusterFilters[0]);
+    } else if (clusterFilters.length > 1) {
+      filters.$or = clusterFilters;
+    }
+
+    const goals = await Goal.find(filters).sort({ createdAt: -1 });
     res.json(goals);
   } catch {
     res.status(500).json({ error: 'Failed to load goals' });
@@ -18,11 +40,20 @@ router.get('/', auth, async (req, res) => {
 router.post('/', auth, async (req, res) => {
   try {
     const { title, description, cluster, steps } = req.body;
+    let clusterIds = normalizeClusterIds(req.body?.clusters);
+    if (!clusterIds.length && req.body?.clusterId) {
+      const resolved = await resolveClusterIdForOwner(req.user.userId, req.body.clusterId);
+      if (resolved) clusterIds = [resolved];
+    } else if (!clusterIds.length && cluster) {
+      const resolved = await resolveClusterIdForOwner(req.user.userId, cluster);
+      if (resolved) clusterIds = [resolved];
+    }
     const goal = new Goal({
       userId: req.user.userId,
       title,
       description: description || '',
       cluster: cluster || null,
+      clusters: clusterIds,
       steps: Array.isArray(steps) ? steps : [],
     });
     await goal.save();
@@ -35,10 +66,19 @@ router.post('/', auth, async (req, res) => {
 // PATCH goal (update title, description, cluster, or steps)
 router.patch('/:id', auth, async (req, res) => {
   try {
+    const updates = { ...req.body };
+    if (Object.prototype.hasOwnProperty.call(updates, 'clusters')) {
+      updates.clusters = normalizeClusterIds(updates.clusters);
+    } else if (Object.prototype.hasOwnProperty.call(updates, 'clusterId')) {
+      const resolved = await resolveClusterIdForOwner(req.user.userId, updates.clusterId);
+      updates.clusters = resolved ? [resolved] : [];
+    }
+    delete updates.clusterId;
+
     const updated = await Goal.findOneAndUpdate(
       { _id: req.params.id, userId: req.user.userId },
-      req.body,
-      { new: true }
+      updates,
+      { new: true, runValidators: true }
     );
     if (!updated) return res.status(404).json({ error: 'Goal not found' });
     res.json(updated);
@@ -79,10 +119,15 @@ router.delete('/:id', auth, async (req, res) => {
 // GET all goals for a cluster
 router.get('/cluster/:cluster', auth, async (req, res) => {
   try {
-    const goals = await Goal.find({
-      userId: req.user.userId,
-      cluster: req.params.cluster,
-    }).sort({ createdAt: -1 });
+    const filters = { userId: req.user.userId };
+    const clusterFilters = [{ cluster: req.params.cluster }];
+    const resolved = await resolveClusterIdForOwner(req.user.userId, req.params.cluster);
+    if (resolved) clusterFilters.push({ clusters: resolved });
+
+    if (clusterFilters.length === 1) Object.assign(filters, clusterFilters[0]);
+    else filters.$or = clusterFilters;
+
+    const goals = await Goal.find(filters).sort({ createdAt: -1 });
     res.json(goals);
   } catch {
     res.status(500).json({ error: 'Failed to load cluster goals' });
