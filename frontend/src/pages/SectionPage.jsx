@@ -1,6 +1,6 @@
 // frontend/src/pages/SectionPage.jsx
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useState, useEffect, useContext, useMemo } from 'react';
+import { useState, useEffect, useContext, useMemo, useCallback, useRef } from 'react';
 import axios from '../api/axiosInstance.js';
 import { AuthContext } from '../AuthContext.jsx';
 import TaskList from '../adapters/TaskList.default.jsx';
@@ -13,19 +13,32 @@ const VIEW_TABS = [
   { key: 'pages', label: 'Pages' },
 ];
 
-function sortEntries(entries = []) {
-  const list = Array.isArray(entries) ? [...entries] : [];
-  return list.sort((a, b) => {
-    const aKey = a?.createdAt || a?.updatedAt || `${a?.date ?? ''}T00:00:00`;
-    const bKey = b?.createdAt || b?.updatedAt || `${b?.date ?? ''}T00:00:00`;
-    return aKey > bKey ? -1 : aKey < bKey ? 1 : 0;
-  });
-}
+const PAGE_SIZE = 25;
+
+const DEFAULT_FILTERS = Object.freeze({
+  startDate: '',
+  endDate: '',
+  tag: '',
+  mood: '',
+});
 
 function renderEntryHtml(entry) {
   if (entry?.html && entry.html.trim()) return entry.html;
   if (typeof entry?.content === 'string' && /<[^>]+>/.test(entry.content)) return entry.content;
   return (entry?.text ?? '').replace(/\n/g, '<br/>');
+}
+
+function formatEntryTimestamp(entry) {
+  const iso = entry?.updatedAt || entry?.createdAt;
+  if (!iso) return '';
+  try {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  } catch (err) {
+    console.warn('formatEntryTimestamp failed:', err);
+    return '';
+  }
 }
 
 export default function SectionPage() {
@@ -36,6 +49,13 @@ export default function SectionPage() {
   const { token } = useContext(AuthContext);
 
   const [entries, setEntries] = useState([]);
+  const [entriesLoading, setEntriesLoading] = useState(false);
+  const [entriesLoadingMore, setEntriesLoadingMore] = useState(false);
+  const [entriesHasMore, setEntriesHasMore] = useState(true);
+  const [entriesError, setEntriesError] = useState('');
+  const [filters, setFilters] = useState(() => ({ ...DEFAULT_FILTERS }));
+  const [copiedEntryId, setCopiedEntryId] = useState('');
+  const [pinningIds, setPinningIds] = useState(() => new Set());
   const [pages, setPages] = useState([]);
   const [allSections, setAllSections] = useState([]);
   const [loadingSections, setLoadingSections] = useState(true);
@@ -43,6 +63,17 @@ export default function SectionPage() {
   const [error, setError] = useState('');
   const [activePane, setActivePane] = useState('entries');
   const [activeKey, setActiveKey] = useState(routeKey);
+
+  const sentinelRef = useRef(null);
+  const copyTimeoutRef = useRef(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => () => {
+    isMountedRef.current = false;
+    if (copyTimeoutRef.current) {
+      clearTimeout(copyTimeoutRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     setActiveKey(routeKey);
@@ -52,6 +83,13 @@ export default function SectionPage() {
     if (!token) {
       setLoadingSections(false);
       setEntries([]);
+      setEntriesHasMore(false);
+      setEntriesError('');
+      setEntriesLoading(false);
+      setEntriesLoadingMore(false);
+      setFilters(() => ({ ...DEFAULT_FILTERS }));
+      setPinningIds(() => new Set());
+      setCopiedEntryId('');
       setPages([]);
     }
   }, [token]);
@@ -84,7 +122,6 @@ export default function SectionPage() {
 
   useEffect(() => {
     if (!token || !activeKey) {
-      setEntries([]);
       setPages([]);
       return;
     }
@@ -94,9 +131,6 @@ export default function SectionPage() {
       setLoadingDetail(true);
       setError('');
       try {
-        const entryRes = await axios.get(`/api/entries?section=${encodeURIComponent(activeKey)}&limit=100`);
-        if (!ignore) setEntries(Array.isArray(entryRes.data) ? entryRes.data : []);
-
         const pagesRes = await axios.get(`/api/section-pages/by-section/${encodeURIComponent(activeKey)}`);
         const rawPages = Array.isArray(pagesRes.data?.items)
           ? pagesRes.data.items
@@ -115,7 +149,6 @@ export default function SectionPage() {
       } catch (e) {
         if (!ignore) {
           console.warn('Section detail failed:', e?.response?.data || e.message);
-          setEntries([]);
           setPages([]);
           setError('We could not load this section right now.');
         }
@@ -159,14 +192,257 @@ export default function SectionPage() {
     [normalizedSections, activeKey],
   );
 
-  const sortedEntries = useMemo(() => sortEntries(entries), [entries]);
+  useEffect(() => {
+    setFilters(() => ({ ...DEFAULT_FILTERS }));
+    setEntries([]);
+    setEntriesHasMore(true);
+    setEntriesError('');
+    setEntriesLoading(false);
+    setEntriesLoadingMore(false);
+    setCopiedEntryId('');
+    setPinningIds(() => new Set());
+  }, [activeSection?.id]);
+
+  const makeEntryParams = useCallback(
+    (offset = 0) => {
+      if (!activeSection?.id) return null;
+      const params = {
+        sectionId: activeSection.id,
+        limit: PAGE_SIZE,
+        offset,
+      };
+      if (activeSection?.key) params.section = activeSection.key;
+
+      const { startDate, endDate, tag, mood } = filters;
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
+      if (tag) params.tag = tag;
+      if (mood) params.mood = mood;
+
+      return params;
+    },
+    [activeSection?.id, activeSection?.key, filters],
+  );
+
   const title = activeSection ? activeSection.label : 'Sections';
+
+  useEffect(() => {
+    if (!token) return;
+
+    const params = makeEntryParams(0);
+    if (!params) {
+      setEntries([]);
+      setEntriesHasMore(false);
+      setEntriesError('');
+      setEntriesLoading(false);
+      setEntriesLoadingMore(false);
+      return;
+    }
+
+    let ignore = false;
+    setEntriesLoading(true);
+    setEntriesLoadingMore(false);
+    setEntriesError('');
+    setEntriesHasMore(true);
+    setEntries([]);
+
+    axios
+      .get('/api/entries', { params })
+      .then((res) => {
+        if (ignore) return;
+        const rows = Array.isArray(res.data) ? res.data : [];
+        setEntries(rows);
+        setEntriesHasMore(rows.length === params.limit);
+      })
+      .catch((err) => {
+        if (ignore) return;
+        console.warn('Section entries load failed:', err?.response?.data || err.message);
+        setEntries([]);
+        setEntriesError('Unable to load entries right now.');
+        setEntriesHasMore(false);
+      })
+      .finally(() => {
+        if (!ignore) setEntriesLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [token, makeEntryParams]);
 
   function handleSelect(section) {
     if (!section?.key) return;
     setActiveKey(section.key);
     navigate(`/sections/${encodeURIComponent(section.key)}`);
   }
+
+  const loadMoreEntries = useCallback(() => {
+    if (!token || entriesLoading || entriesLoadingMore || !entriesHasMore) return;
+
+    const params = makeEntryParams(entries.length);
+    if (!params) return;
+
+    setEntriesLoadingMore(true);
+
+    axios
+      .get('/api/entries', { params })
+      .then((res) => {
+        if (!isMountedRef.current) return;
+        const rows = Array.isArray(res.data) ? res.data : [];
+        if (rows.length === 0) {
+          setEntriesHasMore(false);
+          return;
+        }
+        setEntries((prev) => {
+          const combined = [...prev, ...rows];
+          const deduped = [];
+          const seen = new Set();
+          for (const entry of combined) {
+            const id = entry?._id || entry?.id;
+            if (id && seen.has(id)) continue;
+            if (id) seen.add(id);
+            deduped.push(entry);
+          }
+          return deduped;
+        });
+        setEntriesHasMore(rows.length === params.limit);
+      })
+      .catch((err) => {
+        if (!isMountedRef.current) return;
+        console.warn('Section loadMore entries failed:', err?.response?.data || err.message);
+        setEntriesError((prev) => prev || 'Unable to load more entries.');
+        setEntriesHasMore(false);
+      })
+      .finally(() => {
+        if (isMountedRef.current) setEntriesLoadingMore(false);
+      });
+  }, [
+    token,
+    entriesLoading,
+    entriesLoadingMore,
+    entriesHasMore,
+    entries.length,
+    makeEntryParams,
+  ]);
+
+  const handleFilterChange = useCallback((field, value) => {
+    setFilters((prev) => {
+      const normalizedValue = typeof value === 'string' ? value.trim() : value;
+      if (prev[field] === normalizedValue) return prev;
+      return { ...prev, [field]: normalizedValue ?? '' };
+    });
+  }, []);
+
+  const resetFilters = useCallback(() => {
+    setFilters(() => ({ ...DEFAULT_FILTERS }));
+  }, []);
+
+  const togglePinForEntry = useCallback(
+    async (entry) => {
+      if (!entry?._id || !token) return;
+
+      const entryId = entry._id;
+      setPinningIds((prev) => {
+        const next = new Set(prev);
+        next.add(entryId);
+        return next;
+      });
+
+      try {
+        const res = await axios.patch(`/api/entries/${entryId}`, { pinned: !entry.pinned });
+        if (!isMountedRef.current) return;
+        const updated = res?.data;
+        setEntries((prev) =>
+          prev.map((item) => {
+            if (item._id !== entryId) return item;
+            if (updated && typeof updated === 'object') {
+              return { ...item, ...updated };
+            }
+            return { ...item, pinned: !entry.pinned };
+          }),
+        );
+        setEntriesError('');
+      } catch (err) {
+        console.warn('Toggle pin failed:', err?.response?.data || err.message);
+        if (isMountedRef.current) {
+          setEntriesError('Unable to update pin status.');
+        }
+      } finally {
+        if (isMountedRef.current) {
+          setPinningIds((prev) => {
+            const next = new Set(prev);
+            next.delete(entryId);
+            return next;
+          });
+        }
+      }
+    },
+    [token],
+  );
+
+  const handleCopyLink = useCallback(
+    async (entry) => {
+      if (!entry?._id) return;
+
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const fallbackPath = `/sections/${activeKey || ''}`;
+      const browserPath = typeof window !== 'undefined' ? window.location.pathname || fallbackPath : fallbackPath;
+      const path = entry.date ? `/day/${entry.date}` : browserPath;
+      const url = `${origin}${path}#entry-${entry._id}`;
+
+      try {
+        const canUseClipboard = typeof navigator !== 'undefined' && navigator.clipboard?.writeText;
+        if (canUseClipboard) {
+          await navigator.clipboard.writeText(url);
+          if (!isMountedRef.current) return;
+          setCopiedEntryId(entry._id);
+          if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+          copyTimeoutRef.current = setTimeout(() => {
+            setCopiedEntryId('');
+          }, 2000);
+        } else if (typeof window !== 'undefined') {
+          const confirmed = window.prompt('Copy link to this entry:', url);
+          if (confirmed !== null && isMountedRef.current) {
+            setCopiedEntryId(entry._id);
+            if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+            copyTimeoutRef.current = setTimeout(() => {
+              setCopiedEntryId('');
+            }, 2000);
+          }
+        }
+      } catch (err) {
+        console.warn('Copy entry link failed:', err?.message || err);
+        if (isMountedRef.current) {
+          setEntriesError('Unable to copy link to clipboard.');
+        }
+      }
+    },
+    [activeKey],
+  );
+
+  const dateRangeInvalid = useMemo(
+    () => Boolean(filters.startDate && filters.endDate && filters.startDate > filters.endDate),
+    [filters.startDate, filters.endDate],
+  );
+
+  useEffect(() => {
+    if (!entriesHasMore || entriesLoading || entriesLoadingMore) return;
+    const node = sentinelRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entriesList) => {
+        const first = entriesList[0];
+        if (first?.isIntersecting) {
+          loadMoreEntries();
+        }
+      },
+      { rootMargin: '200px 0px', threshold: 0.1 },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [entriesHasMore, entriesLoading, entriesLoadingMore, loadMoreEntries]);
 
   const loading = loadingSections || (activeKey ? loadingDetail : false);
 
@@ -261,24 +537,138 @@ export default function SectionPage() {
             {loading && !error && <div className="loading">Loading…</div>}
 
             {!loading && !error && activePane === 'entries' && (
-              <div className="entries-stack">
-                {sortedEntries.length === 0 ? (
-                  <div className="empty">No entries yet. Capture your first reflection for this section.</div>
-                ) : (
-                  sortedEntries.map((entry) => (
-                    <article key={entry._id} className="entry-card">
-                      <div className="entry-meta">
-                        <span className="date">{entry.date}</span>
-                        {entry.mood && <span className="pill">{entry.mood}</span>}
-                        {Array.isArray(entry.tags) &&
-                          entry.tags.slice(0, 5).map((tag, idx) => (
-                            <span key={idx} className="pill pill-muted">#{tag}</span>
-                          ))}
-                      </div>
-                      <SafeHTML className="entry-text" html={renderEntryHtml(entry)} />
-                    </article>
-                  ))
+              <div className="entries-pane">
+                <div className="entries-filter-bar">
+                  <div className="filter-field">
+                    <label htmlFor="entries-from">From</label>
+                    <input
+                      id="entries-from"
+                      type="date"
+                      value={filters.startDate}
+                      onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                    />
+                  </div>
+                  <div className="filter-field">
+                    <label htmlFor="entries-to">To</label>
+                    <input
+                      id="entries-to"
+                      type="date"
+                      value={filters.endDate}
+                      onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                    />
+                  </div>
+                  <div className="filter-field">
+                    <label htmlFor="entries-tag">Tag</label>
+                    <input
+                      id="entries-tag"
+                      type="text"
+                      value={filters.tag}
+                      placeholder="Any tag"
+                      onChange={(e) => handleFilterChange('tag', e.target.value)}
+                    />
+                  </div>
+                  <div className="filter-field">
+                    <label htmlFor="entries-mood">Mood</label>
+                    <input
+                      id="entries-mood"
+                      type="text"
+                      value={filters.mood}
+                      placeholder="Any mood"
+                      onChange={(e) => handleFilterChange('mood', e.target.value)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="filter-reset"
+                    onClick={resetFilters}
+                    disabled={!filters.startDate && !filters.endDate && !filters.tag && !filters.mood}
+                  >
+                    Reset
+                  </button>
+                </div>
+
+                {dateRangeInvalid && (
+                  <div className="filter-warning" role="status">
+                    Start date must be before end date.
+                  </div>
                 )}
+
+                {entriesError && !entriesLoading && <div className="callout error">{entriesError}</div>}
+
+                {entriesLoading && entries.length === 0 && <div className="loading">Loading entries…</div>}
+
+                {!entriesLoading && !entriesError && entries.length === 0 && (
+                  <div className="empty">No entries yet. Capture your first reflection for this section.</div>
+                )}
+
+                {entries.length > 0 && (
+                  <div className="entry-feed">
+                    {entries.map((entry) => {
+                      const id = entry._id || entry.id;
+                      const tags = Array.isArray(entry.tags) ? entry.tags : [];
+                      const isPinning = pinningIds instanceof Set && id ? pinningIds.has(id) : false;
+                      const isCopied = copiedEntryId === id;
+                      const timestamp = formatEntryTimestamp(entry);
+                      return (
+                        <article key={id} className={`entry-card ${entry.pinned ? 'pinned' : ''}`}>
+                          <header className="entry-card-head">
+                            <div className="entry-card-meta">
+                              <span className="entry-date">{entry.date || 'Undated'}</span>
+                              {timestamp && <span className="entry-updated">Updated {timestamp}</span>}
+                              {entry.pinned && <span className="entry-flag">Pinned</span>}
+                              {entry.mood && <span className="pill">{entry.mood}</span>}
+                            </div>
+                            <div className="entry-actions">
+                              <button
+                                type="button"
+                                className="entry-action"
+                                onClick={() => togglePinForEntry(entry)}
+                                disabled={isPinning}
+                                aria-pressed={entry.pinned}
+                                aria-label={entry.pinned ? 'Unpin entry' : 'Pin entry'}
+                                title={entry.pinned ? 'Unpin entry' : 'Pin entry'}
+                              >
+                                {isPinning ? '…' : entry.pinned ? '📌' : '📍'}
+                              </button>
+                              <button
+                                type="button"
+                                className="entry-action"
+                                onClick={() => handleCopyLink(entry)}
+                                aria-label="Copy link to entry"
+                                title={isCopied ? 'Link copied!' : 'Copy link'}
+                              >
+                                {isCopied ? '✅' : '🔗'}
+                              </button>
+                            </div>
+                          </header>
+
+                          {tags.length > 0 && (
+                            <div className="entry-tags">
+                              {tags.slice(0, 8).map((tag, idx) => (
+                                <span key={`${id}-tag-${idx}`} className="pill pill-muted">#{tag}</span>
+                              ))}
+                            </div>
+                          )}
+
+                          <SafeHTML className="entry-text" html={renderEntryHtml(entry)} />
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="entries-footer">
+                  {entriesHasMore && <div ref={sentinelRef} className="entries-sentinel" aria-hidden="true" />}
+                  {entriesLoadingMore && <div className="loading">Loading more…</div>}
+                  {entriesHasMore && !entriesLoadingMore && (
+                    <button type="button" className="entries-load-more" onClick={loadMoreEntries}>
+                      Load more entries
+                    </button>
+                  )}
+                  {!entriesHasMore && entries.length > 0 && !entriesLoadingMore && (
+                    <div className="entries-end">You have reached the latest entries.</div>
+                  )}
+                </div>
               </div>
             )}
 

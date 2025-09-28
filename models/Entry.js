@@ -24,7 +24,9 @@ const EntrySchema = new Schema({
   mood   : { type: String, default: "" },
   tags   : { type: [String], default: [] },
   cluster: { type: String, default: "" },    // cluster scoping
-  section: { type: String, default: "" },    // legacy / optional
+  section: { type: String, default: "" },    // legacy / optional slug
+  sectionId: { type: Schema.Types.ObjectId, ref: "Section", default: null, index: true },
+  pinned : { type: Boolean, default: false, index: true },
 
   // SectionPage room scoping
   sectionPageId: { type: Schema.Types.ObjectId, ref: "SectionPage", default: null, index: true },
@@ -38,5 +40,6 @@ const EntrySchema = new Schema({
 // Helpful compound indexes
 EntrySchema.index({ userId: 1, cluster: 1, date: -1 });
 EntrySchema.index({ userId: 1, sectionPageId: 1, date: -1 });
+EntrySchema.index({ userId: 1, sectionId: 1, date: -1, createdAt: -1 });
 
 export default mongoose.model("Entry", EntrySchema);

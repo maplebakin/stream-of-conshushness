@@ -6,6 +6,8 @@ import { AuthContext } from '../AuthContext.jsx';
 import '../Main.css';
 import './SectionsIndex.css';
 
+const ACTIVITY_WINDOW = '7d';
+
 function slugify(input = '') {
   return String(input)
     .toLowerCase()
@@ -30,8 +32,23 @@ function normalizeSection(raw) {
     slug,
     icon,
     description: raw.description || raw.summary || '',
+    public: Boolean(raw.public),
     updatedAt,
   };
+}
+
+function formatActivitySummary(stats) {
+  if (!stats || typeof stats !== 'object') return '';
+  const entries = Number(stats.entries || 0);
+  const tasks = Number(stats.tasks || 0);
+  const total = entries + tasks;
+  if (!total) return '';
+
+  const parts = [];
+  if (entries) parts.push(`${entries} ${entries === 1 ? 'entry' : 'entries'}`);
+  if (tasks) parts.push(`${tasks} ${tasks === 1 ? 'task' : 'tasks'}`);
+
+  return `${parts.join(' & ')} this week`;
 }
 
 function formatUpdatedAt(value) {
@@ -81,6 +98,11 @@ export default function SectionsIndex() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyIds, setBusyIds] = useState(() => new Set());
+  const [searchTerm, setSearchTerm] = useState('');
+  const [quickFilter, setQuickFilter] = useState('all');
+  const [activity, setActivity] = useState({});
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState('');
 
   useEffect(() => {
     if (!token) {
@@ -115,16 +137,113 @@ export default function SectionsIndex() {
     };
   }, [token]);
 
-  const sortedSections = useMemo(() => {
-    return [...sections].sort((a, b) => {
-      if (a.updatedAt && b.updatedAt) {
-        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  useEffect(() => {
+    if (!token) {
+      setActivity({});
+      setActivityLoading(false);
+      setActivityError('');
+      return;
+    }
+
+    let ignore = false;
+
+    async function loadActivity() {
+      setActivityLoading(true);
+      setActivityError('');
+      try {
+        const res = await axios.get('/api/sections/activity', {
+          params: { window: ACTIVITY_WINDOW },
+        });
+        if (ignore) return;
+        const raw = res?.data?.activity || {};
+        const mapped = {};
+        for (const [slug, stats] of Object.entries(raw)) {
+          const entries = Number(stats?.entries || 0);
+          const tasks = Number(stats?.tasks || 0);
+          const total = Number(stats?.total || entries + tasks);
+          mapped[slug] = { entries, tasks, total };
+        }
+        setActivity(mapped);
+      } catch (err) {
+        if (ignore) return;
+        console.warn('Failed to load section activity:', err?.response?.data || err.message);
+        setActivity({});
+        setActivityError(err?.response?.data?.error || 'Unable to load section activity.');
+      } finally {
+        if (!ignore) setActivityLoading(false);
       }
-      if (a.updatedAt) return -1;
-      if (b.updatedAt) return 1;
+    }
+
+    loadActivity();
+    return () => {
+      ignore = true;
+    };
+  }, [token]);
+
+  const filteredSections = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+    const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const activityMap = activity || {};
+
+    const baseSort = (a, b) => {
+      if (a.updatedAt && b.updatedAt) {
+        const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        if (diff !== 0 && Number.isFinite(diff)) return diff;
+      } else if (a.updatedAt) {
+        return -1;
+      } else if (b.updatedAt) {
+        return 1;
+      }
       return a.title.localeCompare(b.title);
-    });
-  }, [sections]);
+    };
+
+    let next = [...sections];
+
+    if (search) {
+      next = next.filter((section) => {
+        const haystack = `${section.title || ''} ${section.description || ''}`.toLowerCase();
+        return haystack.includes(search);
+      });
+    }
+
+    if (quickFilter === 'public') {
+      next = next.filter((section) => Boolean(section.public));
+    } else if (quickFilter === 'recent') {
+      next = next.filter((section) => {
+        if (!section.updatedAt) return false;
+        const value = new Date(section.updatedAt).getTime();
+        return Number.isFinite(value) && value >= since;
+      });
+    } else if (quickFilter === 'active') {
+      next = next.filter((section) => {
+        const slug = section.slug || section.key || section.id;
+        const stats = slug ? activityMap[slug] : null;
+        return Boolean(stats?.total);
+      });
+    }
+
+    if (quickFilter === 'active') {
+      next.sort((a, b) => {
+        const slugA = a.slug || a.key || a.id;
+        const slugB = b.slug || b.key || b.id;
+        const statsA = slugA ? activityMap[slugA] : null;
+        const statsB = slugB ? activityMap[slugB] : null;
+        const totalA = statsA?.total || 0;
+        const totalB = statsB?.total || 0;
+        if (totalB !== totalA) return totalB - totalA;
+        const entriesA = statsA?.entries || 0;
+        const entriesB = statsB?.entries || 0;
+        if (entriesB !== entriesA) return entriesB - entriesA;
+        return baseSort(a, b);
+      });
+    } else {
+      next.sort(baseSort);
+    }
+
+    return next;
+  }, [sections, searchTerm, quickFilter, activity]);
+
+  const hasActiveFilters = Boolean(searchTerm.trim()) || quickFilter !== 'all';
 
   function setBusy(id, busy) {
     setBusyIds((prev) => {
@@ -249,21 +368,64 @@ export default function SectionsIndex() {
         </button>
       </header>
 
+      <div className="sections-index__filters">
+        <input
+          type="search"
+          className="sections-index__search-input"
+          placeholder="Search sections…"
+          aria-label="Search sections"
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          disabled={loading}
+        />
+        <div className="sections-index__quick-filters" role="group" aria-label="Quick filters">
+          {[
+            { key: 'all', label: 'All' },
+            { key: 'public', label: 'Public' },
+            { key: 'recent', label: 'Recently Edited (7d)' },
+            { key: 'active', label: 'Most Active' },
+          ].map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              className={`sections-index__filter-button${quickFilter === option.key ? ' is-active' : ''}`}
+              onClick={() => setQuickFilter(option.key)}
+              aria-pressed={quickFilter === option.key}
+              disabled={option.key === 'active' && activityLoading}
+            >
+              {option.label}
+              {option.key === 'active' && activityLoading ? '…' : ''}
+            </button>
+          ))}
+        </div>
+        {quickFilter === 'active' && activityError && (
+          <div className="sections-index__activity-hint muted">{activityError}</div>
+        )}
+        {quickFilter === 'active' && activityLoading && (
+          <div className="sections-index__activity-hint muted">Loading activity…</div>
+        )}
+      </div>
+
       {error && <div className="alert alert-error">{error}</div>}
 
       {loading ? (
         <div className="muted">Loading sections…</div>
-      ) : sortedSections.length === 0 ? (
+      ) : filteredSections.length === 0 ? (
         <div className="empty-state">
-          <p>No sections yet.</p>
-          <button type="button" className="button button-secondary" onClick={handleCreate}>
-            Create your first section
-          </button>
+          <p>{hasActiveFilters ? 'No sections match your filters yet.' : 'No sections yet.'}</p>
+          {!hasActiveFilters && (
+            <button type="button" className="button button-secondary" onClick={handleCreate}>
+              Create your first section
+            </button>
+          )}
         </div>
       ) : (
         <div className="sections-index__grid">
-          {sortedSections.map((section) => {
+          {filteredSections.map((section) => {
             const busy = busyIds.has(section.id);
+            const slug = section.slug || section.key || section.id;
+            const stats = slug ? activity[slug] : null;
+            const activityLabel = stats ? formatActivitySummary(stats) : '';
             return (
               <article key={section.id || section.slug} className="sections-index__card">
                 <button
@@ -275,7 +437,13 @@ export default function SectionsIndex() {
                   <div className="sections-index__icon" aria-hidden>{section.icon}</div>
                   <div className="sections-index__meta">
                     <h3>{section.title}</h3>
-                    <p>{formatUpdatedAt(section.updatedAt)}</p>
+                    <p className="sections-index__meta-updated">{formatUpdatedAt(section.updatedAt)}</p>
+                    {section.description && (
+                      <p className="sections-index__meta-description">{section.description}</p>
+                    )}
+                    {activityLabel && (
+                      <p className="sections-index__meta-activity">{activityLabel}</p>
+                    )}
                   </div>
                 </button>
                 <div className="sections-index__actions">

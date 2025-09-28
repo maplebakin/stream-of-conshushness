@@ -1,6 +1,9 @@
 // routes/sections.js
 import express from 'express';
+import mongoose from 'mongoose';
+import Entry from '../models/Entry.js';
 import Section from '../models/Section.js';
+import Task from '../models/Task.js';
 
 const router = express.Router();
 
@@ -8,6 +11,38 @@ const ALLOWED_LAYOUTS = new Set(['flow', 'grid', 'kanban', 'tree']);
 
 function getUserId(req) {
   return req.user?.userId || req.user?._id || req.user?.id || null;
+}
+
+function toObjectId(value) {
+  if (!value) return null;
+  if (value instanceof mongoose.Types.ObjectId) return value;
+  if (typeof value === 'string') {
+    if (!mongoose.Types.ObjectId.isValid(value)) return null;
+    return new mongoose.Types.ObjectId(value);
+  }
+  if (value && typeof value === 'object' && value._id) {
+    return toObjectId(value._id);
+  }
+  return null;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function parseWindow(value) {
+  if (value == null) return 7 * DAY_MS;
+  const str = String(value).trim();
+  if (!str) return 7 * DAY_MS;
+
+  const match = str.match(/^(\d+)(?:\s*(d|day|days|h|hour|hours))?$/i);
+  if (!match) return null;
+
+  const amount = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  const unit = (match[2] || 'd').toLowerCase();
+  const multiplier = unit.startsWith('h') ? 60 * 60 * 1000 : DAY_MS;
+
+  return amount * multiplier;
 }
 
 function sanitizeSlug(str) {
@@ -128,6 +163,128 @@ router.get('/', async (req, res) => {
   } catch (err) {
     console.error('GET /api/sections error:', err);
     res.status(500).json({ error: 'Failed to fetch sections' });
+  }
+});
+
+// GET /api/sections/activity
+router.get('/activity', async (req, res) => {
+  try {
+    const ownerId = getUserId(req);
+    if (!ownerId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const ownerObjectId = toObjectId(ownerId);
+    if (!ownerObjectId) return res.status(400).json({ error: 'Invalid user id' });
+
+    const windowRaw = req.query.window;
+    const windowMs = parseWindow(windowRaw);
+    if (windowMs == null) {
+      return res.status(400).json({ error: 'Invalid window parameter' });
+    }
+
+    const since = new Date(Date.now() - windowMs);
+
+    const sections = await Section.find({ ownerId: ownerObjectId }).select('slug _id').lean();
+    if (!sections.length) {
+      return res.json({
+        window: { raw: windowRaw ?? '7d', ms: windowMs, since: since.toISOString() },
+        activity: {},
+      });
+    }
+
+    const slugs = sections.map((section) => section.slug).filter(Boolean);
+    const sectionIds = sections
+      .map((section) => section._id)
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+
+    const slugById = new Map();
+    for (const section of sections) {
+      if (section?._id && section?.slug) {
+        slugById.set(String(section._id), section.slug);
+      }
+    }
+    if (!slugs.length) {
+      return res.json({
+        window: { raw: windowRaw ?? '7d', ms: windowMs, since: since.toISOString() },
+        activity: {},
+      });
+    }
+
+    const activityMap = Object.create(null);
+    for (const slug of slugs) {
+      activityMap[slug] = { entries: 0, tasks: 0, total: 0 };
+    }
+
+    const entryMatch = {
+      userId: ownerObjectId,
+      updatedAt: { $gte: since },
+    };
+
+    const entryOrClauses = [];
+    if (slugs.length) entryOrClauses.push({ section: { $in: slugs } });
+    if (sectionIds.length) entryOrClauses.push({ sectionId: { $in: sectionIds } });
+
+    if (entryOrClauses.length === 1) {
+      Object.assign(entryMatch, entryOrClauses[0]);
+    } else if (entryOrClauses.length > 1) {
+      entryMatch.$or = entryOrClauses;
+    }
+
+    const entriesActivity = await Entry.aggregate([
+      { $match: entryMatch },
+      {
+        $group: {
+          _id: { section: '$section', sectionId: '$sectionId' },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    for (const item of entriesActivity) {
+      const group = item?._id || {};
+      const slugCandidate = group.section || slugById.get(String(group.sectionId || ''));
+      if (slugCandidate && activityMap[slugCandidate]) {
+        activityMap[slugCandidate].entries = item.count || 0;
+      }
+    }
+
+    const tasksActivity = await Task.aggregate([
+      {
+        $match: {
+          userId: ownerObjectId,
+          sections: { $in: slugs },
+          updatedAt: { $gte: since },
+        },
+      },
+      { $unwind: '$sections' },
+      { $match: { sections: { $in: slugs } } },
+      {
+        $group: {
+          _id: '$sections',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    for (const item of tasksActivity) {
+      const slug = item?._id;
+      if (slug && activityMap[slug]) {
+        activityMap[slug].tasks = item.count || 0;
+      }
+    }
+
+    for (const slug of Object.keys(activityMap)) {
+      const stats = activityMap[slug];
+      stats.total = (stats.entries || 0) + (stats.tasks || 0);
+    }
+
+    res.json({
+      window: { raw: windowRaw ?? '7d', ms: windowMs, since: since.toISOString() },
+      activity: activityMap,
+    });
+  } catch (err) {
+    console.error('GET /api/sections/activity error:', err);
+    res.status(500).json({ error: 'Failed to fetch section activity' });
   }
 });
 
