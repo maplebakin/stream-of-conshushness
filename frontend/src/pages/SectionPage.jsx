@@ -68,12 +68,25 @@ export default function SectionPage() {
   const copyTimeoutRef = useRef(null);
   const isMountedRef = useRef(true);
 
-  useEffect(() => () => {
-    isMountedRef.current = false;
-    if (copyTimeoutRef.current) {
-      clearTimeout(copyTimeoutRef.current);
-    }
+  const resetEntryUiState = useCallback(({ hasMore = true, error: nextError = '' } = {}) => {
+    setEntries([]);
+    setEntriesHasMore(hasMore);
+    setEntriesLoading(false);
+    setEntriesLoadingMore(false);
+    setEntriesError(nextError);
+    setCopiedEntryId('');
+    setPinningIds(() => new Set());
   }, []);
+
+  useEffect(
+    () => () => {
+      isMountedRef.current = false;
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     setActiveKey(routeKey);
@@ -82,17 +95,11 @@ export default function SectionPage() {
   useEffect(() => {
     if (!token) {
       setLoadingSections(false);
-      setEntries([]);
-      setEntriesHasMore(false);
-      setEntriesError('');
-      setEntriesLoading(false);
-      setEntriesLoadingMore(false);
+      resetEntryUiState({ hasMore: false });
       setFilters(() => ({ ...DEFAULT_FILTERS }));
-      setPinningIds(() => new Set());
-      setCopiedEntryId('');
       setPages([]);
     }
-  }, [token]);
+  }, [token, resetEntryUiState]);
 
   useEffect(() => {
     if (!token) return;
@@ -193,15 +200,9 @@ export default function SectionPage() {
   );
 
   useEffect(() => {
+    resetEntryUiState();
     setFilters(() => ({ ...DEFAULT_FILTERS }));
-    setEntries([]);
-    setEntriesHasMore(true);
-    setEntriesError('');
-    setEntriesLoading(false);
-    setEntriesLoadingMore(false);
-    setCopiedEntryId('');
-    setPinningIds(() => new Set());
-  }, [activeSection?.id]);
+  }, [activeSection?.id, resetEntryUiState]);
 
   const makeEntryParams = useCallback(
     (offset = 0) => {
@@ -226,16 +227,61 @@ export default function SectionPage() {
 
   const title = activeSection ? activeSection.label : 'Sections';
 
+  const compareEntries = useCallback((a, b) => {
+    const pinnedA = Boolean(a?.pinned);
+    const pinnedB = Boolean(b?.pinned);
+    if (pinnedA !== pinnedB) return pinnedA ? -1 : 1;
+
+    const dateA = a?.date || '';
+    const dateB = b?.date || '';
+    if (dateA && dateB && dateA !== dateB) {
+      return dateB.localeCompare(dateA);
+    }
+    if (!dateA && dateB) return 1;
+    if (dateA && !dateB) return -1;
+
+    const timeA = Date.parse(a?.updatedAt || a?.createdAt || '') || 0;
+    const timeB = Date.parse(b?.updatedAt || b?.createdAt || '') || 0;
+    if (timeA !== timeB) return timeB - timeA;
+
+    const idA = (a?._id || a?.id || '').toString();
+    const idB = (b?._id || b?.id || '').toString();
+    if (idA && idB && idA !== idB) {
+      return idB.localeCompare(idA);
+    }
+    return 0;
+  }, []);
+
+  const normalizeEntries = useCallback(
+    (list) => {
+      if (!Array.isArray(list) || list.length === 0) return [];
+      const map = new Map();
+      const fallback = [];
+      for (const entry of list) {
+        const id = entry?._id || entry?.id;
+        if (id) {
+          map.set(id, entry);
+        } else {
+          fallback.push(entry);
+        }
+      }
+      const deduped = [...map.values(), ...fallback];
+      return deduped.sort(compareEntries);
+    },
+    [compareEntries],
+  );
+
   useEffect(() => {
     if (!token) return;
 
+    if (dateRangeInvalid) {
+      resetEntryUiState({ hasMore: false });
+      return;
+    }
+
     const params = makeEntryParams(0);
     if (!params) {
-      setEntries([]);
-      setEntriesHasMore(false);
-      setEntriesError('');
-      setEntriesLoading(false);
-      setEntriesLoadingMore(false);
+      resetEntryUiState({ hasMore: false });
       return;
     }
 
@@ -245,21 +291,22 @@ export default function SectionPage() {
     setEntriesError('');
     setEntriesHasMore(true);
     setEntries([]);
+    setCopiedEntryId('');
+    setPinningIds(() => new Set());
 
     axios
       .get('/api/entries', { params })
       .then((res) => {
         if (ignore) return;
         const rows = Array.isArray(res.data) ? res.data : [];
-        setEntries(rows);
+        const normalizedRows = normalizeEntries(rows);
+        setEntries(normalizedRows);
         setEntriesHasMore(rows.length === params.limit);
       })
       .catch((err) => {
         if (ignore) return;
         console.warn('Section entries load failed:', err?.response?.data || err.message);
-        setEntries([]);
-        setEntriesError('Unable to load entries right now.');
-        setEntriesHasMore(false);
+        resetEntryUiState({ hasMore: false, error: 'Unable to load entries right now.' });
       })
       .finally(() => {
         if (!ignore) setEntriesLoading(false);
@@ -268,16 +315,25 @@ export default function SectionPage() {
     return () => {
       ignore = true;
     };
-  }, [token, makeEntryParams]);
+  }, [
+    token,
+    makeEntryParams,
+    normalizeEntries,
+    dateRangeInvalid,
+    resetEntryUiState,
+  ]);
 
-  function handleSelect(section) {
-    if (!section?.key) return;
-    setActiveKey(section.key);
-    navigate(`/sections/${encodeURIComponent(section.key)}`);
-  }
+  const handleSelect = useCallback(
+    (section) => {
+      if (!section?.key) return;
+      setActiveKey(section.key);
+      navigate(`/sections/${encodeURIComponent(section.key)}`);
+    },
+    [navigate],
+  );
 
   const loadMoreEntries = useCallback(() => {
-    if (!token || entriesLoading || entriesLoadingMore || !entriesHasMore) return;
+    if (!token || entriesLoading || entriesLoadingMore || !entriesHasMore || dateRangeInvalid) return;
 
     const params = makeEntryParams(entries.length);
     if (!params) return;
@@ -293,18 +349,7 @@ export default function SectionPage() {
           setEntriesHasMore(false);
           return;
         }
-        setEntries((prev) => {
-          const combined = [...prev, ...rows];
-          const deduped = [];
-          const seen = new Set();
-          for (const entry of combined) {
-            const id = entry?._id || entry?.id;
-            if (id && seen.has(id)) continue;
-            if (id) seen.add(id);
-            deduped.push(entry);
-          }
-          return deduped;
-        });
+        setEntries((prev) => normalizeEntries([...prev, ...rows]));
         setEntriesHasMore(rows.length === params.limit);
       })
       .catch((err) => {
@@ -321,8 +366,10 @@ export default function SectionPage() {
     entriesLoading,
     entriesLoadingMore,
     entriesHasMore,
+    dateRangeInvalid,
     entries.length,
     makeEntryParams,
+    normalizeEntries,
   ]);
 
   const handleFilterChange = useCallback((field, value) => {
@@ -334,7 +381,12 @@ export default function SectionPage() {
   }, []);
 
   const resetFilters = useCallback(() => {
-    setFilters(() => ({ ...DEFAULT_FILTERS }));
+    setFilters((prev) => {
+      if (!prev.startDate && !prev.endDate && !prev.tag && !prev.mood) {
+        return prev;
+      }
+      return { ...DEFAULT_FILTERS };
+    });
   }, []);
 
   const togglePinForEntry = useCallback(
@@ -352,15 +404,16 @@ export default function SectionPage() {
         const res = await axios.patch(`/api/entries/${entryId}`, { pinned: !entry.pinned });
         if (!isMountedRef.current) return;
         const updated = res?.data;
-        setEntries((prev) =>
-          prev.map((item) => {
+        setEntries((prev) => {
+          const patched = prev.map((item) => {
             if (item._id !== entryId) return item;
             if (updated && typeof updated === 'object') {
               return { ...item, ...updated };
             }
             return { ...item, pinned: !entry.pinned };
-          }),
-        );
+          });
+          return normalizeEntries(patched);
+        });
         setEntriesError('');
       } catch (err) {
         console.warn('Toggle pin failed:', err?.response?.data || err.message);
@@ -377,7 +430,7 @@ export default function SectionPage() {
         }
       }
     },
-    [token],
+    [token, normalizeEntries],
   );
 
   const handleCopyLink = useCallback(
@@ -425,8 +478,13 @@ export default function SectionPage() {
     [filters.startDate, filters.endDate],
   );
 
+  const hasActiveFilters = useMemo(
+    () => Boolean(filters.startDate || filters.endDate || filters.tag || filters.mood),
+    [filters.startDate, filters.endDate, filters.tag, filters.mood],
+  );
+
   useEffect(() => {
-    if (!entriesHasMore || entriesLoading || entriesLoadingMore) return;
+    if (!entriesHasMore || entriesLoading || entriesLoadingMore || dateRangeInvalid) return;
     const node = sentinelRef.current;
     if (!node) return;
 
@@ -442,7 +500,7 @@ export default function SectionPage() {
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [entriesHasMore, entriesLoading, entriesLoadingMore, loadMoreEntries]);
+  }, [entriesHasMore, entriesLoading, entriesLoadingMore, loadMoreEntries, dateRangeInvalid]);
 
   const loading = loadingSections || (activeKey ? loadingDetail : false);
 
@@ -581,7 +639,7 @@ export default function SectionPage() {
                     type="button"
                     className="filter-reset"
                     onClick={resetFilters}
-                    disabled={!filters.startDate && !filters.endDate && !filters.tag && !filters.mood}
+                    disabled={!hasActiveFilters}
                   >
                     Reset
                   </button>
