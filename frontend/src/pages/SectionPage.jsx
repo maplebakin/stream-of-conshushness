@@ -177,6 +177,7 @@ export default function SectionPage() {
   const normalizedSections = useMemo(() => {
     return (allSections || [])
       .map((s) => ({
+        id: s._id || s.id || null,
         key: (s.key || s.slug || '').toLowerCase(),
         label: s.label || s.name || s.key || 'Untitled section',
         icon: s.icon || s.emoji || '📚',
