@@ -55,7 +55,7 @@ export function extractTags(text = '') {
   return matches ? matches.map(t => t.slice(1)) : [];
 }
 
-export function calculateConfidence(match, type) {
+export function calculateConfidence(match) {
   let base = 0.5;
   if (/need to|must/.test(match[0]))       base += 0.3;
   if (/urgent|important/.test(match[0]))   base += 0.2;

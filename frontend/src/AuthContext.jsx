@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import { setAuthToken as setApiToken } from './api/axiosInstance.js';
@@ -17,7 +18,8 @@ function decodeUser(token) {
       return null;
     }
     return decoded;
-  } catch {
+  } catch (error) {
+    console.warn('[AuthContext] Failed to decode token', error);
     return null;
   }
 }
@@ -51,13 +53,15 @@ function loadInitialState() {
     try {
       const raw = localStorage.getItem('auth_user');
       storedUser = raw ? JSON.parse(raw) : null;
-    } catch {
+    } catch (error) {
+      console.warn('[AuthContext] Could not parse stored auth_user', error);
       storedUser = null;
     }
 
     const user = storedUser ? { ...decoded, ...storedUser } : decoded;
     return { token, user };
-  } catch {
+  } catch (error) {
+    console.warn('[AuthContext] Failed to load initial auth state', error);
     return { token: '', user: null };
   }
 }
@@ -83,7 +87,9 @@ export function AuthProvider({ children }) {
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem('auth_user');
       localStorage.removeItem(LEGACY_TOKEN_KEY);
-    } catch {}
+    } catch (error) {
+      console.warn('[AuthContext] Failed to clear storage on logout', error);
+    }
   }, []);
 
   // Accepts either a string token OR an object { token, user }
@@ -103,7 +109,9 @@ export function AuthProvider({ children }) {
         localStorage.setItem(TOKEN_KEY, t);
         localStorage.setItem('auth_user', JSON.stringify(mergedUser));
         localStorage.removeItem(LEGACY_TOKEN_KEY);
-      } catch {}
+      } catch (error) {
+        console.warn('[AuthContext] Failed to persist token during login', error);
+      }
     } else {
       if (logoutTimerRef.current) {
         clearTimeout(logoutTimerRef.current);
@@ -115,7 +123,9 @@ export function AuthProvider({ children }) {
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem('auth_user');
         localStorage.removeItem(LEGACY_TOKEN_KEY);
-      } catch {}
+      } catch (error) {
+        console.warn('[AuthContext] Failed to clear storage during login fallback', error);
+      }
     }
   }, [logout]);
 
@@ -145,7 +155,9 @@ export function AuthProvider({ children }) {
       try {
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem('auth_user');
-      } catch {}
+      } catch (error) {
+        console.warn('[AuthContext] Failed to clear storage when token missing', error);
+      }
       return;
     }
 
@@ -168,7 +180,11 @@ export function AuthProvider({ children }) {
       }, delay);
     }
 
-    try { localStorage.setItem(TOKEN_KEY, token); } catch {}
+    try {
+      localStorage.setItem(TOKEN_KEY, token);
+    } catch (error) {
+      console.warn('[AuthContext] Failed to persist token update', error);
+    }
   }, [token, logout]);
 
   const value = useMemo(() => ({

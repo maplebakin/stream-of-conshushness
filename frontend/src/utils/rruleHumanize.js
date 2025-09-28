@@ -16,7 +16,7 @@ export function humanizeRRULE(rrule) {
     return I===1 ? `Every ${days}` : `Every ${I} weeks on ${days}`;
   }
   if (F === 'MONTHLY') {
-    if (bmd) return I===1 ? `Every month on the ${bmd}` : `Every ${I} months on the ${bmd}`;
+    if (bymd) return I===1 ? `Every month on the ${bymd}` : `Every ${I} months on the ${bymd}`;
     if (bset && byday.length===1) return I===1 ? `Every ${ORD[bset] || `#${bset}`} ${byday[0]}` : `Every ${I} months on the ${ORD[bset] || `#${bset}`} ${byday[0]}`;
     return I===1 ? 'Every month' : `Every ${I} months`;
   }

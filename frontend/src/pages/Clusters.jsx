@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
 
@@ -18,8 +18,6 @@ function normalizeClusters(resOrData) {
 export default function Clusters() {
   const { token } = useContext(AuthContext);
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
-  const navigate = useNavigate();
-
   const [clusters, setClusters] = useState([]);
   const [name, setName] = useState('');
   const [color, setColor] = useState('#9ecae1');

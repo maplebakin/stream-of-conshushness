@@ -2,8 +2,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { visualizer } from 'rollup-plugin-visualizer';
+import { env } from 'node:process';
 
-const ANALYZE = process.env.ANALYZE === '1';
+const ANALYZE = env.ANALYZE === '1';
 
 export default defineConfig({
   plugins: [
