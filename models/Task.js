@@ -10,6 +10,7 @@ const taskSchema = new mongoose.Schema(
     completed  : { type: Boolean, default: false, index: true },
     completedAt: { type: Date, default: null },
     priority   : { type: Number, default: 0 },
+    status     : { type: String, enum: ['todo', 'doing', 'done'], default: 'todo', index: true },
 
     // Multi tags
     clusters   : { type: [String], default: [], index: true },
@@ -45,9 +46,23 @@ taskSchema.virtual('section')
   });
 
 taskSchema.pre('save', function(next) {
+  if (this.isModified('status')) {
+    if (this.status === 'done' && !this.completed) {
+      this.completed = true;
+    } else if (this.status !== 'done' && this.completed) {
+      this.completed = false;
+    }
+  }
+
   if (this.isModified('completed')) {
     this.completedAt = this.completed ? new Date() : null;
+    if (this.completed) {
+      this.status = 'done';
+    } else if (this.status === 'done') {
+      this.status = 'todo';
+    }
   }
+
   next();
 });
 

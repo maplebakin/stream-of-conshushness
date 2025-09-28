@@ -376,9 +376,11 @@ function normalizeEntryForCreate(payload = {}) {
   if (!("mood" in normalized)) normalized.mood = typeof payload.mood === "string" ? payload.mood : "";
   if (!("cluster" in normalized)) normalized.cluster = typeof payload.cluster === "string" ? payload.cluster : "";
   if (!("section" in normalized)) normalized.section = typeof payload.section === "string" ? payload.section : "";
+  if (!("sectionId" in normalized)) normalized.sectionId = toObjectIdOrNull(payload.sectionId);
   if (!("tags" in normalized)) normalized.tags = deDupeTags(payload.tags);
   if (!("linkedGoal" in normalized)) normalized.linkedGoal = toObjectIdOrNull(payload.linkedGoal);
   if (!("sectionPageId" in normalized)) normalized.sectionPageId = toObjectIdOrNull(payload.sectionPageId);
+  if (!("pinned" in normalized)) normalized.pinned = !!payload.pinned;
   return normalized;
 }
 
@@ -416,6 +418,9 @@ function normalizeEntryForUpdate(payload = {}, existing = {}) {
   if (Object.prototype.hasOwnProperty.call(payload, "section")) {
     normalized.section = typeof payload.section === "string" ? payload.section : "";
   }
+  if (Object.prototype.hasOwnProperty.call(payload, "sectionId")) {
+    normalized.sectionId = toObjectIdOrNull(payload.sectionId);
+  }
   if (Object.prototype.hasOwnProperty.call(payload, "tags")) {
     normalized.tags = deDupeTags(payload.tags);
   }
@@ -424,6 +429,9 @@ function normalizeEntryForUpdate(payload = {}, existing = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(payload, "sectionPageId")) {
     normalized.sectionPageId = toObjectIdOrNull(payload.sectionPageId);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, "pinned")) {
+    normalized.pinned = !!payload.pinned;
   }
   return normalized;
 }
@@ -457,6 +465,8 @@ export async function createEntryWithAutomation({ userId, payload = {} }) {
     mood: normalized.mood,
     cluster: normalized.cluster,
     section: normalized.section,
+    sectionId: normalized.sectionId,
+    pinned: normalized.pinned,
     tags: mergedTags,
     linkedGoal: normalized.linkedGoal,
     sectionPageId: normalized.sectionPageId,
@@ -495,6 +505,9 @@ export async function updateEntryWithAutomation({ userId, entryId, updates = {} 
   if (Object.prototype.hasOwnProperty.call(normalized, "section")) {
     entry.section = normalized.section || "";
   }
+  if (Object.prototype.hasOwnProperty.call(normalized, "sectionId")) {
+    entry.sectionId = normalized.sectionId;
+  }
   if (Object.prototype.hasOwnProperty.call(normalized, "linkedGoal")) {
     entry.linkedGoal = normalized.linkedGoal;
   }
@@ -503,6 +516,9 @@ export async function updateEntryWithAutomation({ userId, entryId, updates = {} 
   }
   if (Object.prototype.hasOwnProperty.call(normalized, "tags")) {
     entry.tags = normalized.tags;
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, "pinned")) {
+    entry.pinned = !!normalized.pinned;
   }
 
   let analysis = null;
