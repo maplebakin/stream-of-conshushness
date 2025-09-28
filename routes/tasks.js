@@ -1,6 +1,7 @@
 // server/routes/tasks.js
 import express from 'express';
 import Task from '../models/Task.js';
+import { normalizeClusterIds, resolveClusterIdForOwner } from '../utils/clusterIds.js';
 
 const router = express.Router();
 
@@ -41,7 +42,16 @@ async function listTasksCore(req, res) {
     const dayISO = dueDate || date;
     if (dayISO) q.dueDate = dayISO;
 
-    if (cluster) q.clusters = String(cluster);
+    let clusterIdFilter = null;
+    if (req.query.clusterId) {
+      clusterIdFilter = await resolveClusterIdForOwner(userId, req.query.clusterId);
+    } else if (cluster) {
+      clusterIdFilter = await resolveClusterIdForOwner(userId, cluster);
+    }
+    if (req.query.clusterId || cluster) {
+      if (!clusterIdFilter) return res.json([]);
+      q.clusters = clusterIdFilter;
+    }
     if (section) q.sections = String(section);
 
     if (completed !== undefined) {
@@ -93,6 +103,14 @@ async function updateTask(req, res) {
       up.title = up.title.trim();
       if (!up.title) return res.status(400).json({ error: 'title required' });
     }
+    if (req.body?.clusterId !== undefined && up.clusters === undefined) {
+      const resolved = await resolveClusterIdForOwner(userId, req.body.clusterId);
+      up.clusters = resolved ? [resolved] : [];
+    } else if (req.body?.cluster !== undefined && up.clusters === undefined) {
+      const resolved = await resolveClusterIdForOwner(userId, req.body.cluster);
+      up.clusters = resolved ? [resolved] : [];
+    }
+
     const doc = await Task.findOne({ _id: id, userId });
     if (!doc) return res.status(404).json({ error: 'Not found' });
 
@@ -100,7 +118,7 @@ async function updateTask(req, res) {
     if (up.notes !== undefined) doc.notes = typeof up.notes === 'string' ? up.notes : '';
     if (up.dueDate !== undefined) doc.dueDate = up.dueDate || null;
     if (up.priority !== undefined) doc.priority = Number.isFinite(Number(up.priority)) ? Number(up.priority) : 0;
-    if (up.clusters !== undefined) doc.clusters = Array.isArray(up.clusters) ? up.clusters : [];
+    if (up.clusters !== undefined) doc.clusters = normalizeClusterIds(up.clusters);
     if (up.sections !== undefined) doc.sections = Array.isArray(up.sections) ? up.sections : [];
     if (up.rrule !== undefined) doc.rrule = typeof up.rrule === 'string' ? up.rrule : '';
     if (up.completed !== undefined) doc.completed = !!up.completed;
@@ -187,13 +205,22 @@ router.post('/', async (req, res) => {
     const allowedStatuses = ['todo', 'doing', 'done'];
     const safeStatus = allowedStatuses.includes(status) ? status : 'todo';
 
+    let clusterIds = normalizeClusterIds(clusters);
+    if (!clusterIds.length && req.body?.clusterId) {
+      const resolved = await resolveClusterIdForOwner(userId, req.body.clusterId);
+      if (resolved) clusterIds = [resolved];
+    } else if (!clusterIds.length && req.body?.cluster) {
+      const resolved = await resolveClusterIdForOwner(userId, req.body.cluster);
+      if (resolved) clusterIds = [resolved];
+    }
+
     const doc = await Task.create({
       userId,
       title,
       notes: notes || '',
       dueDate,
       priority,
-      clusters: clusters || [],
+      clusters: clusterIds,
       sections: sections || [],
       rrule,
       completed: false,

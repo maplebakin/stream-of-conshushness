@@ -13,7 +13,7 @@ const taskSchema = new mongoose.Schema(
     status     : { type: String, enum: ['todo', 'doing', 'done'], default: 'todo', index: true },
 
     // Multi tags
-    clusters   : { type: [String], default: [], index: true },
+    clusters   : { type: [mongoose.Schema.Types.ObjectId], ref: 'Cluster', default: [] },
     sections   : { type: [String], default: [], index: true },
 
     // Recurrence (aligns with UI)
@@ -25,14 +25,23 @@ const taskSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Legacy convenience: singular cluster
+// Legacy convenience: singular cluster (id string)
 taskSchema.virtual('cluster')
-  .get(function () { return this.clusters?.[0] || ''; })
+  .get(function () {
+    const first = this.clusters?.[0];
+    return first ? first.toString() : '';
+  })
   .set(function (val) {
-    if (typeof val !== 'string' || !val.trim()) return;
-    const key = val.trim();
-    if (!Array.isArray(this.clusters) || this.clusters.length === 0) this.clusters = [key];
-    else if (!this.clusters.includes(key)) this.clusters.unshift(key);
+    if (!val) return;
+    const str = typeof val === 'string' ? val.trim() : val?.toString?.();
+    if (!str || !mongoose.Types.ObjectId.isValid(str)) return;
+    const id = new mongoose.Types.ObjectId(str);
+    const key = id.toString();
+    const existing = Array.isArray(this.clusters)
+      ? this.clusters.map((c) => (c instanceof mongoose.Types.ObjectId ? c.toString() : c?.toString?.()))
+      : [];
+    if (existing.includes(key)) return;
+    this.clusters = [id, ...(Array.isArray(this.clusters) ? this.clusters : [])];
   });
 
 // Singular section (for easy form binding)
@@ -65,5 +74,7 @@ taskSchema.pre('save', function(next) {
 
   next();
 });
+
+taskSchema.index({ userId: 1, clusters: 1 });
 
 export default mongoose.model('Task', taskSchema);

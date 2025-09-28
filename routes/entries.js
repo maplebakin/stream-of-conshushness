@@ -36,6 +36,9 @@ router.get("/", async (req, res) => {
       q.date = range;
     }
     if (req.query.cluster) q.cluster = String(req.query.cluster);
+    if (req.query.clusterId && ObjectId.isValid(req.query.clusterId)) {
+      q.clusters = new ObjectId(req.query.clusterId);
+    }
 
     const sectionFilters = [];
     if (req.query.section && String(req.query.section).trim()) {

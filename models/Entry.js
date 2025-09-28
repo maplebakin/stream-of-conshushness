@@ -24,6 +24,7 @@ const EntrySchema = new Schema({
   mood   : { type: String, default: "" },
   tags   : { type: [String], default: [] },
   cluster: { type: String, default: "" },    // cluster scoping
+  clusters: { type: [Schema.Types.ObjectId], ref: "Cluster", default: [] },
   section: { type: String, default: "" },    // legacy / optional
   sectionId: { type: Schema.Types.ObjectId, ref: "Section", default: null, index: true },
   pinned : { type: Boolean, default: false },
@@ -39,6 +40,7 @@ const EntrySchema = new Schema({
 
 // Helpful compound indexes
 EntrySchema.index({ userId: 1, cluster: 1, date: -1 });
+EntrySchema.index({ userId: 1, clusters: 1, date: -1 });
 EntrySchema.index({ userId: 1, sectionPageId: 1, date: -1 });
 EntrySchema.index({ userId: 1, sectionId: 1, pinned: -1, date: -1 });
 
