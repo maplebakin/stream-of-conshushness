@@ -25,6 +25,7 @@ export default function GamePage() {
     })
       .then(res => setGame(res.data))
       .catch(err => {
+        console.warn('[GamePage] Failed to load game', err);
         setNotFound(true);
         setGame(null);
       });

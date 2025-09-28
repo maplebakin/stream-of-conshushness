@@ -199,31 +199,45 @@ router.get('/activity', async (req, res) => {
       });
     }
 
+    const slugMap = new Map();
+    for (const rawSlug of slugs) {
+      const lower = String(rawSlug).toLowerCase();
+      if (!slugMap.has(lower)) {
+        slugMap.set(lower, rawSlug);
+      }
+    }
+    const slugKeys = Array.from(slugMap.keys());
+
     const activityMap = Object.create(null);
     for (const slug of slugs) {
-      activityMap[slug] = { entries: 0, tasks: 0, total: 0 };
+      const canonical = slugMap.get(String(slug).toLowerCase()) || slug;
+      if (!activityMap[canonical]) {
+        activityMap[canonical] = { entries: 0, tasks: 0, total: 0 };
+      }
     }
 
     const entriesActivity = await Entry.aggregate([
       {
         $match: {
           userId: ownerObjectId,
-          section: { $in: slugs },
           updatedAt: { $gte: since },
+          section: { $type: 'string', $ne: '' },
         },
       },
       {
         $group: {
-          _id: '$section',
+          _id: { $toLower: '$section' },
           count: { $sum: 1 },
         },
       },
+      { $match: { _id: { $in: slugKeys } } },
     ]);
 
     for (const item of entriesActivity) {
-      const slug = item?._id;
-      if (slug && activityMap[slug]) {
-        activityMap[slug].entries = item.count || 0;
+      const lowerSlug = item?._id;
+      const canonical = lowerSlug ? slugMap.get(lowerSlug) : null;
+      if (canonical && activityMap[canonical]) {
+        activityMap[canonical].entries = item.count || 0;
       }
     }
 
@@ -231,24 +245,30 @@ router.get('/activity', async (req, res) => {
       {
         $match: {
           userId: ownerObjectId,
-          sections: { $in: slugs },
           updatedAt: { $gte: since },
+          sections: { $exists: true, $ne: [] },
         },
       },
       { $unwind: '$sections' },
-      { $match: { sections: { $in: slugs } } },
+      {
+        $match: {
+          sections: { $type: 'string', $ne: '' },
+        },
+      },
       {
         $group: {
-          _id: '$sections',
+          _id: { $toLower: '$sections' },
           count: { $sum: 1 },
         },
       },
+      { $match: { _id: { $in: slugKeys } } },
     ]);
 
     for (const item of tasksActivity) {
-      const slug = item?._id;
-      if (slug && activityMap[slug]) {
-        activityMap[slug].tasks = item.count || 0;
+      const lowerSlug = item?._id;
+      const canonical = lowerSlug ? slugMap.get(lowerSlug) : null;
+      if (canonical && activityMap[canonical]) {
+        activityMap[canonical].tasks = item.count || 0;
       }
     }
 

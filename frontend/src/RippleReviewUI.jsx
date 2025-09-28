@@ -70,9 +70,24 @@ function getConfidence(r) {
 
 /* ───────────────── robust backend actions ───────────────── */
 async function dismissRipple(id, headers) {
-  try { await axios.post(`/api/ripples/${id}/dismiss`, {}, { headers }); return true; } catch {}
-  try { await axios.patch(`/api/ripples/${id}`, { status: 'dismissed' }, { headers }); return true; } catch {}
-  try { await axios.post(`/api/ripples/${id}/status`, { status: 'dismissed' }, { headers }); return true; } catch {}
+  try {
+    await axios.post(`/api/ripples/${id}/dismiss`, {}, { headers });
+    return true;
+  } catch (error) {
+    console.warn('[RippleReviewUI] POST /dismiss failed, trying fallback', error);
+  }
+  try {
+    await axios.patch(`/api/ripples/${id}`, { status: 'dismissed' }, { headers });
+    return true;
+  } catch (error) {
+    console.warn('[RippleReviewUI] PATCH status fallback failed, trying next', error);
+  }
+  try {
+    await axios.post(`/api/ripples/${id}/status`, { status: 'dismissed' }, { headers });
+    return true;
+  } catch (error) {
+    console.warn('[RippleReviewUI] POST status fallback failed', error);
+  }
   throw new Error('dismiss failed');
 }
 
@@ -173,14 +188,6 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
 
   useEffect(() => { localStorage.setItem('rr_hide_chatter', hideChatter ? '1' : '0'); }, [hideChatter]);
   useEffect(() => { localStorage.setItem('rr_min_conf', String(minConf)); }, [minConf]);
-
-  function startMakeTask(r) {
-    const id = r._id || r.id;
-    const title = r.extractedText || r.text || '';
-    const cluster = clusterSel[id] || '';
-    const hintedDue = r.meta?.dueDate || r.dueDate || dayISO;
-    setTaskDraft({ title, dueDate: hintedDue, cluster, rippleId: id });
-  }
 
   async function onTaskSavedClose() {
     if (!taskDraft) return setTaskDraft(null);
