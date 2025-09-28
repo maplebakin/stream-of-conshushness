@@ -207,13 +207,16 @@ export default function SectionPage() {
 
   const makeEntryParams = useCallback(
     (offset = 0) => {
-      if (!activeSection?.id) return null;
       const params = {
-        sectionId: activeSection.id,
         limit: PAGE_SIZE,
         offset,
       };
+      if (activeSection?.id) params.sectionId = activeSection.id;
       if (activeSection?.key) params.section = activeSection.key;
+
+      if (!params.sectionId && !params.section) {
+        return null;
+      }
 
       const { startDate, endDate, tag, mood } = filters;
       if (startDate) params.startDate = startDate;
