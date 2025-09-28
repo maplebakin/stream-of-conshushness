@@ -3,6 +3,7 @@ import React, { useContext, useEffect, useMemo, useState } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import TaskModal from './TaskModal.jsx';
+import { normalizeClusterList } from './utils/clusterHelpers.js';
 import './DailyRipples.css';
 
 function todayISOInToronto(d = new Date()) {
@@ -142,7 +143,7 @@ export default function DailyRipples(props) {
   useEffect(() => {
     if (!token) return;
     axios.get('/api/clusters', { headers: authHeaders })
-      .then(res => setClusters(Array.isArray(res.data) ? res.data : []))
+      .then(res => setClusters(normalizeClusterList(res)))
       .catch(() => setClusters([]));
   }, [token, authHeaders]);
 
@@ -274,9 +275,9 @@ export default function DailyRipples(props) {
                     onChange={e => setClusterSel(prev => ({ ...prev, [id]: e.target.value }))}
                   >
                     <option value="">Cluster (optional)</option>
-                    {clusters.map(c => (
-                      <option key={c._id || c.id || c.key || c.name} value={c.name || c.label || c.key}>
-                        {c.name || c.label || c.key}
+                    {clusters.map((c) => (
+                      <option key={c.id || c.slug} value={c.slug}>
+                        {c.name}
                       </option>
                     ))}
                   </select>

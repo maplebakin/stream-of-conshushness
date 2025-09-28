@@ -1,419 +1,570 @@
-import React, { useEffect, useMemo, useState, useContext, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from '../api/axiosInstance';
-import { AuthContext } from '../AuthContext.jsx';
-import RoomLayout from '../components/room/RoomLayout.jsx';
 import TaskModal from '../TaskModal.jsx';
-import '../Main.css';
+import EntryModal from '../EntryModal.jsx';
 import SafeHTML from '../components/SafeHTML.jsx';
+import { normalizeClusterList, normalizeCluster, slugifyCluster } from '../utils/clusterHelpers.js';
+import '../Main.css';
+import './ClusterRoom.css';
 
-function torontoParts(d = new Date()) {
-  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' });
-  const p = fmt.formatToParts(d);
-  return { y: p.find(x => x.type === 'year').value, m: p.find(x => x.type === 'month').value, dd: p.find(x => x.type === 'day').value };
-}
-function torontoTodayISO() { const { y, m, dd } = torontoParts(); return `${y}-${m}-${dd}`; }
-function parseISODateLocalMidnight(iso) { const [y, m, d] = iso.split('-').map(n => parseInt(n, 10)); return new Date(y, m - 1, d); }
-function toTorontoISOFromDate(d) { const { y, m, dd } = torontoParts(d); return `${y}-${m}-${dd}`; }
+const TABS = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'tasks', label: 'Tasks' },
+  { key: 'entries', label: 'Entries' }
+];
 
-function buildTimeline({ entries, tasks, appts }, filters) {
-  const items = [];
-  if (filters.entries && Array.isArray(entries)) {
-    for (const e of entries) items.push({ type: 'entry', id: e._id, timelineDate: e.createdAt || e.date || '1970-01-01', data: e });
-  }
-  if (filters.tasks && Array.isArray(tasks)) {
-    for (const t of tasks) items.push({ type: 'task', id: t._id, timelineDate: t.dueDate || t.createdAt || '1970-01-01', data: t });
-  }
-  if (filters.appts && Array.isArray(appts)) {
-    for (const a of appts) items.push({ type: 'appt', id: a._id, timelineDate: a.start || a.date || '1970-01-01', data: a });
-  }
-  items.sort((a, b) => (a.timelineDate > b.timelineDate ? -1 : a.timelineDate < b.timelineDate ? 1 : 0));
-  return items;
+function torontoParts(date = new Date()) {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Toronto',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  const parts = fmt.formatToParts(date);
+  const y = parts.find((p) => p.type === 'year')?.value;
+  const m = parts.find((p) => p.type === 'month')?.value;
+  const d = parts.find((p) => p.type === 'day')?.value;
+  return { y, m, d };
 }
-function PillButton({ active, onClick, children }) {
-  return (
-    <button type="button" onClick={onClick} className={`pill ${active ? '' : 'pill-muted'}`} style={{ cursor: 'pointer', border: 'none', background: 'transparent' }} aria-pressed={!!active}>
-      {children}
-    </button>
-  );
+
+function torontoTodayISO() {
+  const { y, m, d } = torontoParts();
+  return `${y}-${m}-${d}`;
 }
-function EntryCard({ e }) {
-  return (
-    <article className="entry-card" key={e._id} style={{ paddingTop: 8 }}>
-      <div className="entry-meta">
-        <span className="date">{e.date}</span>
-        {e.mood && <span className="pill">{e.mood}</span>}
-        {Array.isArray(e.tags) && e.tags.slice(0, 5).map((t, i) => (<span key={i} className="pill pill-muted">#{t}</span>))}
-      </div>
-      <SafeHTML
-        className="entry-text"
-        html={
-          (e?.html && e.html.length)
-            ? e.html
-            : (typeof e?.content === 'string' && /<[^>]+>/.test(e.content))
-              ? e.content
-              : (e?.text ?? '').replaceAll('\n', '<br/>')
-        }
-      />
-    </article>
-  );
+
+function isoDaysAgo(days = 0) {
+  const base = new Date();
+  base.setHours(12, 0, 0, 0);
+  base.setDate(base.getDate() - days);
+  const { y, m, d } = torontoParts(base);
+  return `${y}-${m}-${d}`;
 }
-function TaskCard({ t, onToggle, onEdit }) {
-  return (
-    <article className="entry-card" key={t._id}>
-      <div className="entry-meta" style={{ display:'flex', gap:8, alignItems:'center' }}>
-        <label className="chk" title={t.completed ? 'Mark not done' : 'Mark done'}>
-          <input type="checkbox" checked={!!t.completed} onChange={() => onToggle?.(t)} />
-          <span className="checkmark" />
-        </label>
-        <span className={`pill ${t.completed ? 'pill-muted' : ''}`}>Task</span>
-        {t.dueDate ? <span className="pill">{t.dueDate}</span> : <span className="pill pill-muted">no date</span>}
-        {Array.isArray(t.sections) && t.sections.length > 0 && (<span className="pill pill-muted">§{t.sections.join(' • ')}</span>)}
-      </div>
-      <div className="entry-text" onClick={() => onEdit?.(t)} style={{ cursor: onEdit ? 'pointer' : 'default', textDecoration: t.completed ? 'line-through' : 'none', opacity: t.completed ? 0.7 : 1 }} title="Click to edit">
-        {t.title}
-      </div>
-      {t.notes && <div className="muted" style={{ marginTop: 6 }}>{t.notes}</div>}
-    </article>
-  );
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  const date = new Date(iso.length === 10 ? `${iso}T12:00:00` : iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
-function ApptCard({ a }) {
-  const when = a.start ? new Date(a.start).toLocaleString() : (a.date || '—');
-  return (
-    <article className="entry-card" key={a._id}>
-      <div className="entry-meta"><span className="pill">Appointment</span><span className="pill">{when}</span></div>
-      <div>{a.title}</div>
-    </article>
-  );
-}
-function normalizeClusters(resOrData) {
-  const d = resOrData?.data ?? resOrData;
-  if (Array.isArray(d)) return d;
-  if (Array.isArray(d?.data)) return d.data;
-  if (Array.isArray(d?.clusters)) return d.clusters;
-  if (Array.isArray(d?.data?.clusters)) return d.data.clusters;
+
+function normalizeArray(payload) {
+  const data = payload?.data ?? payload;
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
   return [];
+}
+
+function entrySnippet(entry) {
+  const plain = entry?.summary || entry?.text || entry?.content || '';
+  if (typeof plain !== 'string') return '';
+  return plain.replace(/<[^>]+>/g, '').trim();
 }
 
 export default function ClusterRoom() {
   const { clusterSlug } = useParams();
-  const { token } = useContext(AuthContext);
-  const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
+  const navigate = useNavigate();
 
-  const [clusters, setClusters] = useState([]);
-  const [entries, setEntries] = useState([]);
-  const [tasks, setTasks] = useState([]);
-  const [appts, setAppts] = useState([]);
-  const [tasksToday, setTasksToday] = useState([]);
-  const [tasksUpcoming, setTasksUpcoming] = useState([]);
-  const [apptsToday, setApptsToday] = useState([]);
-  const [apptsUpcoming, setApptsUpcoming] = useState([]);
-  const [motifs, setMotifs] = useState({ tags: [], moods: [] });
-
+  const [activeCluster, setActiveCluster] = useState(null);
+  const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [composing, setComposing] = useState(false);
-  const [newText, setNewText] = useState('');
+  const [loadError, setLoadError] = useState('');
 
-  const [page, setPage] = useState(0);
-  const limit = 50;
-  const [hasMore, setHasMore] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editForm, setEditForm] = useState({ name: '', slug: '', color: '#9b87f5', icon: '🗂️' });
 
-  const [filters, setFilters] = useState({ entries: true, tasks: false, appts: false, notes: false });
+  const [tasks, setTasks] = useState([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksError, setTasksError] = useState('');
+
+  const [entries, setEntries] = useState([]);
+  const [entriesLoading, setEntriesLoading] = useState(false);
+  const [entriesError, setEntriesError] = useState('');
+
+  const [overview, setOverview] = useState({ openTasks: 0, entriesLast7: 0 });
 
   const [showTaskModal, setShowTaskModal] = useState(false);
-  const [editingTask, setEditingTask] = useState(null);
+  const [showEntryModal, setShowEntryModal] = useState(false);
 
-  const title = (clusterSlug || '').replace(/-/g, ' ');
+  const todayISO = useMemo(() => torontoTodayISO(), []);
+  const startISO = useMemo(() => isoDaysAgo(6), []);
 
-  const recomputeSlices = useCallback((tasksData, apptsData) => {
-    const today = torontoTodayISO();
-    const tToday = (tasksData || []).filter(t => t.dueDate === today);
-    const tUpcoming = (tasksData || []).filter(t => t.dueDate && t.dueDate > today).sort((a,b)=>a.dueDate.localeCompare(b.dueDate)).slice(0,5);
-    const aToday = (apptsData || []).filter(a => {
-      const dt = a.start ? new Date(a.start) : (a.date ? parseISODateLocalMidnight(a.date) : null);
-      return dt && toTorontoISOFromDate(dt) === today;
-    });
-    const aUpcoming = (apptsData || []).filter(a => {
-      const dt = a.start ? new Date(a.start) : (a.date ? parseISODateLocalMidnight(a.date) : null);
-      return dt && toTorontoISOFromDate(dt) > today;
-    }).sort((a,b)=> (a.start || a.date || '').localeCompare(b.start || b.date || '')).slice(0,5);
-    setTasksToday(tToday); setTasksUpcoming(tUpcoming); setApptsToday(aToday); setApptsUpcoming(aUpcoming);
-  }, []);
+  const loadClusterData = useCallback(async (cluster) => {
+    if (!cluster?.id) return;
+    setTasksLoading(true);
+    setEntriesLoading(true);
+    setTasksError('');
+    setEntriesError('');
 
-  const reloadTasks = useCallback(async () => {
-    try {
-      const tRes = await axios.get(`/api/tasks?cluster=${encodeURIComponent(clusterSlug)}&completed=false&limit=200`, { headers });
-      const tasksData = Array.isArray(tRes.data) ? tRes.data : (Array.isArray(tRes.data?.data) ? tRes.data.data : []);
+    const [tasksResult, entriesResult] = await Promise.allSettled([
+      axios.get('/api/tasks', {
+        params: {
+          clusterId: cluster.id,
+          includeCompleted: '1',
+          limit: 200
+        }
+      }),
+      axios.get('/api/entries', {
+        params: {
+          clusterId: cluster.id,
+          startDate: startISO,
+          endDate: todayISO,
+          limit: 50
+        }
+      })
+    ]);
+
+    let tasksData = [];
+    if (tasksResult.status === 'fulfilled') {
+      tasksData = normalizeArray(tasksResult.value).map((t) => ({
+        ...t,
+        dueDate: t.dueDate || '',
+        title: t.title || 'Untitled task'
+      }));
+      tasksData.sort((a, b) => {
+        if (!!a.completed !== !!b.completed) return a.completed ? 1 : -1;
+        if (a.dueDate && b.dueDate && a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+        if (!a.dueDate && b.dueDate) return 1;
+        if (a.dueDate && !b.dueDate) return -1;
+        return (a.title || '').localeCompare(b.title || '');
+      });
       setTasks(tasksData);
-      recomputeSlices(tasksData, appts);
-    } catch (error) {
-      console.warn('Failed to reload cluster tasks', error);
+    } else {
+      setTasks([]);
+      setTasksError(tasksResult.reason?.response?.data?.error || tasksResult.reason?.message || 'Failed to load tasks.');
     }
-  }, [clusterSlug, headers, appts, recomputeSlices]);
+
+    let entriesData = [];
+    if (entriesResult.status === 'fulfilled') {
+      entriesData = normalizeArray(entriesResult.value);
+      entriesData.sort((a, b) => {
+        const aKey = `${a.date || ''}T${a.createdAt || ''}`;
+        const bKey = `${b.date || ''}T${b.createdAt || ''}`;
+        return aKey > bKey ? -1 : aKey < bKey ? 1 : 0;
+      });
+      setEntries(entriesData);
+    } else {
+      setEntries([]);
+      setEntriesError(entriesResult.reason?.response?.data?.error || entriesResult.reason?.message || 'Failed to load entries.');
+    }
+
+    setOverview({
+      openTasks: tasksData.filter((t) => !t.completed).length,
+      entriesLast7: entriesData.length
+    });
+
+    setTasksLoading(false);
+    setEntriesLoading(false);
+  }, [startISO, todayISO]);
 
   useEffect(() => {
-    if (!token || !clusterSlug) return;
-
-    setEntries([]); setPage(0); setHasMore(false);
-    setLoading(true); setErrorMsg('');
-
-    const controller = new AbortController();
-    const signal = controller.signal;
-
-    (async () => {
+    async function loadClusters() {
+      setLoading(true);
+      setLoadError('');
       try {
-        // 1) Left spine clusters
-        let list = [];
-        try {
-          const res = await axios.get('/api/clusters', { headers, signal });
-          list = normalizeClusters(res);
-        } catch {
-          list = [{ key: clusterSlug, label: title }]; // minimal fallback
+        const res = await axios.get('/api/clusters');
+        const list = normalizeClusterList(res);
+        const match = list.find((c) => c.slug === clusterSlug) || null;
+        if (!match) {
+          setActiveCluster(null);
+          setLoadError(list.length ? 'We could not find that cluster.' : 'No clusters yet.');
+        } else {
+          setActiveCluster(match);
         }
-        if (!signal.aborted) {
-          const spine = list.map(c => ({ slug: c.key || c.slug || '', name: c.label || c.name || c.key || 'Unnamed', emoji: c.icon || '' })).filter(x => x.slug);
-          setClusters(spine);
-        }
-
-        // 2) Entries page 0
-        const entryRes = await axios.get(`/api/entries?cluster=${encodeURIComponent(clusterSlug)}&limit=${limit}&offset=0`, { headers, signal });
-        const entriesData = Array.isArray(entryRes.data) ? entryRes.data : (Array.isArray(entryRes.data?.data) ? entryRes.data.data : []);
-        if (!signal.aborted) { setEntries(entriesData); setHasMore(entriesData.length === limit); }
-
-        // 3) Tasks + Appointments
-        let tasksData = [];
-        try {
-          const tRes = await axios.get(`/api/tasks?cluster=${encodeURIComponent(clusterSlug)}&completed=false&limit=200`, { headers, signal });
-          tasksData = Array.isArray(tRes.data) ? tRes.data : (Array.isArray(tRes.data?.data) ? tRes.data.data : []);
-        } catch { tasksData = []; }
-        if (!signal.aborted) setTasks(tasksData);
-
-        let apptsData = [];
-        try {
-          const aRes = await axios.get(`/api/appointments?cluster=${encodeURIComponent(clusterSlug)}&limit=200`, { headers, signal });
-          apptsData = Array.isArray(aRes.data) ? aRes.data : (Array.isArray(aRes.data?.data) ? aRes.data.data : []);
-        } catch { apptsData = []; }
-        if (!signal.aborted) setAppts(apptsData);
-
-        if (!signal.aborted) recomputeSlices(tasksData, apptsData);
-
-        // 5) Motifs from last 30 days of entries
-        const thirty = new Date(); thirty.setDate(thirty.getDate() - 30);
-        const recent = entriesData.filter(e => (e.createdAt ? new Date(e.createdAt) : parseISODateLocalMidnight(e.date)) >= thirty);
-        const tagCounts = {}; const moodCounts = {};
-        for (const e of recent) {
-          if (Array.isArray(e.tags)) e.tags.forEach(t => (tagCounts[t] = (tagCounts[t] || 0) + 1));
-          if (e.mood) moodCounts[e.mood] = (moodCounts[e.mood] || 0) + 1;
-        }
-        const topTags = Object.entries(tagCounts).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([tag,count])=>({tag,count}));
-        const topMoods = Object.entries(moodCounts).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([mood,count])=>({mood,count}));
-        if (!signal.aborted) setMotifs({ tags: topTags, moods: topMoods });
-      } catch (e) {
-        if (!controller.signal.aborted) {
-          console.warn('ClusterRoom load failed:', e?.response?.data || e.message);
-          setErrorMsg('Failed to load room data. Try again.');
-        }
+      } catch (err) {
+        console.error('Cluster load failed:', err);
+        setActiveCluster(null);
+        setLoadError(err?.response?.data?.error || err.message || 'Failed to load clusters.');
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        setLoading(false);
       }
-    })();
+    }
 
-    return () => controller.abort();
-  }, [token, clusterSlug, headers, recomputeSlices, title]);
+    loadClusters();
+  }, [clusterSlug]);
 
-  async function handleAddEntry(e) {
-    e.preventDefault();
-    if (!newText.trim()) return;
+  useEffect(() => {
+    if (!activeCluster) return;
+    setEditForm({
+      name: activeCluster.name,
+      slug: activeCluster.slug,
+      color: activeCluster.color,
+      icon: activeCluster.icon
+    });
+    setEditError('');
+    setEditOpen(false);
+    loadClusterData(activeCluster);
+  }, [activeCluster, loadClusterData]);
+
+  function handleTabChange(tab) {
+    setActiveTab(tab);
+  }
+
+  async function handleToggleTask(task) {
     try {
-      setComposing(true);
-      const resp = await axios.post('/api/entries', { text: newText, cluster: clusterSlug }, { headers });
-      setNewText(''); setEntries(prev => [resp.data, ...prev]);
+      await axios.patch(`/api/tasks/${task._id}`, { completed: !task.completed });
+      await loadClusterData(activeCluster);
     } catch (err) {
-      console.warn('Add entry failed:', err?.response?.data || err.message);
-    } finally { setComposing(false); }
+      console.error('Toggle task failed:', err);
+      setTasksError('Could not update task.');
+    }
   }
 
-  async function loadMoreEntries() {
+  async function handleRefresh() {
+    if (!activeCluster) return;
+    await loadClusterData(activeCluster);
+  }
+
+  function beginEdit() {
+    if (!activeCluster) return;
+    setEditForm({
+      name: activeCluster.name,
+      slug: activeCluster.slug,
+      color: activeCluster.color,
+      icon: activeCluster.icon
+    });
+    setEditError('');
+    setEditOpen(true);
+  }
+
+  async function submitEdit(e) {
+    e?.preventDefault?.();
+    if (!activeCluster) return;
+
+    const updates = {};
+    const nextName = editForm.name.trim();
+    const nextSlug = slugifyCluster(editForm.slug);
+    if (!nextName) {
+      setEditError('Name is required.');
+      return;
+    }
+    if (!nextSlug) {
+      setEditError('Slug is required.');
+      return;
+    }
+    if (nextName !== activeCluster.name) updates.name = nextName;
+    if (nextSlug !== activeCluster.slug) updates.slug = nextSlug;
+    if (editForm.color !== activeCluster.color) updates.color = editForm.color;
+    if (editForm.icon !== activeCluster.icon) updates.icon = editForm.icon;
+
+    if (!Object.keys(updates).length) {
+      setEditOpen(false);
+      return;
+    }
+
+    setEditSaving(true);
+    setEditError('');
     try {
-      const nextPage = page + 1;
-      const offset = nextPage * limit;
-      const res = await axios.get(`/api/entries?cluster=${encodeURIComponent(clusterSlug)}&limit=${limit}&offset=${offset}`, { headers });
-      const batch = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.data) ? res.data.data : []);
-      setEntries(prev => [...prev, ...batch]);
-      setPage(nextPage);
-      setHasMore(batch.length === limit);
-    } catch (e) { console.warn('Load more failed:', e?.response?.data || e.message); }
+      const res = await axios.put(`/api/clusters/${activeCluster.id}`, updates);
+      const updated = normalizeCluster(res?.data?.data ?? res?.data ?? null);
+      if (!updated) throw new Error('Unexpected response');
+      setActiveCluster(updated);
+      setEditOpen(false);
+      if (updated.slug !== activeCluster.slug) {
+        navigate(`/clusters/${encodeURIComponent(updated.slug)}`, { replace: true });
+      }
+    } catch (err) {
+      console.error('Update cluster failed:', err);
+      setEditError(err?.response?.data?.error || err.message || 'Failed to update cluster.');
+    } finally {
+      setEditSaving(false);
+    }
   }
 
-  const toggleTask = async (task) => {
-    const id = task?._id; if (!id) return;
-    try { await axios.patch(`/api/tasks/${id}`, { completed: !task.completed }, { headers }); await reloadTasks(); }
-    catch (e) { console.warn('Toggle task failed:', e?.response?.data || e.message); }
-  };
-  const openEditTask = (task) => { setEditingTask(task || null); setShowTaskModal(true); };
-  const openNewTask = () => { setEditingTask(null); setShowTaskModal(true); };
-  const closeTaskModal = () => setShowTaskModal(false);
-  const onTaskSaved = async () => { setShowTaskModal(false); await reloadTasks(); };
+  async function handleDelete() {
+    if (!activeCluster) return;
+    if (!window.confirm(`Delete ${activeCluster.name}? This cannot be undone.`)) return;
+    try {
+      await axios.delete(`/api/clusters/${activeCluster.id}`);
+      setActiveCluster(null);
+      navigate('/clusters');
+    } catch (err) {
+      console.error('Delete cluster failed:', err);
+      setEditError(err?.response?.data?.error || err.message || 'Failed to delete cluster.');
+    }
+  }
 
-  const timeline = useMemo(() => buildTimeline({ entries, tasks, appts }, filters), [entries, tasks, appts, filters]);
+  function renderOverview() {
+    const activeColor = activeCluster?.color || '#9b87f5';
+    const previewTasks = tasks.filter((t) => !t.completed).slice(0, 3);
+    const previewEntries = entries.slice(0, 3);
 
-  const leftSlot = (
-    <>
-      <h3 style={{ marginTop: 0 }}>Clusters</h3>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {clusters.length === 0 && <span className="muted">No clusters found.</span>}
-        {clusters.map(c => {
-          const active = c.slug === clusterSlug;
-          return (
-            <Link key={c.slug} to={`/clusters/${c.slug}`} className={`px-3 py-2 rounded-button ${active ? 'bg-plum text-mist' : 'text-ink hover:bg-thread hover:text-mist'}`} style={{ textTransform: 'capitalize' }}>
-              {c.emoji ? `${c.emoji} ` : ''}{c.name}
-            </Link>
-          );
-        })}
-      </div>
-    </>
-  );
-
-  const centerSlot = (
-    <>
-      <div className="card" style={{ marginBottom: '1rem' }}>
-        <div className="section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <h2 style={{ margin: 0, textTransform: 'capitalize' }}>{title}</h2>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <PillButton active={filters.entries} onClick={() => setFilters(f => ({ ...f, entries: !f.entries }))}>Entries</PillButton>
-            <PillButton active={filters.tasks} onClick={() => setFilters(f => ({ ...f, tasks: !f.tasks }))}>Tasks</PillButton>
-            <PillButton active={filters.appts} onClick={() => setFilters(f => ({ ...f, appts: !f.appts }))}>Appointments</PillButton>
-            <button className="pill" onClick={openNewTask}>+ New Task</button>
+    return (
+      <div className="cluster-detail__section">
+        <div className="cluster-detail__stats">
+          <div className="cluster-detail__stat-card" style={{ borderColor: activeColor }}>
+            <span className="cluster-detail__stat-label">Open tasks</span>
+            <span className="cluster-detail__stat-value">{overview.openTasks}</span>
+          </div>
+          <div className="cluster-detail__stat-card" style={{ borderColor: activeColor }}>
+            <span className="cluster-detail__stat-label">Entries (last 7 days)</span>
+            <span className="cluster-detail__stat-value">{overview.entriesLast7}</span>
           </div>
         </div>
 
-        <form onSubmit={handleAddEntry} style={{ marginTop: 12 }}>
-          <textarea className="input" placeholder={`New entry in ${title}…`} value={newText} onChange={e => setNewText(e.target.value)} rows={3} style={{ width: '100%' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>
-            {errorMsg ? <span className="muted">{errorMsg}</span> : <span />}
-            <button type="submit" className="button" disabled={composing || !newText.trim()}>{composing ? 'Saving…' : 'Add Entry'}</button>
-          </div>
-        </form>
-      </div>
+        <div className="cluster-detail__quick">
+          <button type="button" className="pill" onClick={() => setShowTaskModal(true)}>+ Task</button>
+          <button type="button" className="pill" onClick={() => setShowEntryModal(true)}>+ Entry</button>
+          <button type="button" className="pill pill-muted" onClick={handleRefresh}>Refresh</button>
+        </div>
 
-      <div className="card">
-        {loading ? (
-          <div>Loading…</div>
-        ) : timeline.length === 0 ? (
-          <div className="muted">This room is quiet. Start with an entry above.</div>
-        ) : (
-          <>
-            {timeline.map(item => {
-              if (item.type === 'entry') return <EntryCard key={`e-${item.id}`} e={item.data} />;
-              if (item.type === 'task') return <TaskCard key={`t-${item.id}`} t={item.data} onToggle={toggleTask} onEdit={openEditTask} />;
-              if (item.type === 'appt') return <ApptCard key={`a-${item.id}`} a={item.data} />;
-              return null;
-            })}
-            {hasMore && (
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
-                <button className="button" onClick={loadMoreEntries}>Load more</button>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </>
-  );
-
-  const rightSlot = (
-    <>
-      <h3 style={{ marginTop: 0 }}>Today in {title}</h3>
-      {tasksToday.length === 0 && apptsToday.length === 0 ? (
-        <p className="muted">Nothing due today.</p>
-      ) : (
-        <>
-          {tasksToday.length > 0 && (
-            <>
-              <div className="muted" style={{ marginTop: 6 }}>Tasks</div>
-              <ul className="unstyled">
-                {tasksToday.map(t => (<li key={t._id}>• <button className="link" onClick={() => openEditTask(t)}>{t.title}</button></li>))}
-              </ul>
-            </>
-          )}
-          {apptsToday.length > 0 && (
-            <>
-              <div className="muted" style={{ marginTop: 6 }}>Appointments</div>
-              <ul className="unstyled">
-                {apptsToday.map(a => {
-                  const time = a.start ? new Date(a.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (a.date || '');
-                  return <li key={a._id}>• {a.title} {time && <span className="pill pill-muted">{time}</span>}</li>;
-                })}
-              </ul>
-            </>
-          )}
-        </>
-      )}
-
-      <h3>Up next</h3>
-      {tasksUpcoming.length === 0 && apptsUpcoming.length === 0 ? (
-        <p className="muted">No upcoming items.</p>
-      ) : (
-        <>
-          {tasksUpcoming.length > 0 && (
-            <>
-              <div className="muted" style={{ marginTop: 6 }}>Tasks</div>
-              <ul className="unstyled">
-                {tasksUpcoming.map(t => (
-                  <li key={t._id}>
-                    • <button className="link" onClick={() => openEditTask(t)}>{t.title}</button>{' '}
-                    <span className="pill pill-muted">{t.dueDate}</span>
+        <div className="cluster-detail__preview-grid">
+          <div className="cluster-detail__preview-card">
+            <div className="cluster-detail__preview-head">
+              <h3>Next up</h3>
+              <Link to="#tasks" onClick={() => setActiveTab('tasks')}>View all</Link>
+            </div>
+            {tasksLoading ? (
+              <p className="muted">Loading tasks…</p>
+            ) : tasksError ? (
+              <p className="muted">{tasksError}</p>
+            ) : !previewTasks.length ? (
+              <p className="muted">No open tasks right now.</p>
+            ) : (
+              <ul className="cluster-detail__preview-list">
+                {previewTasks.map((task) => (
+                  <li key={task._id}>
+                    <span>{task.title}</span>
+                    <small>{task.dueDate ? formatDate(task.dueDate) : 'No due date'}</small>
                   </li>
                 ))}
               </ul>
-            </>
-          )}
-          {apptsUpcoming.length > 0 && (
-            <>
-              <div className="muted" style={{ marginTop: 6 }}>Appointments</div>
-              <ul className="unstyled">
-                {apptsUpcoming.map(a => {
-                  const when = a.start ? new Date(a.start).toLocaleDateString() : (a.date || '');
-                  return <li key={a._id}>• {a.title} <span className="pill pill-muted">{when}</span></li>;
-                })}
-              </ul>
-            </>
-          )}
-        </>
-      )}
+            )}
+          </div>
 
-      <h3>Recent motifs</h3>
-      {motifs.tags.length === 0 && motifs.moods.length === 0 ? (
-        <p className="muted">No trends yet.</p>
-      ) : (
-        <>
-          {motifs.tags.length > 0 && (
-            <div style={{ marginBottom: 8 }}>
-              <div className="muted">Top tags</div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-                {motifs.tags.map(({ tag, count }) => (<span key={tag} className="pill pill-muted">#{tag} ×{count}</span>))}
-              </div>
+          <div className="cluster-detail__preview-card">
+            <div className="cluster-detail__preview-head">
+              <h3>Recent entries</h3>
+              <Link to="#entries" onClick={() => setActiveTab('entries')}>View all</Link>
             </div>
-          )}
-          {motifs.moods.length > 0 && (
-            <div>
-              <div className="muted">Top moods</div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-                {motifs.moods.map(({ mood, count }) => (<span key={mood} className="pill">{mood} ×{count}</span>))}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </>
-  );
+            {entriesLoading ? (
+              <p className="muted">Loading entries…</p>
+            ) : entriesError ? (
+              <p className="muted">{entriesError}</p>
+            ) : !previewEntries.length ? (
+              <p className="muted">No entries in the last week.</p>
+            ) : (
+              <ul className="cluster-detail__preview-list">
+                {previewEntries.map((entry) => (
+                  <li key={entry._id}>
+                    <span>{formatDate(entry.date || entry.createdAt)}</span>
+                    <small>{entrySnippet(entry).slice(0, 80) || '—'}</small>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderTasks() {
+    return (
+      <div className="cluster-detail__section" id="tasks">
+        <div className="cluster-detail__actions-row">
+          <div className="cluster-detail__actions-group">
+            <button type="button" className="pill" onClick={() => setShowTaskModal(true)}>+ Task</button>
+            <button type="button" className="pill pill-muted" onClick={handleRefresh}>Refresh</button>
+          </div>
+        </div>
+        {tasksLoading ? (
+          <p className="muted">Loading tasks…</p>
+        ) : tasksError ? (
+          <p className="error-text">{tasksError}</p>
+        ) : !tasks.length ? (
+          <p className="muted">No tasks yet. Create one to get started.</p>
+        ) : (
+          <ul className="cluster-detail__tasks">
+            {tasks.map((task) => (
+              <li key={task._id} className={`cluster-detail__task ${task.completed ? 'is-complete' : ''}`}>
+                <label>
+                  <input type="checkbox" checked={!!task.completed} onChange={() => handleToggleTask(task)} />
+                  <span className="cluster-detail__task-title">{task.title}</span>
+                </label>
+                <div className="cluster-detail__task-meta">
+                  <span>{task.dueDate ? formatDate(task.dueDate) : 'No due date'}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
+
+  function renderEntries() {
+    return (
+      <div className="cluster-detail__section" id="entries">
+        <div className="cluster-detail__actions-row">
+          <div className="cluster-detail__actions-group">
+            <button type="button" className="pill" onClick={() => setShowEntryModal(true)}>+ Entry</button>
+            <button type="button" className="pill pill-muted" onClick={handleRefresh}>Refresh</button>
+          </div>
+        </div>
+        {entriesLoading ? (
+          <p className="muted">Loading entries…</p>
+        ) : entriesError ? (
+          <p className="error-text">{entriesError}</p>
+        ) : !entries.length ? (
+          <p className="muted">No entries for this range yet.</p>
+        ) : (
+          <div className="cluster-detail__entries">
+            {entries.map((entry) => (
+              <article key={entry._id} className="entry-card">
+                <header className="cluster-detail__entry-head">
+                  <span className="pill">{formatDate(entry.date || entry.createdAt)}</span>
+                  {Array.isArray(entry.tags) && entry.tags.length > 0 && (
+                    <div className="cluster-detail__entry-tags">
+                      {entry.tags.slice(0, 4).map((tag) => (
+                        <span key={tag} className="pill pill-muted">#{tag}</span>
+                      ))}
+                    </div>
+                  )}
+                </header>
+                <SafeHTML
+                  className="cluster-detail__entry-body"
+                  html={
+                    entry?.html && entry.html.trim()
+                      ? entry.html
+                      : typeof entry?.content === 'string' && /<[^>]+>/.test(entry.content)
+                        ? entry.content
+                        : (entry?.text || '').replace(/\n/g, '<br/>')
+                  }
+                />
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <>
-      <RoomLayout title={title} left={leftSlot} right={rightSlot}>{centerSlot}</RoomLayout>
-      {showTaskModal && (
-        <TaskModal onClose={closeTaskModal} onSaved={onTaskSaved} task={editingTask || undefined} defaultCluster={clusterSlug} defaultDate={torontoTodayISO()} />
+    <div className="page cluster-detail">
+      <header
+        className="cluster-detail__header"
+        style={{ '--cluster-color': activeCluster?.color || '#9b87f5' }}
+      >
+        <div className="cluster-detail__header-top">
+          <Link to="/clusters" className="cluster-detail__back">
+            ← Back to clusters
+          </Link>
+          {activeCluster && (
+            <div className="cluster-detail__header-actions">
+              <button type="button" className="pill pill-muted" onClick={beginEdit}>Rename</button>
+              <button type="button" className="pill cluster-detail__delete" onClick={handleDelete}>Delete</button>
+            </div>
+          )}
+        </div>
+
+        {loading ? (
+          <h1 className="cluster-detail__title">Loading…</h1>
+        ) : loadError ? (
+          <div className="cluster-detail__error">{loadError}</div>
+        ) : !activeCluster ? (
+          <h1 className="cluster-detail__title">Select a cluster</h1>
+        ) : (
+          <div className="cluster-detail__identity">
+            <span className="cluster-detail__icon" aria-hidden="true">{activeCluster.icon}</span>
+            <div>
+              <h1 className="cluster-detail__title">{activeCluster.name}</h1>
+              <p className="cluster-detail__slug">#{activeCluster.slug}</p>
+            </div>
+          </div>
+        )}
+
+        {editOpen && (
+          <form className="cluster-detail__edit" onSubmit={submitEdit}>
+            <div className="cluster-detail__edit-grid">
+              <label>
+                <span>Name</span>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                <span>Slug</span>
+                <input
+                  type="text"
+                  value={editForm.slug}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, slug: e.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                <span>Color</span>
+                <input
+                  type="color"
+                  value={editForm.color}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, color: e.target.value }))}
+                />
+              </label>
+              <label>
+                <span>Icon</span>
+                <input
+                  type="text"
+                  value={editForm.icon}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, icon: e.target.value }))}
+                />
+              </label>
+            </div>
+            {editError && <div className="error-text" style={{ marginTop: '0.5rem' }}>{editError}</div>}
+            <div className="cluster-detail__edit-actions">
+              <button type="button" className="pill pill-muted" onClick={() => setEditOpen(false)} disabled={editSaving}>Cancel</button>
+              <button type="submit" className="pill" disabled={editSaving}>{editSaving ? 'Saving…' : 'Save changes'}</button>
+            </div>
+          </form>
+        )}
+      </header>
+
+      {activeCluster && (
+        <nav className="cluster-detail__tabs" role="tablist">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              className={`cluster-detail__tab ${activeTab === tab.key ? 'is-active' : ''}`}
+              onClick={() => handleTabChange(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
       )}
-    </>
+
+      {activeCluster && activeTab === 'overview' && renderOverview()}
+      {activeCluster && activeTab === 'tasks' && renderTasks()}
+      {activeCluster && activeTab === 'entries' && renderEntries()}
+
+      {showTaskModal && activeCluster && (
+        <TaskModal
+          isOpen
+          onClose={() => setShowTaskModal(false)}
+          onSaved={() => {
+            setShowTaskModal(false);
+            loadClusterData(activeCluster);
+          }}
+          defaultCluster={activeCluster.slug}
+        />
+      )}
+
+      {showEntryModal && activeCluster && (
+        <EntryModal
+          onClose={() => setShowEntryModal(false)}
+          onSaved={() => {
+            setShowEntryModal(false);
+            loadClusterData(activeCluster);
+          }}
+          defaultCluster={activeCluster.slug}
+        />
+      )}
+    </div>
   );
 }

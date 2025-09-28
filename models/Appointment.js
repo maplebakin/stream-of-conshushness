@@ -49,6 +49,7 @@ const AppointmentSchema = new Schema(
 
     // Optional linkage / scoping
     cluster  : { type: String, default: '' },
+    clusters : { type: [Schema.Types.ObjectId], ref: 'Cluster', default: [] },
     entryId  : { type: Schema.Types.ObjectId, ref: 'Entry', default: null },
   },
   { timestamps: true }
@@ -84,5 +85,7 @@ AppointmentSchema.index(
   { userId: 1, date: 1, timeStart: 1, title: 1 },
   { unique: true, sparse: true }
 );
+
+AppointmentSchema.index({ userId: 1, clusters: 1, date: 1 });
 
 export default mongoose.model('Appointment', AppointmentSchema);

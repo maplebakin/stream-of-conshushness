@@ -3,18 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
 import CreateClusterModal from '../components/CreateClusterModal.jsx';
-
-function slugifyKey(s = '') {
-  return String(s).toLowerCase().trim().replace(/[^\p{Letter}\p{Number}]+/gu,'-').replace(/^-+|-+$/g,'').slice(0,64);
-}
-function normalizeClusters(resOrData) {
-  const d = resOrData?.data ?? resOrData;
-  if (Array.isArray(d)) return d;
-  if (Array.isArray(d?.data)) return d.data;
-  if (Array.isArray(d?.clusters)) return d.clusters;
-  if (Array.isArray(d?.data?.clusters)) return d.data.clusters;
-  return [];
-}
+import { normalizeClusterList } from '../utils/clusterHelpers.js';
 
 export default function ClustersIndex() {
   const { token } = useContext(AuthContext);
@@ -30,23 +19,9 @@ export default function ClustersIndex() {
     setLoading(true); setErr('');
     try {
       const r = await axios.get('/api/clusters', { headers });
-      const list = normalizeClusters(r);
-      const normalized = list.map(c => ({
-        _id: c._id,
-        key: (c.key || c.slug || slugifyKey(c.label || c.name || '')).toLowerCase(),
-        label: c.label || c.name || c.key || 'Untitled',
-        color: c.color || '#9b87f5',
-        icon: c.icon || '🗂️',
-        pinned: !!c.pinned,
-        order: Number.isFinite(c.order) ? c.order : 0,
-        updatedAt: c.updatedAt || c.createdAt || new Date().toISOString()
-      })).filter(c => c.key);
-
-      normalized.sort((a, b) =>
-        (a.pinned !== b.pinned) ? (a.pinned ? -1 : 1)
-        : (a.order - b.order) || a.label.localeCompare(b.label)
-      );
-      setClusters(normalized);
+      const list = normalizeClusterList(r);
+      const sorted = [...list].sort((a, b) => a.name.localeCompare(b.name));
+      setClusters(sorted);
     } catch (e) {
       setErr(e?.response?.data?.error || e.message || 'Failed to load clusters.');
       setClusters([]);
@@ -59,8 +34,8 @@ export default function ClustersIndex() {
 
   function onCreated(newCluster) {
     setShowCreate(false);
-    const key = (newCluster?.key || slugifyKey(newCluster?.label || newCluster?.name || '')).toLowerCase();
-    if (key) navigate(`/clusters/${encodeURIComponent(key)}`);
+    const slug = newCluster?.slug || '';
+    if (slug) navigate(`/clusters/${encodeURIComponent(slug)}`);
     else load();
   }
 
@@ -85,20 +60,20 @@ export default function ClustersIndex() {
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(240px,1fr))', gap:12 }}>
             {clusters.map(c => (
               <Link
-                key={c._id || c.key}
-                to={`/clusters/${encodeURIComponent(c.key)}`}
+                key={c.id || c.slug}
+                to={`/clusters/${encodeURIComponent(c.slug)}`}
                 className="card"
                 style={{ textDecoration:'none', color:'inherit', borderColor: c.color }}
               >
                 <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                   <span style={{ fontSize: 22 }}>{c.icon}</span>
                   <div style={{ display:'grid' }}>
-                    <div style={{ fontWeight: 700 }}>{c.label}</div>
-                    <div className="muted" style={{ fontSize: 12 }}>#{c.key}</div>
+                    <div style={{ fontWeight: 700 }}>{c.name}</div>
+                    <div className="muted" style={{ fontSize: 12 }}>#{c.slug}</div>
                   </div>
                 </div>
                 <small className="muted" style={{ marginTop: 6 }}>
-                  updated {new Date(c.updatedAt).toLocaleString()}
+                  updated {(c.updatedAt || c.createdAt) ? new Date(c.updatedAt || c.createdAt).toLocaleString() : 'just now'}
                 </small>
               </Link>
             ))}
