@@ -127,7 +127,7 @@ export default function TaskList({
     return () => {
       ignore = true;
     };
-  }, [token, targetDate, view]);
+  }, [token, targetDate, view, section, cluster]);
 
   const filtered = useMemo(
     () => filterTasks(tasks, { view, targetDate, section, cluster }),

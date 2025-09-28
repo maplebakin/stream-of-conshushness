@@ -13,7 +13,8 @@ import RegisterPage from './RegisterPage.jsx';
 import GameList from './GameList.jsx';
 import GamePage from './GamePage.jsx';
 
-import SectionPage from './pages/SectionPage.jsx';            // landing + section detail
+import SectionsIndex from './pages/SectionsIndex.jsx';        // sections index grid
+import SectionPage from './pages/SectionPage.jsx';            // section detail
 import SectionPageRoom from './pages/SectionPageRoom.jsx';    // NEW: page room under a section
 import ClustersIndex from './pages/ClustersIndex.jsx';        // clusters index
 import ClusterRoom from './pages/ClusterRoom.jsx';            // per-cluster room
@@ -68,7 +69,7 @@ function AppRoutes() {
           <Route path="/_adapters" element={<AdapterHarness />} />
 
           {/* Sections */}
-          <Route path="/sections" element={<SectionPage />} />                 {/* landing */}
+          <Route path="/sections" element={<SectionsIndex />} />               {/* landing */}
           <Route path="/sections/:key" element={<SectionPage />} />            {/* section detail */}
           <Route path="/sections/:sectionSlug/:pageSlug" element={<SectionPageRoom />} />             {/* room default -> journal */}
           <Route path="/sections/:sectionSlug/:pageSlug/:tab" element={<SectionPageRoom />} />        {/* room tabbed */}

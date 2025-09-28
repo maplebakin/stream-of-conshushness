@@ -1,0 +1,131 @@
+/* frontend/src/pages/SectionsIndex.css */
+.sections-index {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem clamp(1rem, 3vw, 2.5rem);
+  min-height: calc(100vh - 64px);
+  box-sizing: border-box;
+}
+
+.sections-index__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.sections-index__header h1 {
+  margin: 0;
+}
+
+.sections-index__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.25rem;
+}
+
+.sections-index__card {
+  background: var(--color-surface, rgba(15, 18, 26, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 18px;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 160px;
+  overflow: hidden;
+}
+
+.sections-index__card-body {
+  border: none;
+  background: transparent;
+  padding: 1.25rem 1.25rem 0.75rem;
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 0.75rem;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.sections-index__card-body:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.sections-index__card-body:hover:not(:disabled) {
+  background: radial-gradient(circle at top, rgba(155, 135, 245, 0.08), transparent 70%);
+}
+
+.sections-index__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: rgba(155, 135, 245, 0.12);
+  display: grid;
+  place-items: center;
+  font-size: 1.8rem;
+}
+
+.sections-index__meta h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.sections-index__meta p {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  color: var(--color-muted, rgba(200, 205, 214, 0.75));
+}
+
+.sections-index__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem 1.1rem;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--color-thread, #9b87f5);
+  cursor: pointer;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
+.link-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  text-decoration: none;
+}
+
+.link-button.danger {
+  color: #ff6b81;
+}
+
+.empty-state {
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 2rem;
+  text-align: center;
+  display: grid;
+  gap: 0.75rem;
+  justify-items: center;
+}
+
+@media (max-width: 720px) {
+  .sections-index {
+    padding: 1.25rem;
+  }
+
+  .sections-index__grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+}
