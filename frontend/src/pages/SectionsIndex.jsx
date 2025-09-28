@@ -3,26 +3,18 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from '../api/axiosInstance.js';
 import { AuthContext } from '../AuthContext.jsx';
+import { sanitizeSlug } from '../utils/slug.js';
 import '../Main.css';
 import './SectionsIndex.css';
 
 const ACTIVITY_WINDOW = '7d';
-
-function slugify(input = '') {
-  return String(input)
-    .toLowerCase()
-    .trim()
-    .replace(/[^\p{Letter}\p{Number}]+/gu, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 96);
-}
 
 function normalizeSection(raw) {
   if (!raw || typeof raw !== 'object') return null;
 
   const id = raw.id || raw._id || null;
   const title = raw.title || raw.label || raw.name || 'Untitled section';
-  const slug = raw.slug || raw.key || slugify(title);
+  const slug = raw.slug || raw.key || sanitizeSlug(title);
   const icon = raw.icon || raw.emoji || '📚';
   const updatedAt = raw.updatedAt || raw.updated_at || raw.modifiedAt || raw.modified_at || raw.createdAt || null;
 
@@ -265,7 +257,7 @@ export default function SectionsIndex() {
     if (!trimmed) return;
 
     const tempId = `temp-${Date.now()}`;
-    const slug = slugify(trimmed);
+    const slug = sanitizeSlug(trimmed);
     const optimistic = {
       id: tempId,
       title: trimmed,
@@ -301,7 +293,7 @@ export default function SectionsIndex() {
     const trimmed = nextTitle.trim();
     if (!trimmed || trimmed === section.title) return;
 
-    const nextSlug = slugify(trimmed);
+    const nextSlug = sanitizeSlug(trimmed);
     const previous = { ...section };
 
     setBusy(section.id, true);

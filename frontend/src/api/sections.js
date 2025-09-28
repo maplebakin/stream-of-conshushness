@@ -24,7 +24,7 @@ export async function createSection(payload) {
 }
 
 export async function updateSection(id, payload) {
-  const res = await api.patch(`/api/sections/${encodeURIComponent(id)}`, payload);
+  const res = await api.put(`/api/sections/${encodeURIComponent(id)}`, payload);
   return normalize(res);
 }
 
