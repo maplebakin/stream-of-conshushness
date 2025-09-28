@@ -1,15 +1,7 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { AuthContext } from '../AuthContext.jsx';
 import { makeApi } from '../utils/api.js';
-
-function normalizeClusters(payload) {
-  const d = payload?.data ?? payload;
-  if (Array.isArray(d)) return d;
-  if (Array.isArray(d?.data)) return d.data;
-  if (Array.isArray(d?.clusters)) return d.clusters;
-  if (Array.isArray(d?.data?.clusters)) return d.data.clusters;
-  return [];
-}
+import { normalizeClusterList } from '../utils/clusterHelpers.js';
 
 export default function ClusterPicker({ value = '', onChange, disabled = false, id = 'cluster-picker' }) {
   const { token } = useContext(AuthContext);
@@ -25,25 +17,11 @@ export default function ClusterPicker({ value = '', onChange, disabled = false, 
       try {
         const res = await api.get('/api/clusters');
         if (ignore) return;
-        const list = normalizeClusters(res).map(c => ({
-          key: c.key ?? (c.slug || c.name?.toLowerCase() || ''),
-          label: c.label ?? c.name ?? c.key ?? ''
-        })).filter(c => c.key && c.label);
-
-        const original = normalizeClusters(res);
-        const keyed = new Map(list.map(c => [c.key, c]));
-        const pinnedMap = new Map(original.map(c => [c.key, !!c.pinned]));
-        const orderMap  = new Map(original.map(c => [c.key, typeof c.order === 'number' ? c.order : 0]));
-        const sorted = [...keyed.values()].sort((a, b) => {
-          const pA = pinnedMap.get(a.key) ? 1 : 0;
-          const pB = pinnedMap.get(b.key) ? 1 : 0;
-          if (pA !== pB) return pB - pA;
-          const oA = orderMap.get(a.key) ?? 0;
-          const oB = orderMap.get(b.key) ?? 0;
-          if (oA !== oB) return oA - oB;
-          return a.label.localeCompare(b.label);
-        });
-        setClusters(sorted);
+        const list = normalizeClusterList(res)
+          .map((c) => ({ key: c.slug, label: c.name }))
+          .filter((c) => c.key && c.label);
+        list.sort((a, b) => a.label.localeCompare(b.label));
+        setClusters(list);
       } catch (e) {
         console.error(e);
         setClusters([]);
@@ -55,10 +33,11 @@ export default function ClusterPicker({ value = '', onChange, disabled = false, 
   }, [api]);
 
   const v = value || '';
+  const activeLabel = clusters.find(c => c.key === v)?.label;
 
   return (
     <div className="qa-row">
-      <span className="qa-label">{v ? `Cluster: ${v}` : 'Unassigned'}</span>
+      <span className="qa-label">{v ? `Cluster: ${activeLabel || v}` : 'Unassigned'}</span>
       <select
         id={id}
         className="qa-select"

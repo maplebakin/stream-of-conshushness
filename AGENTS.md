@@ -20,6 +20,12 @@
 - Shared helpers belong in `utils/`, and anything that needs request context (like entry automation) should accept a payload rather than pulling from globals.
 - Cluster assignments are now stored as ObjectId arrays named `clusters` on journal entries, tasks, goals, appointments, and notes. Use `utils/clusterIds.js` to normalize query/body input and run `scripts/migrations/backfillClusterLinks.mjs` to backfill legacy slug data when deploying.
 
+
+- Frontend cluster views share slug normalization helpers in `frontend/src/utils/clusterHelpers.js`; when working with cluster data, reuse those utilities so slug/name/color/icon handling stays consistent across pages and modals.
+- Shared layout primitives live in `frontend/src/base.css`—classes like `.page`, `.card`, `.pill`, and `.alert` keep contrast and spacing consistent across the app. Prefer using them (or extending them) instead of recreating ad-hoc UI styles.
+=======
+ main
+
 ## Frontend Guidelines
 - React components are functional and hook-based. Manage per-page state inside `frontend/src/pages/` and shared UI/state inside `frontend/src/components/` or `frontend/src/contexts/`.
 - Fetch data with the shared `frontend/src/api/axiosInstance.js` so auth headers and interceptors remain consistent.
