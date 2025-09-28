@@ -114,6 +114,45 @@ function renderEntryHtml(entry) {
   return (entry?.text ?? '').replace(/\n/g, '<br/>');
 }
 
+function formatUpdatedAt(value) {
+  if (!value) return 'Never updated';
+  try {
+    const updated = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(updated.getTime())) return 'Updated recently';
+
+    const now = Date.now();
+    const diffMs = updated.getTime() - now;
+    const diffMinutes = Math.round(diffMs / 60000);
+    const absMinutes = Math.abs(diffMinutes);
+
+    if (absMinutes < 1) return 'Updated just now';
+    if (absMinutes < 60) {
+      const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+      return `Updated ${rtf.format(diffMinutes, 'minute')}`;
+    }
+
+    const diffHours = Math.round(diffMinutes / 60);
+    if (Math.abs(diffHours) < 24) {
+      const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+      return `Updated ${rtf.format(diffHours, 'hour')}`;
+    }
+
+    const diffDays = Math.round(diffHours / 24);
+    if (Math.abs(diffDays) < 30) {
+      const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+      return `Updated ${rtf.format(diffDays, 'day')}`;
+    }
+
+    return `Updated ${updated.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: updated.getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
+    })}`;
+  } catch {
+    return 'Updated recently';
+  }
+}
+
 function normalizeSection(raw) {
   if (!raw) return null;
   const slug = (raw.slug || raw.key || '').toLowerCase();
@@ -476,7 +515,7 @@ export default function SectionPage() {
                     placeholder="Untitled section"
                     aria-label="Section title"
                   />
-                  <span className="section-updated">Updated {new Date(activeSection.updatedAt || Date.now()).toLocaleDateString()}</span>
+                  <span className="section-updated">{formatUpdatedAt(activeSection.updatedAt)}</span>
                 </div>
               </div>
 

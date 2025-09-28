@@ -10,6 +10,15 @@ function getUserId(req) {
   return req.user?.userId || req.user?._id || req.user?.id || null;
 }
 
+function normalizeObjectId(value) {
+  if (!value) return null;
+  if (value instanceof mongoose.Types.ObjectId) return value;
+  if (mongoose.Types.ObjectId.isValid(value)) {
+    return new mongoose.Types.ObjectId(value);
+  }
+  return value;
+}
+
 function sanitizeSlug(str) {
   const base = String(str || '').toLowerCase().trim();
   return base
@@ -45,11 +54,17 @@ function normalizeLayout(value) {
 function shapeSection(doc) {
   const base = typeof doc.toObject === 'function' ? doc.toObject() : doc;
   const title = base.title || base.label || base.name || '';
-  const slug = base.slug || base.key || '';
+  const slug = (base.slug || base.key || '').toString().trim().toLowerCase();
   const icon = base.icon ?? base.emoji ?? '';
-  const theme = base.theme && typeof base.theme === 'object' ? base.theme : {};
-  const ownerId = base.ownerId || base.userId || null;
-  const userId = base.userId || base.ownerId || null;
+  const theme = base.theme && typeof base.theme === 'object' ? { ...base.theme } : {};
+  const ownerRaw = base.ownerId || base.userId || null;
+  const userRaw = base.userId || base.ownerId || null;
+  const ownerId = ownerRaw && typeof ownerRaw.toString === 'function' ? ownerRaw.toString() : ownerRaw;
+  const userId = userRaw && typeof userRaw.toString === 'function' ? userRaw.toString() : userRaw;
+  const updatedAt =
+    base.updatedAt instanceof Date ? base.updatedAt.toISOString() : base.updatedAt || null;
+  const createdAt =
+    base.createdAt instanceof Date ? base.createdAt.toISOString() : base.createdAt || null;
 
   return {
     ...base,
@@ -64,14 +79,17 @@ function shapeSection(doc) {
     icon,
     emoji: icon,
     theme,
+    updatedAt,
+    createdAt,
   };
 }
 
 function buildOwnerFilter(ownerId) {
   if (!ownerId) return null;
+  const normalized = normalizeObjectId(ownerId);
   const clauses = [];
-  clauses.push({ ownerId });
-  clauses.push({ userId: ownerId });
+  clauses.push({ ownerId: normalized });
+  clauses.push({ userId: normalized });
   return { $or: clauses };
 }
 
@@ -81,7 +99,7 @@ function buildIdentifierFilter(raw) {
   const clauses = [];
 
   if (mongoose.Types.ObjectId.isValid(raw)) {
-    clauses.push({ _id: raw });
+    clauses.push({ _id: normalizeObjectId(raw) });
   }
 
   const asString = String(raw);
