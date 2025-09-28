@@ -425,7 +425,7 @@ export default function SectionPage() {
       if (!y || !m || !d) throw new Error('bad date');
       const dt = new Date(Date.UTC(y, m - 1, d, 12));
       return `Due ${dateFormatter.format(dt)}`;
-    } catch (err) {
+    } catch {
       return `Due ${dateISO}`;
     }
   }

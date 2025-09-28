@@ -2,6 +2,7 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
+import { normalizeClusterList } from './utils/clusterHelpers.js';
 
 function todayISOInToronto(d = new Date()) {
   const fmt = new Intl.DateTimeFormat('en-CA', {
@@ -55,7 +56,7 @@ export default function TaskModal({
   useEffect(() => {
     if (!token) return;
     axios.get('/api/clusters', { headers })
-      .then(res => setClusters(Array.isArray(res.data) ? res.data : []))
+      .then(res => setClusters(normalizeClusterList(res)))
       .catch(() => setClusters([]));
   }, [token, headers]);
 
@@ -145,9 +146,9 @@ export default function TaskModal({
                 className="w-full border rounded px-3 py-2 bg-white dark:bg-zinc-900"
               >
                 <option value="">—</option>
-                {clusters.map(c => (
-                  <option key={c._id || c.id || c.key || c.name} value={c.name || c.label || c.key}>
-                    {c.name || c.label || c.key}
+                {clusters.map((c) => (
+                  <option key={c.id || c.slug} value={c.slug}>
+                    {c.name}
                   </option>
                 ))}
               </select>
