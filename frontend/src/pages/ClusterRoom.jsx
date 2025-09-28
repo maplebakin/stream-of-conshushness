@@ -147,7 +147,9 @@ export default function ClusterRoom() {
       const tasksData = Array.isArray(tRes.data) ? tRes.data : (Array.isArray(tRes.data?.data) ? tRes.data.data : []);
       setTasks(tasksData);
       recomputeSlices(tasksData, appts);
-    } catch {}
+    } catch (error) {
+      console.warn('Failed to reload cluster tasks', error);
+    }
   }, [clusterSlug, headers, appts, recomputeSlices]);
 
   useEffect(() => {
