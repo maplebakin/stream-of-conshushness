@@ -43,14 +43,31 @@ function normalizeLayout(value) {
 
 function shapeSection(doc) {
   const base = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+  const title = base.title || base.label || base.name || '';
+  const slug = base.slug || base.key || '';
+  const icon = base.icon ?? base.emoji ?? '';
+  const theme = base.theme && typeof base.theme === 'object' ? base.theme : {};
+
   return {
     ...base,
     id: base._id?.toString?.() || base._id,
-    key: base.slug,
-    label: base.title,
-    name: base.title,
-    emoji: base.icon,
+    title,
+    label: title,
+    name: title,
+    slug,
+    key: slug,
+    icon,
+    emoji: icon,
+    theme,
   };
+}
+
+function buildOwnerFilter(ownerId) {
+  if (!ownerId) return null;
+  const clauses = [];
+  clauses.push({ ownerId });
+  clauses.push({ userId: ownerId });
+  return { $or: clauses };
 }
 
 // POST /api/sections
@@ -88,8 +105,11 @@ router.post('/', async (req, res) => {
 
     const payload = {
       ownerId,
+      userId: ownerId,
       title,
+      label: title,
       slug,
+      key: slug,
       description,
       icon,
       public: isPublic,
@@ -119,7 +139,8 @@ router.get('/', async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const list = await Section.find({ ownerId: requestedOwnerId })
+    const ownerFilter = buildOwnerFilter(requestedOwnerId);
+    const list = await Section.find(ownerFilter || { ownerId: requestedOwnerId })
       .sort({ updatedAt: -1, _id: -1 })
       .lean();
 
@@ -136,7 +157,7 @@ router.get('/:id', async (req, res) => {
     const ownerId = getUserId(req);
     if (!ownerId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const doc = await Section.findOne({ _id: req.params.id, ownerId });
+    const doc = await Section.findOne({ _id: req.params.id, ...(buildOwnerFilter(ownerId) || { ownerId }) });
     if (!doc) return res.status(404).json({ error: 'Section not found' });
 
     res.json(shapeSection(doc));
@@ -158,12 +179,14 @@ router.put('/:id', async (req, res) => {
       const title = String(req.body.title || '').trim();
       if (!title) return res.status(400).json({ error: 'title cannot be empty' });
       update.title = title;
+      update.label = title;
     }
 
     if ('slug' in req.body) {
       const slug = sanitizeSlug(req.body.slug || '');
       if (!slug) return res.status(400).json({ error: 'slug cannot be empty' });
       update.slug = slug;
+      update.key = slug;
     }
 
     if ('description' in req.body) {
@@ -171,7 +194,8 @@ router.put('/:id', async (req, res) => {
     }
 
     if ('icon' in req.body) {
-      update.icon = typeof req.body.icon === 'string' ? req.body.icon : '';
+      const icon = typeof req.body.icon === 'string' ? req.body.icon : '';
+      update.icon = icon;
     }
 
     if ('public' in req.body) {
@@ -205,7 +229,7 @@ router.put('/:id', async (req, res) => {
     }
 
     const doc = await Section.findOneAndUpdate(
-      { _id: req.params.id, ownerId },
+      { _id: req.params.id, ...(buildOwnerFilter(ownerId) || { ownerId }) },
       update,
       { new: true, runValidators: true }
     );
@@ -228,7 +252,7 @@ router.delete('/:id', async (req, res) => {
     const ownerId = getUserId(req);
     if (!ownerId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const result = await Section.deleteOne({ _id: req.params.id, ownerId });
+    const result = await Section.deleteOne({ _id: req.params.id, ...(buildOwnerFilter(ownerId) || { ownerId }) });
     if (result.deletedCount === 0) return res.status(404).json({ error: 'Section not found' });
 
     res.sendStatus(204);
