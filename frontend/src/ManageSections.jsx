@@ -1,170 +1,244 @@
-// src/ManageSections.jsx
-import { useState, useEffect, useContext, useMemo } from 'react';
+// src/ManageSections.jsx (updated for new Section API)
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import axios from './api/axiosInstance.js';
 import { AuthContext } from './AuthContext.jsx';
 import Header from './Header.jsx';
 import './Main.css';
 
-function slugifyKey(s = '') {
-  return String(s)
+const DEFAULT_ICON = '📚';
+
+function sanitizeSlug(value = '') {
+  return String(value)
     .toLowerCase()
     .trim()
     .replace(/[^\p{Letter}\p{Number}]+/gu, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 64);
+    .replace(/-+/g, '-')
+    .slice(0, 96);
 }
 
-function normalizeSection(s) {
-  if (!s || typeof s !== 'object') return null;
+function normalizeSection(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const title = raw.title || raw.label || raw.name || '';
+  const slug = raw.slug || raw.key || sanitizeSlug(title);
   return {
-    id: s._id || s.id || undefined,
-    key: s.key || s.slug || slugifyKey(s.label || s.name || ''),
-    label: s.label || s.name || s.key || '',
-    icon: s.icon || s.emoji || '📚',
-    pinned: !!s.pinned,
-    order: Number.isFinite(s.order) ? s.order : 0,
-    description: s.description || '',
-    color: s.color || '#9b87f5',
+    id: raw.id || raw._id || null,
+    title,
+    slug,
+    icon: raw.icon || raw.emoji || DEFAULT_ICON,
+    description: typeof raw.description === 'string' ? raw.description : '',
+    public: Boolean(raw.public),
+    updatedAt: raw.updatedAt || raw.updated_at || raw.modifiedAt || raw.modified_at || null,
   };
 }
 
 export default function ManageSections() {
   const { token, isAuthenticated } = useContext(AuthContext);
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
   const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [opMsg, setOpMsg] = useState('');
+  const flashTimerRef = useRef(null);
 
-  // Create form
-  const [newLabel, setNewLabel] = useState('');
-  const [newIcon, setNewIcon] = useState('📚');
+  // Create form state
+  const [newTitle, setNewTitle] = useState('');
+  const [newSlug, setNewSlug] = useState('');
+  const [newIcon, setNewIcon] = useState(DEFAULT_ICON);
+  const [newDescription, setNewDescription] = useState('');
+  const [newPublic, setNewPublic] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  // Edit row state
-  const [editKey, setEditKey] = useState(null);
-  const [editLabel, setEditLabel] = useState('');
-  const [editIcon, setEditIcon] = useState('📚');
-  const [editPinned, setEditPinned] = useState(false);
-  const [editOrder, setEditOrder] = useState(0);
+  // Edit form state
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editSlug, setEditSlug] = useState('');
+  const [editIcon, setEditIcon] = useState(DEFAULT_ICON);
+  const [editDescription, setEditDescription] = useState('');
+  const [editPublic, setEditPublic] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const sorted = useMemo(() => {
+  const note = useCallback((message) => {
+    setOpMsg(message);
+    if (flashTimerRef.current) {
+      window.clearTimeout(flashTimerRef.current);
+    }
+    flashTimerRef.current = window.setTimeout(() => {
+      setOpMsg('');
+      flashTimerRef.current = null;
+    }, 2000);
+  }, []);
+
+  useEffect(() => () => {
+    if (flashTimerRef.current) {
+      window.clearTimeout(flashTimerRef.current);
+    }
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadSections() {
+      if (!token) {
+        if (!ignore) {
+          setSections([]);
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (!ignore) setLoading(true);
+      try {
+        const res = await axios.get('/api/sections');
+        if (ignore) return;
+        const list = Array.isArray(res.data)
+          ? res.data.map(normalizeSection).filter(Boolean)
+          : [];
+        setSections(list);
+      } catch (error) {
+        if (ignore) return;
+        console.warn('[ManageSections] load failed:', error?.response?.data || error.message);
+        setSections([]);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+
+    loadSections();
+    return () => {
+      ignore = true;
+    };
+  }, [token]);
+
+  const sortedSections = useMemo(() => {
     return [...sections].sort((a, b) => {
-      if (a.pinned !== b.pinned) return b.pinned - a.pinned;
-      if (a.order !== b.order) return a.order - b.order;
-      return (a.label || a.key).localeCompare(b.label || b.key);
+      if (a.updatedAt && b.updatedAt) {
+        const diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        if (Number.isFinite(diff) && diff !== 0) return diff;
+      } else if (a.updatedAt) {
+        return -1;
+      } else if (b.updatedAt) {
+        return 1;
+      }
+      return (a.title || '').localeCompare(b.title || '');
     });
   }, [sections]);
 
-  function note(msg) {
-    setOpMsg(msg);
-    setTimeout(() => setOpMsg(''), 1500);
-  }
-
-  async function load() {
+  async function handleCreate(event) {
+    event.preventDefault();
     if (!token) return;
-    setLoading(true);
-    try {
-      const res = await axios.get('/api/sections', { headers });
-      const list = Array.isArray(res.data)
-        ? res.data.map(normalizeSection).filter(Boolean)
-        : [];
-      setSections(list);
-    } catch (e) {
-      console.warn('Failed to load sections', e?.response?.data || e.message);
-      setSections([]);
-    } finally {
-      setLoading(false);
+
+    const title = newTitle.trim();
+    if (!title) return;
+
+    const slugCandidate = sanitizeSlug(newSlug) || sanitizeSlug(title);
+    if (!slugCandidate) {
+      alert('Slug must contain letters or numbers.');
+      return;
     }
-  }
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [token]);
+    const payload = {
+      title,
+      slug: slugCandidate,
+      icon: (newIcon || DEFAULT_ICON).trim() || DEFAULT_ICON,
+      description: newDescription.trim(),
+      public: newPublic,
+    };
 
-  /* ------------------------ Create ------------------------ */
-  async function createSection(e) {
-    e.preventDefault();
-    const label = newLabel.trim();
-    if (!label) return;
-    const key = slugifyKey(label);
     setCreating(true);
     try {
-      const body = { key, label, icon: newIcon, pinned: true, order: 0 };
-      const res = await axios.post('/api/sections', body, { headers });
-      const created = normalizeSection(res.data) || { ...body, id: res.data?._id };
-      setSections(prev => [...prev, created]);
-      setNewLabel('');
-      setNewIcon('📚');
+      const res = await axios.post('/api/sections', payload);
+      const created = normalizeSection(res.data) || { id: res.data?._id || slugCandidate, ...payload };
+      setSections((prev) => {
+        const filtered = prev.filter((item) => item.id !== created.id);
+        return [created, ...filtered];
+      });
+      setNewTitle('');
+      setNewSlug('');
+      setNewIcon(DEFAULT_ICON);
+      setNewDescription('');
+      setNewPublic(false);
       note('Section created');
-    } catch (e) {
-      console.warn('Create failed', e?.response?.data || e.message);
-      alert(e?.response?.data?.error || 'Could not create section');
+    } catch (error) {
+      console.warn('[ManageSections] create failed:', error?.response?.data || error.message);
+      alert(error?.response?.data?.error || 'Could not create section');
     } finally {
       setCreating(false);
     }
   }
 
-  /* ------------------------ Edit/Save ------------------------ */
-  function beginEdit(s) {
-    setEditKey(s.key);
-    setEditLabel(s.label);
-    setEditIcon(s.icon || '📚');
-    setEditPinned(!!s.pinned);
-    setEditOrder(Number.isFinite(s.order) ? s.order : 0);
+  function beginEdit(section) {
+    setEditingId(section.id);
+    setEditTitle(section.title || '');
+    setEditSlug(section.slug || '');
+    setEditIcon(section.icon || DEFAULT_ICON);
+    setEditDescription(section.description || '');
+    setEditPublic(Boolean(section.public));
   }
 
   function cancelEdit() {
-    setEditKey(null);
-    setEditLabel('');
-    setEditIcon('📚');
-    setEditPinned(false);
-    setEditOrder(0);
+    setEditingId(null);
+    setEditTitle('');
+    setEditSlug('');
+    setEditIcon(DEFAULT_ICON);
+    setEditDescription('');
+    setEditPublic(false);
   }
 
-  async function saveEdit(original) {
-    const nextLabel = editLabel.trim();
-    if (!nextLabel) return;
-    const maybeNewKey = slugifyKey(nextLabel);
+  async function handleSaveEdit(event) {
+    event.preventDefault();
+    if (!editingId) return;
+
+    const title = editTitle.trim();
+    if (!title) return;
+
+    const slugCandidate = sanitizeSlug(editSlug) || sanitizeSlug(title);
+    if (!slugCandidate) {
+      alert('Slug must contain letters or numbers.');
+      return;
+    }
+
+    const payload = {
+      title,
+      slug: slugCandidate,
+      icon: (editIcon || DEFAULT_ICON).trim() || DEFAULT_ICON,
+      description: editDescription.trim(),
+      public: editPublic,
+    };
+
     setSaving(true);
-
     try {
-      const body = { label: nextLabel, icon: editIcon, pinned: editPinned, order: editOrder };
-      if (maybeNewKey !== original.key) body.key = maybeNewKey;
-
-      const res = await axios.patch(`/api/sections/${encodeURIComponent(original.id)}`, body, { headers });
-      const updated = normalizeSection(res.data) || {
-        ...original,
-        ...body,
-        key: body.key || original.key,
-      };
-      setSections(prev => prev.map(s => (s.key === original.key ? updated : s)));
-      note('Saved');
+      const res = await axios.patch(`/api/sections/${encodeURIComponent(editingId)}`, payload);
+      const updated = normalizeSection(res.data) || { id: editingId, ...payload };
+      setSections((prev) => prev.map((item) => (item.id === editingId ? updated : item)));
+      note('Section updated');
       cancelEdit();
-    } catch (errModern) {
-      console.warn('Update failed', errModern?.response?.data || errModern.message);
-      alert(errModern?.response?.data?.error || 'Could not save section');
+    } catch (error) {
+      console.warn('[ManageSections] update failed:', error?.response?.data || error.message);
+      alert(error?.response?.data?.error || 'Could not update section');
     } finally {
       setSaving(false);
     }
   }
 
-  /* ------------------------ Delete ------------------------ */
-  async function removeSection(s) {
-    const warn = `Delete “${s.label}”? This may remove or orphan associated entries/pages.`;
-    if (!window.confirm(warn)) return;
+  async function handleDelete(section) {
+    if (!section?.id) return;
+    const confirmed = window.confirm(`Delete “${section.title}”? This cannot be undone.`);
+    if (!confirmed) return;
+
     try {
-      await axios.delete(`/api/sections/${encodeURIComponent(s.id || s._id || s.key)}`, { headers });
-      setSections(prev => prev.filter(x => x.key !== s.key));
-      note('Deleted');
-    } catch (e) {
-      console.warn('Delete failed', e?.response?.data || e.message);
-      alert(e?.response?.data?.error || 'Could not delete section');
+      await axios.delete(`/api/sections/${encodeURIComponent(section.id)}`);
+      setSections((prev) => prev.filter((item) => item.id !== section.id));
+      note('Section deleted');
+    } catch (error) {
+      console.warn('[ManageSections] delete failed:', error?.response?.data || error.message);
+      alert(error?.response?.data?.error || 'Could not delete section');
     }
   }
 
   if (!isAuthenticated) {
     return <div className="page" style={{ padding: 24 }}>Please log in.</div>;
   }
+
   if (loading) {
     return (
       <>
@@ -177,150 +251,214 @@ export default function ManageSections() {
   return (
     <>
       <Header />
-      <div className="page" style={{ padding: 16 }}>
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="section-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap: 12 }}>
+      <div className="page" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="card" style={{ padding: 16 }}>
+          <div
+            className="section-header"
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
+          >
             <h2 style={{ margin: 0 }}>Manage Sections</h2>
             {opMsg && <span className="pill">{opMsg}</span>}
           </div>
 
-          {/* Create */}
-          <form onSubmit={createSection} style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop: 8 }}>
-            <input
-              className="input"
-              placeholder="New section label (e.g., Crochet, Games)"
-              value={newLabel}
-              onChange={e => setNewLabel(e.target.value)}
-              style={{ minWidth: 220, flex: 1 }}
-              required
-            />
-            <input
-              className="input"
-              placeholder="Icon (emoji)"
-              value={newIcon}
-              onChange={e => setNewIcon(e.target.value)}
-              style={{ width: 90, textAlign:'center' }}
-              aria-label="Section icon"
-            />
-            <button className="button" disabled={creating}>
-              {creating ? 'Creating…' : 'Create'}
-            </button>
+          <form onSubmit={handleCreate} style={{ display: 'grid', gap: 12, marginTop: 16 }}>
+            <div className="field">
+              <label htmlFor="new-title">Title</label>
+              <input
+                id="new-title"
+                className="input"
+                placeholder="e.g., Crochet, Games"
+                value={newTitle}
+                onChange={(event) => setNewTitle(event.target.value)}
+                required
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="new-slug">Slug</label>
+              <input
+                id="new-slug"
+                className="input"
+                placeholder="Auto-generated from title if left blank"
+                value={newSlug}
+                onChange={(event) => setNewSlug(event.target.value)}
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="new-icon">Icon (emoji)</label>
+              <input
+                id="new-icon"
+                className="input"
+                value={newIcon}
+                onChange={(event) => setNewIcon(event.target.value)}
+                maxLength={4}
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="new-description">Description</label>
+              <textarea
+                id="new-description"
+                className="input"
+                rows={2}
+                value={newDescription}
+                onChange={(event) => setNewDescription(event.target.value)}
+                placeholder="Optional short summary"
+              />
+            </div>
+
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                checked={newPublic}
+                onChange={(event) => setNewPublic(event.target.checked)}
+              />
+              <span>Public section</span>
+            </label>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="submit" className="button" disabled={creating}>
+                {creating ? 'Creating…' : 'Create section'}
+              </button>
+            </div>
           </form>
         </div>
 
-        {/* List */}
-        <div className="card">
-          {sorted.length === 0 ? (
-            <p className="muted">No sections yet.</p>
+        <div className="card" style={{ padding: 16, display: 'grid', gap: 16 }}>
+          {sortedSections.length === 0 ? (
+            <div className="muted">No sections yet. Create one above to get started.</div>
           ) : (
-            <ul className="unstyled" style={{ display:'grid', gap: 8 }}>
-              {sorted.map(s => {
-                const editing = editKey === s.key;
-                return (
-                  <li
-                    key={s.key}
-                    className="section-item"
-                    style={{
-                      display:'grid',
-                      gridTemplateColumns:'minmax(80px,120px) 1fr 110px 90px auto',
-                      gap: 8,
-                      alignItems:'center',
-                      padding:'10px 12px',
-                      border:'1px solid var(--color-border,#2a2a32)',
-                      borderRadius:12,
-                      background:'var(--card,rgba(255,255,255,.02))'
-                    }}
-                  >
-                    {/* Icon */}
-                    {editing ? (
-                      <input
-                        className="input"
-                        value={editIcon}
-                        onChange={e => setEditIcon(e.target.value)}
-                        aria-label="Icon"
-                      />
-                    ) : (
-                      <div style={{ fontSize: 22 }}>{s.icon}</div>
-                    )}
+            sortedSections.map((section) => {
+              const editing = editingId === section.id;
+              return (
+                <div
+                  key={section.id || section.slug}
+                  className="sections-manage__row"
+                  style={{
+                    border: '1px solid var(--border-color, rgba(148, 163, 184, 0.24))',
+                    borderRadius: 12,
+                    padding: 16,
+                    display: 'grid',
+                    gap: 12,
+                  }}
+                >
+                  {editing ? (
+                    <form onSubmit={handleSaveEdit} style={{ display: 'grid', gap: 12 }}>
+                      <div className="field">
+                        <label htmlFor="edit-title">Title</label>
+                        <input
+                          id="edit-title"
+                          className="input"
+                          value={editTitle}
+                          onChange={(event) => setEditTitle(event.target.value)}
+                          required
+                        />
+                      </div>
 
-                    {/* Label (and key shown muted) */}
-                    <div style={{ overflow:'hidden' }}>
-                      {editing ? (
-                        <>
-                          <input
-                            className="input"
-                            value={editLabel}
-                            onChange={e => setEditLabel(e.target.value)}
-                            aria-label="Label"
-                          />
-                          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                            slug: {slugifyKey(editLabel || s.label)}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div style={{ fontWeight: 600 }}>{s.label}</div>
-                          <div className="muted" style={{ fontSize: 12 }}>slug: {s.key}</div>
-                        </>
-                      )}
-                    </div>
+                      <div className="field">
+                        <label htmlFor="edit-slug">Slug</label>
+                        <input
+                          id="edit-slug"
+                          className="input"
+                          value={editSlug}
+                          onChange={(event) => setEditSlug(event.target.value)}
+                          required
+                        />
+                      </div>
 
-                    {/* Pinned */}
-                    <div style={{ display:'flex', alignItems:'center', gap: 6 }}>
-                      <span className="muted" style={{ fontSize: 12 }}>Pinned</span>
-                      {editing ? (
+                      <div className="field">
+                        <label htmlFor="edit-icon">Icon</label>
+                        <input
+                          id="edit-icon"
+                          className="input"
+                          value={editIcon}
+                          onChange={(event) => setEditIcon(event.target.value)}
+                          maxLength={4}
+                        />
+                      </div>
+
+                      <div className="field">
+                        <label htmlFor="edit-description">Description</label>
+                        <textarea
+                          id="edit-description"
+                          className="input"
+                          rows={2}
+                          value={editDescription}
+                          onChange={(event) => setEditDescription(event.target.value)}
+                        />
+                      </div>
+
+                      <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <input
                           type="checkbox"
-                          checked={editPinned}
-                          onChange={e => setEditPinned(e.target.checked)}
-                          aria-label="Pinned"
+                          checked={editPublic}
+                          onChange={(event) => setEditPublic(event.target.checked)}
                         />
-                      ) : (
-                        <span className={`pill ${s.pinned ? '' : 'pill-muted'}`}>{s.pinned ? 'Yes' : 'No'}</span>
-                      )}
-                    </div>
+                        <span>Public section</span>
+                      </label>
 
-                    {/* Order */}
-                    <div style={{ display:'flex', alignItems:'center', gap: 6 }}>
-                      <span className="muted" style={{ fontSize: 12 }}>Order</span>
-                      {editing ? (
-                        <input
-                          className="input"
-                          type="number"
-                          value={editOrder}
-                          onChange={e => setEditOrder(parseInt(e.target.value || '0', 10))}
-                          style={{ width: 70 }}
-                          aria-label="Order"
-                        />
-                      ) : (
-                        <span className="pill pill-muted">{s.order}</span>
-                      )}
-                    </div>
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                        <button type="submit" className="button" disabled={saving}>
+                          {saving ? 'Saving…' : 'Save changes'}
+                        </button>
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          onClick={cancelEdit}
+                          disabled={saving}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between',
+                        gap: 16,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                        <span style={{ fontSize: '1.75rem' }} aria-hidden>
+                          {section.icon || DEFAULT_ICON}
+                        </span>
+                        <div style={{ display: 'grid', gap: 4 }}>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <strong>{section.title || 'Untitled section'}</strong>
+                            {section.public && <span className="pill">Public</span>}
+                          </div>
+                          <span className="muted">Slug: {section.slug || '—'}</span>
+                          {section.description && (
+                            <span className="muted">{section.description}</span>
+                          )}
+                        </div>
+                      </div>
 
-                    {/* Actions */}
-                    <div style={{ display:'flex', gap: 6, justifyContent:'flex-end' }}>
-                      {editing ? (
-                        <>
-                          <button
-                            className="button"
-                            onClick={() => saveEdit(s)}
-                            disabled={saving}
-                          >
-                            {saving ? 'Saving…' : 'Save'}
-                          </button>
-                          <button className="button chip" onClick={cancelEdit} disabled={saving}>Cancel</button>
-                        </>
-                      ) : (
-                        <>
-                          <button className="button chip" onClick={() => beginEdit(s)}>Edit</button>
-                          <button className="button chip danger" onClick={() => removeSection(s)}>Delete</button>
-                        </>
-                      )}
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          className="link-button"
+                          onClick={() => beginEdit(section)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="link-button danger"
+                          onClick={() => handleDelete(section)}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
-                  </li>
-                );
-              })}
-            </ul>
+                  )}
+                </div>
+              );
+            })
           )}
         </div>
       </div>
