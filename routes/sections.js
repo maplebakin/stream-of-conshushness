@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import Section from '../models/Section.js';
 
 const router = express.Router();
@@ -47,10 +48,14 @@ function shapeSection(doc) {
   const slug = base.slug || base.key || '';
   const icon = base.icon ?? base.emoji ?? '';
   const theme = base.theme && typeof base.theme === 'object' ? base.theme : {};
+  const ownerId = base.ownerId || base.userId || null;
+  const userId = base.userId || base.ownerId || null;
 
   return {
     ...base,
     id: base._id?.toString?.() || base._id,
+    ownerId,
+    userId,
     title,
     label: title,
     name: title,
@@ -68,6 +73,36 @@ function buildOwnerFilter(ownerId) {
   clauses.push({ ownerId });
   clauses.push({ userId: ownerId });
   return { $or: clauses };
+}
+
+function buildIdentifierFilter(raw) {
+  if (!raw) return null;
+
+  const clauses = [];
+
+  if (mongoose.Types.ObjectId.isValid(raw)) {
+    clauses.push({ _id: raw });
+  }
+
+  const asString = String(raw);
+  clauses.push({ slug: asString });
+  clauses.push({ key: asString });
+
+  const normalized = sanitizeSlug(asString);
+  if (normalized && normalized !== asString) {
+    clauses.push({ slug: normalized });
+    clauses.push({ key: normalized });
+  }
+
+  if (!clauses.length) return null;
+  return { $or: clauses };
+}
+
+function combineFilters(...clauses) {
+  const filtered = clauses.filter(Boolean);
+  if (!filtered.length) return {};
+  if (filtered.length === 1) return filtered[0];
+  return { $and: filtered };
 }
 
 // POST /api/sections
@@ -139,8 +174,8 @@ router.get('/', async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const ownerFilter = buildOwnerFilter(requestedOwnerId);
-    const list = await Section.find(ownerFilter || { ownerId: requestedOwnerId })
+    const ownerFilter = buildOwnerFilter(requestedOwnerId) || { ownerId: requestedOwnerId };
+    const list = await Section.find(ownerFilter)
       .sort({ updatedAt: -1, _id: -1 })
       .lean();
 
@@ -157,7 +192,12 @@ router.get('/:id', async (req, res) => {
     const ownerId = getUserId(req);
     if (!ownerId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const doc = await Section.findOne({ _id: req.params.id, ...(buildOwnerFilter(ownerId) || { ownerId }) });
+    const identifierFilter = buildIdentifierFilter(req.params.id);
+    if (!identifierFilter) return res.status(404).json({ error: 'Section not found' });
+    const ownerFilter = buildOwnerFilter(ownerId) || { ownerId };
+    const match = combineFilters(ownerFilter, identifierFilter);
+
+    const doc = await Section.findOne(match);
     if (!doc) return res.status(404).json({ error: 'Section not found' });
 
     res.json(shapeSection(doc));
@@ -228,11 +268,15 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'No updates supplied' });
     }
 
-    const doc = await Section.findOneAndUpdate(
-      { _id: req.params.id, ...(buildOwnerFilter(ownerId) || { ownerId }) },
-      update,
-      { new: true, runValidators: true }
-    );
+    update.ownerId = ownerId;
+    update.userId = ownerId;
+
+    const identifierFilter = buildIdentifierFilter(req.params.id);
+    if (!identifierFilter) return res.status(404).json({ error: 'Section not found' });
+    const ownerFilter = buildOwnerFilter(ownerId) || { ownerId };
+    const match = combineFilters(ownerFilter, identifierFilter);
+
+    const doc = await Section.findOneAndUpdate(match, update, { new: true, runValidators: true });
 
     if (!doc) return res.status(404).json({ error: 'Section not found' });
 
@@ -252,7 +296,12 @@ router.delete('/:id', async (req, res) => {
     const ownerId = getUserId(req);
     if (!ownerId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const result = await Section.deleteOne({ _id: req.params.id, ...(buildOwnerFilter(ownerId) || { ownerId }) });
+    const identifierFilter = buildIdentifierFilter(req.params.id);
+    if (!identifierFilter) return res.status(404).json({ error: 'Section not found' });
+    const ownerFilter = buildOwnerFilter(ownerId) || { ownerId };
+    const match = combineFilters(ownerFilter, identifierFilter);
+
+    const result = await Section.deleteOne(match);
     if (result.deletedCount === 0) return res.status(404).json({ error: 'Section not found' });
 
     res.sendStatus(204);
