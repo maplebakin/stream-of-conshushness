@@ -3,7 +3,8 @@ import React, { useContext } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 import './variables.css';
-import './DesignSystem.css'
+import './DesignSystem.css';
+
 // Pages / Layout
 import MainPage from './MainPage.jsx';
 import DailyPage from './DailyPage.jsx';
@@ -13,11 +14,11 @@ import RegisterPage from './RegisterPage.jsx';
 import GameList from './GameList.jsx';
 import GamePage from './GamePage.jsx';
 
-import SectionsIndex from './pages/SectionsIndex.jsx';        // sections index grid
-import SectionPage from './pages/SectionPage.jsx';            // section detail
-import SectionPageRoom from './pages/SectionPageRoom.jsx';    // NEW: page room under a section
-import ClustersIndex from './pages/ClustersIndex.jsx';        // clusters index
-import ClusterRoom from './pages/ClusterRoom.jsx';            // per-cluster room
+import SectionsIndex from './pages/SectionsIndex.jsx';
+import SectionPage from './pages/SectionPage.jsx';
+import SectionPageRoom from './pages/SectionPageRoom.jsx';
+import ClustersIndex from './pages/ClustersIndex.jsx';
+import ClusterRoom from './pages/ClusterRoom.jsx';
 
 import RippleReviewUI from './RippleReviewUI';
 import Layout from './Layout.jsx';
@@ -69,14 +70,14 @@ function AppRoutes() {
           <Route path="/_adapters" element={<AdapterHarness />} />
 
           {/* Sections */}
-          <Route path="/sections" element={<SectionsIndex />} />               {/* landing */}
-          <Route path="/sections/:key" element={<SectionPage />} />            {/* section detail */}
-          <Route path="/sections/:sectionSlug/:pageSlug" element={<SectionPageRoom />} />             {/* room default -> journal */}
-          <Route path="/sections/:sectionSlug/:pageSlug/:tab" element={<SectionPageRoom />} />        {/* room tabbed */}
+          <Route path="/sections" element={<SectionsIndex />} />
+          <Route path="/sections/:key" element={<SectionPage />} />
+          <Route path="/sections/:sectionSlug/:pageSlug" element={<SectionPageRoom />} />
+          <Route path="/sections/:sectionSlug/:pageSlug/:tab" element={<SectionPageRoom />} />
 
           {/* Clusters */}
           <Route path="/clusters" element={<ClustersIndex />} />
-          <Route path="/clusters/:clusterSlug" element={<ClusterRoom />} />    {/* param name matches ClusterRoom */}
+          <Route path="/clusters/:clusterSlug" element={<ClusterRoom />} />
 
           {/* Games */}
           <Route path="/section/games" element={<GameList />} />

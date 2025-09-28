@@ -1,4 +1,3 @@
-// frontend/src/pages/SectionPage.jsx
 import { useState, useEffect, useContext, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from '../api/axiosInstance.js';

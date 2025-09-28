@@ -1,4 +1,3 @@
-// routes/sections.js
 import express from 'express';
 import Section from '../models/Section.js';
 
