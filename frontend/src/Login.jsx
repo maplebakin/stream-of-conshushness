@@ -2,6 +2,7 @@
 import React, { useState, useContext, useRef, useEffect } from 'react';
 import { AuthContext } from './AuthContext.jsx';
 import { useNavigate, Link } from 'react-router-dom';
+import './login.css';
 
 export default function LoginPage() {
   const { login } = useContext(AuthContext);

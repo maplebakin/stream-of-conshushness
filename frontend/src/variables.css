@@ -82,3 +82,72 @@
   --transition-base: 180ms ease;
   --transition-fast: 120ms ease;
 }
+
+/* Dark Mode Theme */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Core palette - dark variants */
+  --color-mist: #1a1614;           /* dark background */
+  --color-ink: #e8dfd8;            /* light text */
+  --color-ink-strong: #f4ede6;     /* bright headings */
+  --color-vein: #a89585;           /* muted neutral */
+  --color-lantern: #f2a65e;        /* warm accent (same) */
+  --color-ripple: #6ba88f;         /* brighter green */
+  --color-spool: #9b87f5;          /* lavender accent (brighter) */
+  --color-plum: #7b6ba6;           /* lighter plum */
+  --color-thread: #9b8ff0;         /* brighter indigo */
+  --color-border: #3a3430;         /* darker outline */
+
+  /* Surfaces */
+  --color-background: var(--color-mist);
+  --color-surface: #252220;
+  --color-surface-muted: #2d2926;
+  --color-surface-soft: #221f1d;
+  --color-surface-elevated: #302d2a;
+  --color-overlay: rgba(37, 34, 32, 0.9);
+  --color-surface-2: var(--color-surface-muted);
+  --color-surface-quiet: #2a2724;
+
+  /* Type */
+  --color-text: var(--color-ink);
+  --color-text-strong: var(--color-ink-strong);
+  --color-muted: color-mix(in srgb, var(--color-vein) 70%, black 30%);
+  --color-on-accent: #1a1614;
+  --color-on-dark: #f4ede6;
+
+  /* Status - adjusted for dark mode */
+  --color-success: #4ade80;
+  --color-warning: #fb923c;
+  --color-danger: #f87171;
+  --color-info: #60a5fa;
+
+  /* Focus + selection */
+  --focus-ring: color-mix(in srgb, var(--color-spool) 80%, black 20%);
+  --focus-ring-muted: color-mix(in srgb, var(--color-ripple) 75%, black 25%);
+
+  /* Shadow + depth - darker shadows for dark mode */
+  --shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.3);
+  --shadow-elevated: 0 18px 45px rgba(0, 0, 0, 0.4);
+  --shadow-border: inset 0 0 0 1px rgba(232, 223, 216, 0.08);
+}
+
+/* Additional utility variables that work in both themes */
+:root, [data-theme="dark"] {
+  --bg-primary: var(--color-surface);
+  --bg-secondary: var(--color-surface-muted);
+  --bg-tertiary: var(--color-surface-soft);
+  --bg-hover: var(--color-surface-elevated);
+  --bg-disabled: var(--color-surface-quiet);
+  --bg-info: var(--color-info);
+
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-muted);
+  --text-tertiary: color-mix(in srgb, var(--color-muted) 60%, transparent 40%);
+
+  --border-primary: var(--color-border);
+  --border-info: var(--color-info);
+
+  --accent-primary: var(--color-spool);
+  --accent-secondary: var(--color-ripple);
+}

@@ -70,7 +70,8 @@ router.get("/", async (req, res) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit || "100", 10), 1), 500);
     const rows = await Entry.find(q)
       .sort({ pinned: -1, date: -1, createdAt: -1, _id: -1 })
-      .limit(limit);
+      .limit(limit)
+      .populate('clusters', 'name slug icon color');
     res.json(rows);
   } catch (e) {
     console.error("GET /entries error", e);
@@ -84,7 +85,7 @@ router.get("/:id", async (req, res) => {
     const userId = getUserIdFromRequest(req);
     const { id } = req.params;
     if (!ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid id" });
-    const doc = await Entry.findOne({ _id: id, userId });
+    const doc = await Entry.findOne({ _id: id, userId }).populate('clusters', 'name slug icon color');
     if (!doc) return res.status(404).json({ error: "Not found" });
     res.json(doc);
   } catch (e) {
@@ -98,7 +99,7 @@ router.get("/by-date/:date", async (req, res) => {
   try {
     const userId = getUserIdFromRequest(req);
     const dateISO = normalizeDate(req.params.date);
-    const rows = await Entry.find({ userId, date: dateISO }).sort({ createdAt: -1 });
+    const rows = await Entry.find({ userId, date: dateISO }).sort({ createdAt: -1 }).populate('clusters', 'name slug icon color');
     res.json(rows);
   } catch (e) {
     console.error("GET /entries/by-date/:date error", e);
@@ -113,6 +114,7 @@ router.post("/", async (req, res) => {
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const entry = await createEntryWithAutomation({ userId, payload: req.body || {} });
+    await entry.populate('clusters', 'name slug icon color');
     res.status(201).json(entry);
   } catch (e) {
     console.error("POST /entries error", e);
@@ -131,6 +133,7 @@ router.patch("/:id", async (req, res) => {
 
     const doc = await updateEntryWithAutomation({ userId, entryId: id, updates: req.body || {} });
     if (!doc) return res.status(404).json({ error: "Not found" });
+    await doc.populate('clusters', 'name slug icon color');
     res.json(doc);
   } catch (e) {
     console.error("PATCH /entries/:id error", e);

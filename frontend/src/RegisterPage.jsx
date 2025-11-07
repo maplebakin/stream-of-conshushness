@@ -2,6 +2,7 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from './AuthContext.jsx';
+import './login.css';
 
 export default function RegisterPage() {
   const { login } = useContext(AuthContext);

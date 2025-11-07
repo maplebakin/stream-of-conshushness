@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import User from '../models/User.js';
 import auth from '../middleware/auth.js';
+import { authLimiter, passwordResetLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
@@ -89,7 +90,7 @@ async function generateUniqueUsername(base) {
  *   { email, password }                    // auto-generates username from email local-part
  *   { identifier, password }               // identifier can be username or email
  */
-router.post('/register', async (req, res) => {
+router.post('/register', authLimiter, async (req, res) => {
   try {
     const {
       username: rawUsername,
@@ -148,7 +149,7 @@ router.post('/register', async (req, res) => {
  *   { email, password }
  *   { identifier, password }
  */
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
   try {
     const { username, email, identifier, password } = req.body || {};
     const loginId = (identifier || username || email || '').trim();
@@ -176,7 +177,7 @@ router.post('/login', async (req, res) => {
 /** FORGOT (no enumeration)
  * POST /api/forgot  or  /api/auth/forgot   { identifier }
  */
-router.post('/forgot', async (req, res) => {
+router.post('/forgot', passwordResetLimiter, async (req, res) => {
   try {
     const { identifier } = req.body || {};
     if (!identifier) return fail(res, 400, 'identifier required');
@@ -242,7 +243,7 @@ router.post('/forgot', async (req, res) => {
  *   A) { token, newPassword }
  *   B) { username, code, newPassword }
  */
-router.post('/reset', async (req, res) => {
+router.post('/reset', passwordResetLimiter, async (req, res) => {
   try {
     const { token, username, code, newPassword } = req.body || {};
     if (!newPassword || newPassword.length < 6) {
@@ -343,7 +344,7 @@ router.post('/admin/reset-password', async (req, res) => {
 router.get('/me', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId)
-      .select('_id username email isAdmin createdAt updatedAt');
+      .select('_id username email isAdmin profilePicture createdAt updatedAt');
     if (!user) return res.status(404).json({ error: 'user not found' });
     res.json({ ok: true, user });
   } catch (e) {
@@ -355,7 +356,7 @@ router.get('/me', auth, async (req, res) => {
 // PATCH /api/me   { email?, username? }
 router.patch('/me', auth, async (req, res) => {
   try {
-    const { email, username } = req.body || {};
+    const { email, username, profilePicture } = req.body || {};
     const user = await User.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'user not found' });
 
@@ -374,10 +375,20 @@ router.patch('/me', auth, async (req, res) => {
       user.username = username.trim();
     }
 
+    if (typeof profilePicture === 'string') {
+      user.profilePicture = profilePicture.trim();
+    }
+
     await user.save();
     res.json({
       ok: true,
-      user: { id: user._id, username: user.username, email: user.email, isAdmin: user.isAdmin },
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        isAdmin: user.isAdmin,
+        profilePicture: user.profilePicture,
+      },
     });
   } catch (e) {
     console.error(e);

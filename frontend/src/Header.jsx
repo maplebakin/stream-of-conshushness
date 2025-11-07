@@ -1,7 +1,8 @@
 // src/Header.jsx
 import { Link, useLocation } from 'react-router-dom';
-import { useContext } from 'react';
+import { useContext, useState, useEffect } from 'react';
 import { AuthContext } from './AuthContext.jsx';
+import axios from './api/axiosInstance';
 import './Main.css';
 import './Header.css';
 
@@ -25,6 +26,22 @@ function isActivePath(pathname, to) {
 export default function Header() {
   const location = useLocation();
   const { isAuthenticated, logout } = useContext(AuthContext);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    async function fetchUser() {
+      try {
+        const { data } = await axios.get('/api/me');
+        setUser(data.user);
+      } catch (e) {
+        console.error('Failed to fetch user:', e);
+      }
+    }
+
+    fetchUser();
+  }, [isAuthenticated]);
 
   const NavItem = ({ to, label }) => {
     const active = isActivePath(location.pathname, to);
@@ -53,6 +70,51 @@ export default function Header() {
         <NavItem to="/calendar" label="📆 Calendar" />
         <NavItem to="/sections" label="🎛️ Sections" />
         {isAuthenticated && <NavItem to="/settings" label="⚙️ User Settings" />}
+
+        {isAuthenticated && user && (
+          <Link
+            to="/account"
+            title="Account"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              textDecoration: 'none',
+              marginLeft: '8px',
+            }}
+          >
+            {user.profilePicture ? (
+              <img
+                src={user.profilePicture}
+                alt={`${user.username}'s profile`}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  border: '2px solid var(--border-primary)',
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  background: 'var(--accent-primary)',
+                  border: '2px solid var(--border-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.9rem',
+                  fontWeight: 'bold',
+                  color: 'white',
+                }}
+              >
+                {user.username?.[0]?.toUpperCase() || '?'}
+              </div>
+            )}
+          </Link>
+        )}
 
         {isAuthenticated && (
           <button

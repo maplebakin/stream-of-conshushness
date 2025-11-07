@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import '../login.css';
 
 function useQuery() {
   const p = new URLSearchParams(window.location.search);

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import '../login.css';
 
 const EMAIL_LINKS = {
   'gmail.com'       : 'https://mail.google.com/',

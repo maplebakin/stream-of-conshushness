@@ -37,7 +37,7 @@ async function listTasksCore(req, res) {
       section,
     } = req.query;
 
-    const q = { userId };
+    const q = { userId, deletedAt: null }; // Exclude soft-deleted tasks
 
     const dayISO = dueDate || date;
     if (dayISO) q.dueDate = dayISO;
@@ -64,7 +64,9 @@ async function listTasksCore(req, res) {
     const off = clamp(offset ?? 0, 0, 1_000_000);
 
     const sort = { completed: 1, dueDate: 1, createdAt: -1 };
-    const items = await Task.find(q).sort(sort).skip(off).limit(lim).lean();
+    const items = await Task.find(q).sort(sort).skip(off).limit(lim)
+      .populate('clusters', 'name slug icon color')
+      .lean();
     res.json(items);
   } catch (e) {
     console.error('[tasks] list failed:', e);
@@ -130,6 +132,7 @@ async function updateTask(req, res) {
     }
 
     const saved = await doc.save();
+    await saved.populate('clusters', 'name slug icon color');
     res.json(saved);
   } catch (e) {
     console.error('[tasks] update failed:', e);
@@ -162,7 +165,7 @@ router.patch('/:id/toggle', async (req, res) => {
       { _id: id, userId },
       { $set: { completed: nowCompleted, status, completedAt } },
       { new: true, runValidators: true }
-    ).lean();
+    ).populate('clusters', 'name slug icon color').lean();
 
     // If we just completed and it's recurring, spawn the next
     let next = null;
@@ -183,6 +186,7 @@ router.patch('/:id/toggle', async (req, res) => {
           completed: false,
           status: 'todo',
         });
+        await next.populate('clusters', 'name slug icon color');
       }
     }
 
@@ -226,6 +230,7 @@ router.post('/', async (req, res) => {
       completed: false,
       status: safeStatus === 'done' ? 'done' : safeStatus,
     });
+    await doc.populate('clusters', 'name slug icon color');
     res.status(201).json(doc);
   } catch (e) {
     // validation stays 400; everything else 500
@@ -235,13 +240,17 @@ router.post('/', async (req, res) => {
   }
 });
 
-// DELETE /api/tasks/:id  → hard delete a single task
+// DELETE /api/tasks/:id  → soft delete a single task
 router.delete('/:id', async (req, res) => {
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const { id } = req.params;
-    const doc = await Task.findOneAndDelete({ _id: id, userId });
+    const doc = await Task.findOneAndUpdate(
+      { _id: id, userId, deletedAt: null },
+      { $set: { deletedAt: new Date() } },
+      { new: true }
+    );
     if (!doc) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true, deleted: doc._id });
   } catch (e) {
@@ -250,15 +259,18 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// POST /api/tasks/bulk-delete  → hard delete many by id
+// POST /api/tasks/bulk-delete  → soft delete many by id
 router.post('/bulk-delete', async (req, res) => {
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter(Boolean) : [];
     if (ids.length === 0) return res.status(400).json({ error: 'ids required' });
-    const r = await Task.deleteMany({ _id: { $in: ids }, userId });
-    res.json({ ok: true, deletedCount: r.deletedCount });
+    const r = await Task.updateMany(
+      { _id: { $in: ids }, userId, deletedAt: null },
+      { $set: { deletedAt: new Date() } }
+    );
+    res.json({ ok: true, deletedCount: r.modifiedCount });
   } catch (e) {
     console.error('[tasks] bulk-delete failed:', e);
     res.status(500).json({ error: 'bulk-delete failed' });
@@ -312,5 +324,163 @@ function nextFromRRule(rrule, fromISO) {
   }
   return '';
 }
+
+// Bulk operations
+// POST /api/tasks/bulk/complete - Mark multiple tasks as complete
+router.post('/bulk/complete', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array required' });
+    }
+
+    const result = await Task.updateMany(
+      { _id: { $in: ids }, userId },
+      { $set: { completed: true, status: 'done', completedAt: new Date() } }
+    );
+
+    res.json({ ok: true, modified: result.modifiedCount });
+  } catch (e) {
+    console.error('[tasks] bulk complete failed:', e);
+    res.status(500).json({ error: 'bulk complete failed' });
+  }
+});
+
+// POST /api/tasks/bulk/delete - Soft delete multiple tasks
+router.post('/bulk/delete', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array required' });
+    }
+
+    const result = await Task.updateMany(
+      { _id: { $in: ids }, userId, deletedAt: null },
+      { $set: { deletedAt: new Date() } }
+    );
+
+    res.json({ ok: true, deleted: result.modifiedCount });
+  } catch (e) {
+    console.error('[tasks] bulk delete failed:', e);
+    res.status(500).json({ error: 'bulk delete failed' });
+  }
+});
+
+// POST /api/tasks/bulk/move - Move multiple tasks to a cluster
+router.post('/bulk/move', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { ids, clusterId } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array required' });
+    }
+
+    const clusterObjectId = await resolveClusterIdForOwner(userId, clusterId);
+    if (!clusterObjectId && clusterId) {
+      return res.status(404).json({ error: 'Cluster not found' });
+    }
+
+    const clusters = clusterObjectId ? [clusterObjectId] : [];
+    const result = await Task.updateMany(
+      { _id: { $in: ids }, userId },
+      { $set: { clusters } }
+    );
+
+    res.json({ ok: true, modified: result.modifiedCount });
+  } catch (e) {
+    console.error('[tasks] bulk move failed:', e);
+    res.status(500).json({ error: 'bulk move failed' });
+  }
+});
+
+// GET /api/tasks/trash - View deleted tasks
+router.get('/trash', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const tasks = await Task.find({
+      userId,
+      deletedAt: { $ne: null }
+    })
+    .sort({ deletedAt: -1 })
+    .limit(100)
+    .populate('clusters', 'name slug icon color')
+    .lean();
+
+    res.json(tasks);
+  } catch (e) {
+    console.error('[tasks] trash list failed:', e);
+    res.status(500).json({ error: 'trash list failed' });
+  }
+});
+
+// POST /api/tasks/:id/restore - Restore a deleted task
+router.post('/:id/restore', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const { id } = req.params;
+
+    const doc = await Task.findOneAndUpdate(
+      { _id: id, userId, deletedAt: { $ne: null } },
+      { $set: { deletedAt: null } },
+      { new: true }
+    ).populate('clusters', 'name slug icon color');
+
+    if (!doc) return res.status(404).json({ error: 'Not found or not deleted' });
+    res.json({ ok: true, task: doc });
+  } catch (e) {
+    console.error('[tasks] restore failed:', e);
+    res.status(500).json({ error: 'restore failed' });
+  }
+});
+
+// DELETE /api/tasks/:id/permanent - Permanently delete a task
+router.delete('/:id/permanent', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const { id } = req.params;
+
+    const doc = await Task.findOneAndDelete({
+      _id: id,
+      userId,
+      deletedAt: { $ne: null }
+    });
+
+    if (!doc) return res.status(404).json({ error: 'Not found or not in trash' });
+    res.json({ ok: true, deleted: doc._id });
+  } catch (e) {
+    console.error('[tasks] permanent delete failed:', e);
+    res.status(500).json({ error: 'permanent delete failed' });
+  }
+});
+
+// POST /api/tasks/trash/empty - Permanently delete all trash items
+router.post('/trash/empty', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const result = await Task.deleteMany({
+      userId,
+      deletedAt: { $ne: null }
+    });
+
+    res.json({ ok: true, deletedCount: result.deletedCount });
+  } catch (e) {
+    console.error('[tasks] empty trash failed:', e);
+    res.status(500).json({ error: 'empty trash failed' });
+  }
+});
 
 export default router;

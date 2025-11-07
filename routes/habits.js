@@ -1,6 +1,7 @@
 import express from 'express';
 import auth from '../middleware/auth.js';
 import Habit from '../models/Habit.js';
+import { calculateHabitAnalytics } from '../utils/habitAnalytics.js';
 
 const router = express.Router();
 
@@ -74,5 +75,30 @@ router.patch('/:id/done', auth, async (req, res) => {
   }
 });
 
+// GET analytics for all habits
+router.get('/analytics', auth, async (req, res) => {
+  try {
+    const habits = await Habit.find({ userId: req.user.userId }).lean();
+    const analytics = habits.map(habit => calculateHabitAnalytics(habit));
+    res.json(analytics);
+  } catch (error) {
+    console.error('[habits] Analytics failed:', error);
+    res.status(500).json({ error: 'Failed to load analytics' });
+  }
+});
+
+// GET analytics for single habit
+router.get('/:id/analytics', auth, async (req, res) => {
+  try {
+    const habit = await Habit.findOne({ _id: req.params.id, userId: req.user.userId }).lean();
+    if (!habit) return res.status(404).json({ error: 'Habit not found' });
+
+    const analytics = calculateHabitAnalytics(habit);
+    res.json(analytics);
+  } catch (error) {
+    console.error('[habits] Analytics failed:', error);
+    res.status(500).json({ error: 'Failed to load analytics' });
+  }
+});
 
 export default router;

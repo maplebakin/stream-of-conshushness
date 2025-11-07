@@ -19,6 +19,7 @@ export default function Account() {
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [msg, setMsg] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   async function load() {
     try {
@@ -68,6 +69,60 @@ export default function Account() {
     }
   }
 
+  async function handleProfilePictureUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      setMsg('Please select an image file.');
+      return;
+    }
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setMsg('Image must be smaller than 5MB.');
+      return;
+    }
+
+    setMsg('');
+    setUploading(true);
+    try {
+      // Upload image
+      const formData = new FormData();
+      formData.append('profilePicture', file);
+
+      const uploadRes = await axios.post('/api/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      // Update user profile with the uploaded image URL
+      await axios.patch('/api/me', {
+        profilePicture: uploadRes.data.url,
+      });
+
+      setMsg('Profile picture updated successfully!');
+      await load();
+    } catch (e) {
+      setMsg(e?.response?.data?.error || 'Failed to upload profile picture.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeProfilePicture() {
+    if (!window.confirm('Remove your profile picture?')) return;
+
+    setMsg('');
+    try {
+      await axios.patch('/api/me', { profilePicture: '' });
+      setMsg('Profile picture removed.');
+      await load();
+    } catch (e) {
+      setMsg(e?.response?.data?.error || 'Failed to remove profile picture.');
+    }
+  }
+
   return (
     <main className="app-main" style={{ padding: 24 }}>
       <section className="section">
@@ -103,6 +158,78 @@ export default function Account() {
               <div>{profile.pendingEmail}</div>
             </div>
           )}
+        </div>
+
+        <div className="panel" style={{ marginTop: 16 }}>
+          <h3 className="font-thread">Profile Picture</h3>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginTop: 12 }}>
+            {profile?.profilePicture ? (
+              <img
+                src={profile.profilePicture}
+                alt="Profile"
+                style={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  border: '2px solid var(--border-primary)',
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: '50%',
+                  background: 'var(--bg-secondary)',
+                  border: '2px solid var(--border-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '2rem',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                {profile?.username?.[0]?.toUpperCase() || '?'}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label style={{ position: 'relative' }}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProfilePictureUpload}
+                  disabled={uploading}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  className="btn"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.previousElementSibling.click();
+                  }}
+                  disabled={uploading}
+                >
+                  {uploading ? 'Uploading...' : profile?.profilePicture ? 'Change Picture' : 'Upload Picture'}
+                </button>
+              </label>
+
+              {profile?.profilePicture && (
+                <button
+                  className="btn"
+                  onClick={removeProfilePicture}
+                  disabled={uploading}
+                  style={{ background: 'var(--status-error, #dc2626)', color: 'white' }}
+                >
+                  Remove Picture
+                </button>
+              )}
+            </div>
+          </div>
+          <div style={{ marginTop: 8, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+            Supported: JPG, PNG, WebP, GIF. Max size: 5MB
+          </div>
         </div>
 
         <div className="panel" style={{ marginTop: 16 }}>

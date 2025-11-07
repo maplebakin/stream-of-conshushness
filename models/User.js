@@ -9,6 +9,9 @@ const userSchema = new mongoose.Schema(
 
     isAdmin: { type: Boolean, default: false },
 
+    // Profile customization
+    profilePicture: { type: String, default: '' }, // URL or filename of uploaded profile picture
+
     // Password reset flow
     resetTokenHash: { type: String, default: null },
     resetTokenExpiry: { type: Date, default: null },

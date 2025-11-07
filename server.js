@@ -14,6 +14,8 @@ import jwt from "jsonwebtoken";
 import cors from "cors";
 import helmet from "helmet";
 import auth from "./middleware/auth.js";
+import { generalLimiter, writeLimiter } from "./middleware/rateLimiter.js";
+import { globalErrorHandler } from "./utils/errorHandler.js";
 
 /* ───────────── Route Handlers (ESM) ───────────── */
 import authRoutes from "./routes/auth.js";
@@ -36,6 +38,8 @@ import suggestedTaskRoutes from "./routes/suggestedTasks.js";
 import clustersRouter from "./routes/clusters.js";
 import uploadRouter from "./utils/upload.js";
 import adminRoutes from "./routes/admin.js";
+import exportRoutes from "./routes/export.js";
+import searchRoutes from "./routes/search.js";
 import Ripple from "./models/Ripple.js";
 
 /* ───────────── Compat (ESM) ───────────── */
@@ -71,6 +75,10 @@ app.use(
 );
 
 app.use(express.json({ limit: "5mb" }));
+
+/* ───────────── Rate Limiting ───────────── */
+app.use(generalLimiter); // Apply general rate limiting to all routes
+app.use(writeLimiter);   // Additional limit on write operations
 
 app.use('/routes', compatRouter);
 
@@ -149,6 +157,8 @@ app.use("/api/suggested-tasks", auth, suggestedTaskRoutes);
 app.use("/api/clusters", auth, clustersRouter);
 app.use("/api/upload", auth, uploadRouter);
 app.use("/api/admin", auth, adminRoutes);
+app.use("/api/export", auth, exportRoutes);
+app.use("/api/search", auth, searchRoutes);
 
 /** Compat LAST: public auth aliases + protected alias bridges */
 app.use("/api", compatRouter);
@@ -262,10 +272,7 @@ if (hasDist) {
 }
 
 /* ───────────── Error Handling ───────────── */
-app.use((err, _req, res, _next) => {
-  console.error("💥 Uncaught error:", err);
-  res.status(err.status || 500).json({ error: err.message || "Server error" });
-});
+app.use(globalErrorHandler);
 
 /* ───────────── MongoDB Connection ───────────── */
 (async () => {

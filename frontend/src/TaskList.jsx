@@ -1,8 +1,10 @@
 // frontend/src/TaskList.jsx
 // src/TaskList.jsx
 import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
+import { useToast } from './ToastContext.jsx';
 import { todayISOInToronto } from './utils/date.js';
 import './Main.css';
 import './TaskList.css';
@@ -10,6 +12,7 @@ import { describeRepeat } from './utils/repeat.js';
 
 export default function TaskList({ date, header = 'Tasks' }) {
   const { token } = useContext(AuthContext);
+  const { showUndo } = useToast();
   const today = useMemo(() => todayISOInToronto(), []);
   const isToday = date === today;
 
@@ -29,6 +32,10 @@ export default function TaskList({ date, header = 'Tasks' }) {
   const [showComposer, setShowComposer] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [adding, setAdding] = useState(false);
+
+  // Bulk operations state
+  const [selectedTasks, setSelectedTasks] = useState(new Set());
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -157,6 +164,97 @@ export default function TaskList({ date, header = 'Tasks' }) {
     }
   }
 
+  // Bulk operation helpers
+  function toggleTaskSelection(taskId) {
+    setSelectedTasks(prev => {
+      const next = new Set(prev);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedTasks.size === tasks.length) {
+      setSelectedTasks(new Set());
+    } else {
+      setSelectedTasks(new Set(tasks.map(t => t._id)));
+    }
+  }
+
+  async function handleBulkComplete() {
+    if (selectedTasks.size === 0) return;
+    setBulkActionLoading(true);
+    try {
+      const ids = Array.from(selectedTasks);
+      await axios.post('/api/tasks/bulk/complete', { ids }, { headers: authHeaders });
+      // Refresh tasks
+      await fetchTasks();
+      setSelectedTasks(new Set());
+    } catch (e) {
+      console.error('Bulk complete failed:', e);
+      alert('Failed to complete tasks. Please try again.');
+    } finally {
+      setBulkActionLoading(false);
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (selectedTasks.size === 0) return;
+    setBulkActionLoading(true);
+    try {
+      const ids = Array.from(selectedTasks);
+      // Store tasks before deleting for undo
+      const tasksToDelete = tasks.filter(t => selectedTasks.has(t._id));
+
+      // Delete tasks
+      await axios.post('/api/tasks/bulk/delete', { ids }, { headers: authHeaders });
+
+      // Optimistically update UI
+      setTasks(prev => prev.filter(t => !selectedTasks.has(t._id)));
+      setSelectedTasks(new Set());
+
+      // Show undo toast
+      showUndo(
+        `Deleted ${tasksToDelete.length} task${tasksToDelete.length > 1 ? 's' : ''}`,
+        async () => {
+          // Undo callback: recreate the tasks
+          try {
+            const recreatePromises = tasksToDelete.map(task =>
+              axios.post('/api/tasks', {
+                title: task.title,
+                notes: task.notes || '',
+                dueDate: task.dueDate,
+                priority: task.priority || 0,
+                clusters: task.clusters || [],
+                sections: task.sections || [],
+                rrule: task.rrule || '',
+                completed: task.completed || false,
+                status: task.status || 'todo',
+              }, { headers: authHeaders })
+            );
+            await Promise.all(recreatePromises);
+            // Refresh tasks after undo
+            await fetchTasks();
+          } catch (e) {
+            console.error('Undo failed:', e);
+            alert('Failed to undo deletion. Please try again.');
+          }
+        }
+      );
+    } catch (e) {
+      console.error('Bulk delete failed:', e);
+      alert('Failed to delete tasks. Please try again.');
+      // Refresh to restore correct state
+      await fetchTasks();
+    } finally {
+      setBulkActionLoading(false);
+    }
+  }
+
   return (
     <div className="task-list">
       <div className="task-list-header">
@@ -200,6 +298,52 @@ export default function TaskList({ date, header = 'Tasks' }) {
           )}
         </div>
       </div>
+
+      {/* Bulk operations toolbar */}
+      {selectedTasks.size > 0 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '12px',
+          background: 'var(--bg-secondary)',
+          borderRadius: '8px',
+          marginBottom: '12px',
+          border: '1px solid var(--border-primary)'
+        }}>
+          <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+            {selectedTasks.size} task{selectedTasks.size > 1 ? 's' : ''} selected
+          </span>
+          <button
+            className="make-task-btn"
+            type="button"
+            onClick={handleBulkComplete}
+            disabled={bulkActionLoading}
+            title="Mark all selected tasks as complete"
+          >
+            ✓ Complete
+          </button>
+          <button
+            className="set-cluster-btn"
+            type="button"
+            onClick={handleBulkDelete}
+            disabled={bulkActionLoading}
+            title="Delete all selected tasks"
+            style={{ background: 'var(--status-error, #dc2626)', color: 'white' }}
+          >
+            Delete
+          </button>
+          <button
+            className="add-task-btn"
+            type="button"
+            onClick={() => setSelectedTasks(new Set())}
+            disabled={bulkActionLoading}
+            title="Clear selection"
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {/* Inline composer */}
       {showComposer && (
@@ -245,25 +389,79 @@ export default function TaskList({ date, header = 'Tasks' }) {
       ) : tasks.length === 0 ? (
         <div className="muted">No tasks due for this day.</div>
       ) : (
-        <ul className="tasks" style={{ listStyle: 'none', padding: 0, margin: '8px 0', display: 'grid', gap: 8 }}>
-          {tasks.map(t => (
-            <li
-              key={t._id}
-              className={`task-item ${t.completed ? 'done' : ''}`}
-            >
-              <button
-                className="checkbox"
-                onClick={() => toggleComplete(t)}
-                aria-label={t.completed ? 'Mark incomplete' : 'Mark complete'}
-                title={t.completed ? 'Mark incomplete' : 'Mark complete'}
+        <>
+          {/* Select All checkbox */}
+          {tasks.length > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 0',
+              marginBottom: '8px',
+              borderBottom: '1px solid var(--border-primary)'
+            }}>
+              <input
+                type="checkbox"
+                checked={selectedTasks.size === tasks.length && tasks.length > 0}
+                onChange={toggleSelectAll}
+                style={{ cursor: 'pointer' }}
+                title="Select all tasks"
               />
-              <div className="task-title">{t.title}</div>
-              {t.cluster && <div className="cluster muted">{t.cluster}</div>}
-              {t.repeat && <div className="repeat muted">{describeRepeat(t.repeat)}</div>}
-              {t.dueDate && <div className="due muted">due {t.dueDate}</div>}
-            </li>
-          ))}
-        </ul>
+              <label style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', cursor: 'pointer' }} onClick={toggleSelectAll}>
+                Select all
+              </label>
+            </div>
+          )}
+
+          <ul className="tasks" style={{ listStyle: 'none', padding: 0, margin: '8px 0', display: 'grid', gap: 8 }}>
+            {tasks.map(t => (
+              <li
+                key={t._id}
+                className={`task-item ${t.completed ? 'done' : ''}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  background: selectedTasks.has(t._id) ? 'var(--bg-secondary)' : 'transparent',
+                  padding: '8px',
+                  borderRadius: '6px',
+                  transition: 'background 0.2s'
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedTasks.has(t._id)}
+                  onChange={() => toggleTaskSelection(t._id)}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ cursor: 'pointer', flexShrink: 0 }}
+                  title="Select task"
+                />
+                <button
+                  className="checkbox"
+                  onClick={() => toggleComplete(t)}
+                  aria-label={t.completed ? 'Mark incomplete' : 'Mark complete'}
+                  title={t.completed ? 'Mark incomplete' : 'Mark complete'}
+                  style={{ flexShrink: 0 }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, flexWrap: 'wrap' }}>
+                  <div className="task-title">{t.title}</div>
+                  {t.clusters && t.clusters.length > 0 && t.clusters[0]?.slug && (
+                    <Link
+                      to={`/clusters/${t.clusters[0].slug}`}
+                      className="cluster muted"
+                      style={{ textDecoration: 'none', color: 'inherit' }}
+                      title={`View cluster: ${t.clusters[0].name}`}
+                    >
+                      {t.clusters[0].icon && `${t.clusters[0].icon} `}{t.clusters[0].name}
+                    </Link>
+                  )}
+                  {t.repeat && <div className="repeat muted">{describeRepeat(t.repeat)}</div>}
+                  {t.dueDate && <div className="due muted">due {t.dueDate}</div>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       {/* Inbox (undated) — collapsed by default */}

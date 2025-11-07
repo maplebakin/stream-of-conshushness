@@ -1,5 +1,6 @@
 // frontend/src/EntriesSection.jsx
 import React, { useState, useEffect, useContext, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import { toDisplay } from './utils/display.js';

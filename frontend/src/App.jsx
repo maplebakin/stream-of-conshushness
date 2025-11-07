@@ -1,6 +1,8 @@
 // frontend/src/App.jsx
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import CommandPalette from './components/CommandPalette.jsx';
+import useKeyboardShortcuts from './hooks/useKeyboardShortcuts.js';
 
 import './variables.css';
 import './DesignSystem.css'
@@ -27,10 +29,16 @@ import Account from './pages/Account.jsx';
 import UserSettings from './pages/UserSettings.jsx';
 import AdminPanel from './pages/AdminPanel.jsx';
 import AdapterHarness from './adapters/AdapterHarness.jsx';
+import ExportData from './pages/ExportData.jsx';
+import GlobalSearch from './pages/GlobalSearch.jsx';
+import HabitAnalytics from './pages/HabitAnalytics.jsx';
+import TrashPage from './pages/TrashPage.jsx';
 
-// Auth / Search Contexts
+// Auth / Search / Theme / Toast Contexts
 import { AuthProvider, AuthContext } from './AuthContext.jsx';
 import { SearchProvider } from './SearchContext.jsx';
+import { ThemeProvider } from './ThemeContext.jsx';
+import { ToastProvider } from './ToastContext.jsx';
 
 // Password reset pages
 import ForgotPassword from './pages/ForgotPassword.jsx';
@@ -50,9 +58,25 @@ function TodayRedirect() {
 
 function AppRoutes() {
   const { isAuthenticated } = useContext(AuthContext);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  // Global keyboard shortcuts
+  useKeyboardShortcuts([
+    {
+      key: 'k',
+      ctrl: true,
+      action: () => setCommandPaletteOpen(true),
+      allowInInputs: true
+    }
+  ]);
 
   return (
-    <Routes>
+    <>
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+      />
+      <Routes>
       {/* Public routes */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<RegisterPage />} />
@@ -90,6 +114,10 @@ function AppRoutes() {
 
           <Route path="/account" element={<Account />} />
           <Route path="/settings" element={<UserSettings />} />
+          <Route path="/export" element={<ExportData />} />
+          <Route path="/search" element={<GlobalSearch />} />
+          <Route path="/habits/analytics" element={<HabitAnalytics />} />
+          <Route path="/trash" element={<TrashPage />} />
 
           {/* 404 inside authed shell */}
           <Route path="*" element={<div style={{ padding: 32 }}>Not found.</div>} />
@@ -98,17 +126,22 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to="/login" replace />} />
       )}
     </Routes>
+    </>
   );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <SearchProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </SearchProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <SearchProvider>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </SearchProvider>
+        </ToastProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

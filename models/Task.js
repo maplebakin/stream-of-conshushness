@@ -21,6 +21,9 @@ const taskSchema = new mongoose.Schema(
 
     entryId    : { type: mongoose.Schema.Types.ObjectId, ref: 'Entry', default: null },
     goalId     : { type: mongoose.Schema.Types.ObjectId, ref: 'Goal', default: null },
+
+    // Soft delete support
+    deletedAt  : { type: Date, default: null, index: true },
   },
   { timestamps: true }
 );

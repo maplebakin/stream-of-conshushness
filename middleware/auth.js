@@ -23,7 +23,8 @@ export default function auth(req, res, next) {
   try {
     const secret = process.env.JWT_SECRET;
     if (!secret || String(secret).length < 12) {
-      return res.status(500).json({ error: 'server jwt misconfigured' });
+      console.error('[auth] JWT_SECRET is missing or too short');
+      return res.status(500).json({ error: 'Internal server error' });
     }
     const payload = jwt.verify(token, secret);
 

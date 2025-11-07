@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { AuthContext } from './AuthContext.jsx';
 import { getLocalTodayISO, toDisplayDate } from './utils/date.js';
 import SafeHTML from './components/SafeHTML.jsx'; // (top of file)
+import RecentActivityWidget from './components/RecentActivityWidget.jsx';
 
 /* ---------- Robust sort helpers so newest stay on top across reloads ---------- */
 const parseDayMs = (v) => {
@@ -194,6 +195,9 @@ export default function MainPage() {
           </button>
         </div>
       </section>
+
+      {/* Recent Activity Widget */}
+      <RecentActivityWidget />
 
       {/* Body */}
       <section className="entry-feed">
