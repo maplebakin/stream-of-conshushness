@@ -9,6 +9,7 @@ import {
   normalizeDate,
 } from '../utils/entryAutomation.js';
 import { analyzePriority } from '../utils/suggestMetadata.js';
+import { resolveClusterIdForOwner } from '../utils/clusterIds.js';
 
 /* ───────────────── helpers ───────────────── */
 function torontoTodayISO() {
@@ -95,8 +96,22 @@ const root = {
 
     const q = { userId: ctx.user.userId };
     if (typeof completed === 'boolean') q.completed = completed;
-    if (cluster) q.clusters = new RegExp(`^${String(cluster).toLowerCase()}$`, 'i');
     if (date) q.dueDate = String(date);
+
+    if (cluster) {
+      const legacyMatch = new RegExp(`^${String(cluster).toLowerCase()}$`, 'i');
+      try {
+        const clusterId = await resolveClusterIdForOwner(ctx.user.userId, cluster);
+        if (clusterId) {
+          q.clusters = clusterId;
+        } else {
+          q.clusters = legacyMatch;
+        }
+      } catch (error) {
+        console.error('[graphql.tasks] cluster resolution failed:', error);
+        q.clusters = legacyMatch;
+      }
+    }
 
     let query = Task.find(q).sort({ completed: 1, dueDate: 1, createdAt: -1 }).skip(offset).limit(Math.max(1, Math.min(200, limit)));
 
