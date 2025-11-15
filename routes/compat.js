@@ -204,8 +204,8 @@ r.get('/note', async (req, res) => {
 
 /* ─── SCHEDULE / CALENDAR redirects ─────────────────────────────────── */
 r.get('/schedule/:date', (req, res) => {
-  const q = new URLSearchParams({ date: req.params.date }).toString();
-  return res.redirect(307, `/api/schedule?${q}`);
+  const { date } = req.params;
+  return res.redirect(307, `/api/schedule/${encodeURIComponent(date)}`);
 });
 
 r.get('/calendar/upcoming/list', (req, res) => {
