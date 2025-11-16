@@ -107,9 +107,19 @@ router.get('/', async (req, res) => {
       return { ...base, $or: clusterFilters };
     };
 
-    const from = isISO(req.query.from) ? req.query.from : null;
-    const to   = isISO(req.query.to) ? req.query.to : null;
-    if (!from && !to) {
+    const rawFrom = req.query.from;
+    const rawTo   = req.query.to;
+    const from = isISO(rawFrom) ? rawFrom : null;
+    const to   = isISO(rawTo) ? rawTo : null;
+
+    if ((rawFrom !== undefined || rawTo !== undefined) && !from && !to) {
+      return res.status(400).json({ error: 'Invalid date range' });
+    }
+
+    let fromISO = from;
+    let toISO   = to;
+
+    if (!fromISO && !toISO) {
       // default: show next 30 days
       const now = new Date();
       const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -117,18 +127,20 @@ router.get('/', async (req, res) => {
       const y = (d) => d.getUTCFullYear();
       const m = (d) => String(d.getUTCMonth() + 1).padStart(2, '0');
       const d2= (d) => String(d.getUTCDate()).padStart(2, '0');
-      req.query.from = `${y(start)}-${m(start)}-${d2(start)}`;
-      req.query.to   = `${y(end)}-${m(end)}-${d2(end)}`;
+      fromISO = `${y(start)}-${m(start)}-${d2(start)}`;
+      toISO   = `${y(end)}-${m(end)}-${d2(end)}`;
     }
 
-    const F = req.query.from;
-    const T = req.query.to;
+    const rangeFrom = fromISO;
+    const rangeTo   = toISO;
+    const expandFrom = fromISO || toISO;
+    const expandTo   = toISO || fromISO;
 
     // 1) load one-offs in range
     const rangeQ = applyClusterFilters({ userId });
-    if (F && T) rangeQ.date = { $gte: F, $lte: T };
-    else if (F) rangeQ.date = { $gte: F };
-    else if (T) rangeQ.date = { $lte: T };
+    if (rangeFrom && rangeTo) rangeQ.date = { $gte: rangeFrom, $lte: rangeTo };
+    else if (rangeFrom) rangeQ.date = { $gte: rangeFrom };
+    else if (rangeTo) rangeQ.date = { $lte: rangeTo };
     rangeQ.rrule = ''; // ensure not series
 
     const oneOffs = await Appointment.find(rangeQ)
@@ -139,14 +151,14 @@ router.get('/', async (req, res) => {
     let virtuals = [];
     if (String(req.query.includeSeries || '1') !== '0') {
       const seriesQ = applyClusterFilters({ userId, rrule: { $ne: '' } });
-      // Narrow by series bounds: startDate ≤ T and (until null or until ≥ F)
-      if (T) seriesQ.startDate = { $lte: T };
-      if (F) seriesQ.$or = [{ until: null }, { until: { $gte: F } }, { until: '' }];
+      // Narrow by series bounds: startDate ≤ expandTo and (until null or until ≥ expandFrom)
+      if (expandTo) seriesQ.startDate = { $lte: expandTo };
+      if (expandFrom) seriesQ.$or = [{ until: null }, { until: { $gte: expandFrom } }, { until: '' }];
 
       const series = await Appointment.find(seriesQ).lean();
 
       for (const s of series) {
-        const dates = expandDatesInRange(s.rrule, s.startDate, F, T);
+        const dates = expandDatesInRange(s.rrule, s.startDate, expandFrom, expandTo);
         for (const dISO of dates) {
           virtuals.push({
             _id: `virtual:${s._id}:${dISO}`,
