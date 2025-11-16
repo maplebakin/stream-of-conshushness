@@ -42,16 +42,17 @@ export default function TaskList({ date, header = 'Tasks' }) {
   async function fetchTasks() {
     setLoading(true);
     try {
-      const params = new URLSearchParams(
-        isToday
-          ? {
-              view: 'today',
-              date,
-              includeOverdue: includeOverdue ? '1' : '0',
-              includeRecurring: includeRecurring ? '1' : '0',
-            }
-          : { view: 'date', date }
-      );
+      const baseParams = isToday
+        ? {
+            view: 'today',
+            date,
+            includeOverdue: includeOverdue ? '1' : '0',
+            // When the "Recurring" chip is off, explicitly send includeRecurring=0
+            // so the server knows to hide repeating tasks.
+            includeRecurring: includeRecurring ? '1' : '0',
+          }
+        : { view: 'date', date };
+      const params = new URLSearchParams(baseParams);
       const { data } = await axios.get(`/api/tasks?${params.toString()}`, { headers: authHeaders });
       setTasks(data);
     } finally {

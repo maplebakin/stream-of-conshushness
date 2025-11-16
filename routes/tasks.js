@@ -31,16 +31,34 @@ async function listTasksCore(req, res) {
       dueDate,
       cluster,         // single cluster key (string)
       includeCompleted,
+      includeOverdue,
+      includeRecurring,
       completed,       // explicit completed=true/false overrides includeCompleted
       limit,
       offset,
       section,
     } = req.query;
+    // Flags:
+    // - includeCompleted: allow done tasks in the response
+    // - includeOverdue: when paired with ?date=YYYY-MM-DD, also include older incomplete tasks
+    // - includeRecurring: hide repeating tasks when set to 0/false
 
     const q = { userId, deletedAt: null }; // Exclude soft-deleted tasks
 
     const dayISO = dueDate || date;
-    if (dayISO) q.dueDate = dayISO;
+    const includeOverdueFlag = parseBool(includeOverdue, false);
+    const includeRecurringFlag = parseBool(includeRecurring, true);
+
+    if (dayISO) {
+      if (includeOverdueFlag && date) {
+        q.$or = [
+          { dueDate: dayISO },
+          { dueDate: { $lt: dayISO }, completed: false },
+        ];
+      } else {
+        q.dueDate = dayISO;
+      }
+    }
 
     let clusterIdFilter = null;
     if (req.query.clusterId) {
@@ -58,6 +76,10 @@ async function listTasksCore(req, res) {
       q.completed = parseBool(completed);
     } else if (!parseBool(includeCompleted, false)) {
       q.completed = false;
+    }
+
+    if (!includeRecurringFlag) {
+      q.rrule = { $in: [null, ''] };
     }
 
     const lim = clamp(limit ?? 200, 1, 1000);
