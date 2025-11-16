@@ -214,11 +214,11 @@ r.get('/calendar/upcoming/list', (req, res) => {
 });
 
 /* ─── AUTH legacy passthroughs ──────────────────────────────────────── */
-r.post('/login',        expressJsonReplay(() => ({ url: '/api/auth/login',           body: {} })));
-r.post('/register',     expressJsonReplay(() => ({ url: '/api/auth/register',        body: {} })));
-r.post('/forgot',       expressJsonReplay(() => ({ url: '/api/auth/forgot',          body: {} })));
-r.post('/reset',        expressJsonReplay(() => ({ url: '/api/auth/reset',           body: {} })));
+r.post('/login',        expressJsonReplay((req) => ({ url: '/api/auth/login',           body: req.body })));
+r.post('/register',     expressJsonReplay((req) => ({ url: '/api/auth/register',        body: req.body })));
+r.post('/forgot',       expressJsonReplay((req) => ({ url: '/api/auth/forgot',          body: req.body })));
+r.post('/reset',        expressJsonReplay((req) => ({ url: '/api/auth/reset',           body: req.body })));
 r.get('/change-password',  (_req,res)=>res.status(405).json({error:'use POST /api/auth/change-password'}));
-r.post('/change-password', expressJsonReplay(() => ({ url: '/api/auth/change-password', body: {} })));
+r.post('/change-password', expressJsonReplay((req) => ({ url: '/api/auth/change-password', body: req.body })));
 
 export default r;
