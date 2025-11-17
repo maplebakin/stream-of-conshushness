@@ -7,6 +7,13 @@ import ImportantEvent from '../models/ImportantEvent.js';
 const r = Router();
 r.use(auth);
 
+const isYMD = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+const formatYmd = (date) => [
+  date.getFullYear(),
+  String(date.getMonth() + 1).padStart(2, '0'),
+  String(date.getDate()).padStart(2, '0'),
+].join('-');
+
 // GET /api/calendar/:ym  (ym = YYYY-MM)
 r.get('/:ym', async (req, res) => {
   const userId = req.user.userId;
@@ -28,17 +35,22 @@ r.get('/:ym', async (req, res) => {
 // GET /api/calendar/upcoming/list?from=YYYY-MM-DD
 r.get('/upcoming/list', async (req, res) => {
   const userId = req.user.userId;
-  const from = req.query.from;
-  if (!from) return res.json({ appointments: [], events: [], today: '' });
-  const addDays = (iso, n) => { const d=new Date(iso); d.setDate(d.getDate()+n);
-    return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('-');
-  };
-  const horizon = addDays(from, 60);
+  const fromRaw = req.query.from;
+  if (!isYMD(fromRaw)) return res.status(400).json({ error: 'from must be YYYY-MM-DD' });
+
+  const fromDate = new Date(fromRaw);
+  if (Number.isNaN(fromDate.getTime())) {
+    return res.status(400).json({ error: 'from must be a valid date' });
+  }
+
+  const addDays = (date, n) => { const d = new Date(date); d.setDate(d.getDate() + n); return formatYmd(d); };
+  const from = formatYmd(fromDate);
+  const horizon = addDays(fromDate, 60);
   const [appts, events] = await Promise.all([
     Appointment.find({ userId, date: { $gte: from, $lte: horizon } }).sort({ date: 1 }),
     ImportantEvent.find({ userId, date: { $gte: from, $lte: horizon } }).sort({ date: 1 }),
   ]);
-  const daysUntil = (iso) => Math.round((new Date(iso) - new Date(from)) / 86400000);
+  const daysUntil = (iso) => Math.round((new Date(iso) - fromDate) / 86400000);
   res.json({
     today: from,
     appointments: appts.map(a => ({ id: a._id, title: a.title, date: a.date, daysUntil: daysUntil(a.date) })),
