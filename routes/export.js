@@ -21,6 +21,17 @@ function getUserId(req) {
   return req.user?.userId || req.user?._id || req.user?.id || null;
 }
 
+function sanitizeCsvField(value) {
+  const str = (value ?? '').toString();
+  const withoutNewlines = str.replace(/[\r\n]+/g, ' ');
+
+  if (/^[=+\-@]/.test(withoutNewlines)) {
+    return `'${withoutNewlines}`;
+  }
+
+  return withoutNewlines;
+}
+
 /**
  * GET /api/export/json
  * Export all user data as JSON
@@ -116,11 +127,15 @@ router.get('/csv/entries', async (req, res) => {
 
     // CSV rows
     for (const entry of entries) {
+      const sanitizedText = sanitizeCsvField(entry.text || entry.content || '');
+      const sanitizedMood = sanitizeCsvField(entry.mood || '');
+      const sanitizedTags = sanitizeCsvField((entry.tags || []).join(', '));
+
       const row = [
         entry.date || '',
-        `"${(entry.text || entry.content || '').replace(/"/g, '""')}"`, // Escape quotes
-        entry.mood || '',
-        `"${(entry.tags || []).join(', ')}"`,
+        `"${sanitizedText.replace(/"/g, '""')}"`, // Escape quotes
+        sanitizedMood,
+        `"${sanitizedTags.replace(/"/g, '""')}"`,
         entry.pinned ? 'Yes' : 'No',
         entry.createdAt ? new Date(entry.createdAt).toISOString() : ''
       ];
