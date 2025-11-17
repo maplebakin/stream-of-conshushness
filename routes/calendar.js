@@ -11,8 +11,11 @@ r.use(auth);
 r.get('/:ym', async (req, res) => {
   const userId = req.user.userId;
   const ym = req.params.ym;
-  const from = `${ym}-01`;
-  const to   = `${ym}-31`;
+  const [year, month] = ym.split('-').map(Number);
+  const startDate = new Date(Date.UTC(year, month - 1, 1));
+  const endDate = new Date(Date.UTC(year, month, 0));
+  const from = startDate.toISOString().slice(0, 10);
+  const to = endDate.toISOString().slice(0, 10);
   const [tasks, appts, events] = await Promise.all([
     Task.find({ userId, dueDate: { $gte: from, $lte: to } }, 'dueDate'),
     Appointment.find({ userId, date: { $gte: from, $lte: to } }, 'date'),
