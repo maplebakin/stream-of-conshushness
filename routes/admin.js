@@ -3,6 +3,7 @@ import express from 'express';
 import bcrypt from 'bcrypt'; // or 'bcryptjs' if you swapped
 import User from '../models/User.js';
 import auth from '../middleware/auth.js';
+import { passwordResetLimiter as adminGrantLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
@@ -20,8 +21,25 @@ async function requireAdmin(req, res, next) {
   }
 }
 
+/* ───────── restrict grant to admins unless bootstrapping ───────── */
+async function requireGrantPermissions(req, res, next) {
+  try {
+    const bootstrapEnabled = process.env.ADMIN_GRANT_BOOTSTRAP === 'true';
+    const adminExists = await User.exists({ isAdmin: true });
+
+    if (!bootstrapEnabled || adminExists) {
+      return requireAdmin(req, res, next);
+    }
+
+    return next();
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'admin check failed' });
+  }
+}
+
 /* ───────── one-time bootstrap: promote a user to admin (CLI/curl only) ───────── */
-router.post('/grant', async (req, res) => {
+router.post('/grant', auth, adminGrantLimiter, requireGrantPermissions, async (req, res) => {
   try {
     const { ADMIN_SECRET } = process.env;
     const { adminSecret, username } = req.body || {};
