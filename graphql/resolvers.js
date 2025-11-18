@@ -116,18 +116,26 @@ const root = {
     let query = Task.find(q).sort({ completed: 1, dueDate: 1, createdAt: -1 }).skip(offset).limit(Math.max(1, Math.min(200, limit)));
 
     if (includeEntries) {
-      query = query.populate('sourceEntryId', 'date text content').populate('linkedEntryIds', 'date text content');
+      query = query
+        .populate('sourceEntryId', 'date text content')
+        .populate('entryId', 'date text content')
+        .populate('linkedEntryIds', 'date text content');
     }
 
     const docs = await query.lean();
 
     if (!includeEntries) return docs;
 
-    return docs.map(t => ({
-      ...t,
-      sourceEntry: t.sourceEntryId ? previewOf(t.sourceEntryId) : null,
-      linkedEntries: Array.isArray(t.linkedEntryIds) ? t.linkedEntryIds.map(previewOf) : [],
-    }));
+    return docs.map(t => {
+      const sourceEntryDoc = t.sourceEntryId || t.entryId;
+      const linkedEntryDocs = Array.isArray(t.linkedEntryIds) ? t.linkedEntryIds : [];
+
+      return {
+        ...t,
+        sourceEntry: sourceEntryDoc ? previewOf(sourceEntryDoc) : null,
+        linkedEntries: linkedEntryDocs.map(previewOf).filter(Boolean),
+      };
+    });
   },
 
   /* ─────────── Mutation: createEntry (returns Entry) ─────────── */

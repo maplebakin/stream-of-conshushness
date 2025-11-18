@@ -20,6 +20,8 @@ const taskSchema = new mongoose.Schema(
     rrule      : { type: String, default: '' },
 
     entryId    : { type: mongoose.Schema.Types.ObjectId, ref: 'Entry', default: null },
+    sourceEntryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Entry', default: null },
+    linkedEntryIds: { type: [mongoose.Schema.Types.ObjectId], ref: 'Entry', default: [] },
     goalId     : { type: mongoose.Schema.Types.ObjectId, ref: 'Goal', default: null },
 
     // Soft delete support

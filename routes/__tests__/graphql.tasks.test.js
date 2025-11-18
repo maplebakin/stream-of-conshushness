@@ -78,5 +78,30 @@ describe('GraphQL tasks resolver', () => {
     expect(queryArg.clusters.test('marketing')).toBe(true);
     expect(result).toEqual(tasks);
   });
+
+  it('returns entry previews when includeEntries is true', async () => {
+    const entry = { _id: 'entry1', date: '2024-10-01', text: 'Entry text' };
+    const linked = { _id: 'entry2', date: '2024-10-02', content: 'Linked content' };
+
+    const tasks = [
+      { _id: 'task3', title: 'With entries', entryId: entry, linkedEntryIds: [linked] },
+    ];
+
+    queryChain.lean.mockResolvedValue(tasks);
+
+    const result = await root.tasks({ includeEntries: true }, { user: { userId } });
+
+    expect(queryChain.populate).toHaveBeenCalledWith('sourceEntryId', 'date text content');
+    expect(queryChain.populate).toHaveBeenCalledWith('entryId', 'date text content');
+    expect(queryChain.populate).toHaveBeenCalledWith('linkedEntryIds', 'date text content');
+
+    expect(result).toEqual([
+      {
+        ...tasks[0],
+        sourceEntry: { _id: 'entry1', date: '2024-10-01', preview: 'Entry text' },
+        linkedEntries: [{ _id: 'entry2', date: '2024-10-02', preview: 'Linked content' }],
+      },
+    ]);
+  });
 });
 
