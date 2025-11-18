@@ -10,6 +10,7 @@ import {
 } from '../utils/entryAutomation.js';
 import { analyzePriority } from '../utils/suggestMetadata.js';
 import { resolveClusterIdForOwner } from '../utils/clusterIds.js';
+import { slugifyClusterSlug } from '../models/Cluster.js';
 
 /* ───────────────── helpers ───────────────── */
 function torontoTodayISO() {
@@ -99,17 +100,26 @@ const root = {
     if (date) q.dueDate = String(date);
 
     if (cluster) {
-      const legacyMatch = new RegExp(`^${String(cluster).toLowerCase()}$`, 'i');
+      const slug = slugifyClusterSlug(cluster);
+      const clusterCriteria = [];
+
       try {
         const clusterId = await resolveClusterIdForOwner(ctx.user.userId, cluster);
         if (clusterId) {
-          q.clusters = clusterId;
-        } else {
-          q.clusters = legacyMatch;
+          clusterCriteria.push({ clusters: clusterId });
         }
       } catch (error) {
         console.error('[graphql.tasks] cluster resolution failed:', error);
-        q.clusters = legacyMatch;
+      }
+
+      if (slug) {
+        clusterCriteria.push({ cluster: slug });
+      }
+
+      if (clusterCriteria.length === 1) {
+        Object.assign(q, clusterCriteria[0]);
+      } else if (clusterCriteria.length > 1) {
+        q.$or = clusterCriteria;
       }
     }
 

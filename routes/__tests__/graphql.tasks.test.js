@@ -42,12 +42,12 @@ describe('GraphQL tasks resolver', () => {
     vi.clearAllMocks();
   });
 
-  it('filters by resolved cluster ObjectId when given a slug', async () => {
+  it('filters by resolved cluster ObjectId while still supporting legacy slug matches', async () => {
     const clusterId = new mongoose.Types.ObjectId();
     resolveClusterIdForOwner.mockResolvedValue(clusterId);
 
     const tasks = [
-      { _id: 'task1', title: 'Test task', clusters: [clusterId] },
+      { _id: 'task1', title: 'Test task', clusters: [clusterId], cluster: clusterSlug },
     ];
 
     queryChain.lean.mockResolvedValue(tasks);
@@ -57,7 +57,10 @@ describe('GraphQL tasks resolver', () => {
     expect(resolveClusterIdForOwner).toHaveBeenCalledWith(userId, clusterSlug);
     expect(taskFindSpy).toHaveBeenCalledWith(expect.objectContaining({
       userId,
-      clusters: clusterId,
+      $or: [
+        { clusters: clusterId },
+        { cluster: clusterSlug },
+      ],
     }));
     expect(result).toEqual(tasks);
   });
@@ -66,7 +69,7 @@ describe('GraphQL tasks resolver', () => {
     resolveClusterIdForOwner.mockResolvedValue(null);
 
     const tasks = [
-      { _id: 'task2', title: 'Legacy task', clusters: ['marketing'] },
+      { _id: 'task2', title: 'Legacy task', cluster: clusterSlug },
     ];
 
     queryChain.lean.mockResolvedValue(tasks);
@@ -74,9 +77,47 @@ describe('GraphQL tasks resolver', () => {
     const result = await root.tasks({ cluster: clusterSlug }, { user: { userId } });
 
     const queryArg = taskFindSpy.mock.calls[0][0];
-    expect(queryArg.clusters).toBeInstanceOf(RegExp);
-    expect(queryArg.clusters.test('marketing')).toBe(true);
+    expect(queryArg.cluster).toBe(clusterSlug);
+    expect(queryArg.$or).toBeUndefined();
     expect(result).toEqual(tasks);
+  });
+
+  it('returns tasks when includeEntries is requested for a legacy slugged task', async () => {
+    resolveClusterIdForOwner.mockResolvedValue(null);
+
+    const tasks = [
+      {
+        _id: 'task3',
+        title: 'Legacy task with entries',
+        cluster: clusterSlug,
+        sourceEntryId: { _id: 'entry1', date: '2024-11-01', text: 'Source text' },
+        linkedEntryIds: [
+          { _id: 'entry2', date: '2024-11-02', content: 'Linked content' },
+        ],
+      },
+    ];
+
+    queryChain.lean.mockResolvedValue(tasks);
+
+    const result = await root.tasks({ cluster: clusterSlug, includeEntries: true }, { user: { userId } });
+
+    expect(taskFindSpy).toHaveBeenCalledWith(expect.objectContaining({ cluster: clusterSlug }));
+    expect(queryChain.populate).toHaveBeenCalledTimes(2);
+    expect(result).toEqual([
+      {
+        _id: 'task3',
+        title: 'Legacy task with entries',
+        cluster: clusterSlug,
+        sourceEntryId: { _id: 'entry1', date: '2024-11-01', text: 'Source text' },
+        linkedEntryIds: [
+          { _id: 'entry2', date: '2024-11-02', content: 'Linked content' },
+        ],
+        sourceEntry: { _id: 'entry1', date: '2024-11-01', preview: 'Source text' },
+        linkedEntries: [
+          { _id: 'entry2', date: '2024-11-02', preview: 'Linked content' },
+        ],
+      },
+    ]);
   });
 });
 
