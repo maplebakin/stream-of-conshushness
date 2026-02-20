@@ -1,7 +1,7 @@
 // frontend/src/pages/GlobalSearch.jsx
 // Global search page
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axiosInstance from '../api/axiosInstance';
 import toast from 'react-hot-toast';

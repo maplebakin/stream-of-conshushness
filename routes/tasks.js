@@ -1,72 +1,34 @@
 // server/routes/tasks.js
 import express from 'express';
+import mongoose from 'mongoose';
 import Task from '../models/Task.js';
+import Entry from '../models/Entry.js';
 import { normalizeClusterIds, resolveClusterIdForOwner } from '../utils/clusterIds.js';
+import * as taskService from '../services/taskService.js';
 
 const router = express.Router();
+const { ObjectId } = mongoose.Types;
 
 /* ---------------------- helpers ---------------------- */
 function getUserId(req) {
   return req.user?.userId || req.user?._id || req.user?.id || null;
 }
-
-function parseBool(v, def = false) {
-  if (v == null) return def;
-  const s = String(v).toLowerCase();
-  return s === '1' || s === 'true' || s === 'yes';
+function isValidId(id) {
+  return ObjectId.isValid(id);
 }
-function clamp(n, lo, hi) {
-  const x = parseInt(n, 10);
-  if (Number.isNaN(x)) return lo;
-  return Math.max(lo, Math.min(hi, x));
+function normalizeIdArray(raw) {
+  const arr = Array.isArray(raw) ? raw : [];
+  const ids = arr.filter((v) => isValidId(v)).map((v) => new ObjectId(v));
+  return ids;
 }
 
 /* Core lister wrapped so it never explodes */
-async function listTasksCore(req, res) {
+async function listTasks(req, res) {
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-    const {
-      date,            // alias of dueDate
-      dueDate,
-      cluster,         // single cluster key (string)
-      includeCompleted,
-      completed,       // explicit completed=true/false overrides includeCompleted
-      limit,
-      offset,
-      section,
-    } = req.query;
 
-    const q = { userId, deletedAt: null }; // Exclude soft-deleted tasks
-
-    const dayISO = dueDate || date;
-    if (dayISO) q.dueDate = dayISO;
-
-    let clusterIdFilter = null;
-    if (req.query.clusterId) {
-      clusterIdFilter = await resolveClusterIdForOwner(userId, req.query.clusterId);
-    } else if (cluster) {
-      clusterIdFilter = await resolveClusterIdForOwner(userId, cluster);
-    }
-    if (req.query.clusterId || cluster) {
-      if (!clusterIdFilter) return res.json([]);
-      q.clusters = clusterIdFilter;
-    }
-    if (section) q.sections = String(section);
-
-    if (completed !== undefined) {
-      q.completed = parseBool(completed);
-    } else if (!parseBool(includeCompleted, false)) {
-      q.completed = false;
-    }
-
-    const lim = clamp(limit ?? 200, 1, 1000);
-    const off = clamp(offset ?? 0, 0, 1_000_000);
-
-    const sort = { completed: 1, dueDate: 1, createdAt: -1 };
-    const items = await Task.find(q).sort(sort).skip(off).limit(lim)
-      .populate('clusters', 'name slug icon color')
-      .lean();
+    const items = await taskService.getTasks(userId, req.query);
     res.json(items);
   } catch (e) {
     console.error('[tasks] list failed:', e);
@@ -77,17 +39,167 @@ async function listTasksCore(req, res) {
 /* ---------------------- routes ---------------------- */
 
 // GET /api/tasks
-router.get('/', listTasksCore);
+router.get('/', listTasks);
 
 // Alias: GET /api/tasks/day/:date  (includes completed by default)
 router.get('/day/:date', async (req, res) => {
   try {
     req.query.dueDate = req.params.date;
     if (req.query.includeCompleted == null) req.query.includeCompleted = '1';
-    return listTasksCore(req, res);
+    return listTasks(req, res);
   } catch (e) {
     console.error('[tasks] day list failed:', e);
     res.status(500).json({ error: 'list failed' });
+  }
+});
+
+function torontoYmd(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Toronto',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date);
+  const y = parts.find((p) => p.type === 'year')?.value;
+  const m = parts.find((p) => p.type === 'month')?.value;
+  const d = parts.find((p) => p.type === 'day')?.value;
+  return `${y}-${m}-${d}`;
+}
+
+function addDaysYmd(iso, days) {
+  const [y, m, d] = String(iso).split('-').map(Number);
+  const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1, 12));
+  dt.setUTCDate(dt.getUTCDate() + Number(days || 0));
+  return torontoYmd(dt);
+}
+
+// POST /api/tasks/carry-forward  { from?, to?, cluster? }
+router.post('/carry-forward', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    let from = String(req.body?.from ?? req.query?.from ?? '').trim();
+    let to = String(req.body?.to ?? req.query?.to ?? '').trim();
+    const cluster = String(req.body?.cluster ?? req.query?.cluster ?? '').trim();
+
+    if (!from && !to) {
+      from = torontoYmd();
+      to = addDaysYmd(from, 1);
+    } else if (from && !to) {
+      to = addDaysYmd(from, 1);
+    } else if (!from && to) {
+      from = torontoYmd();
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      return res.status(400).json({ error: 'from and to must be YYYY-MM-DD', got: { from, to } });
+    }
+
+    const match = { userId, completed: false, dueDate: from, deletedAt: null };
+    if (cluster) {
+      const clusterId = await resolveClusterIdForOwner(userId, cluster);
+      if (!clusterId) return res.status(404).json({ error: 'cluster not found' });
+      match.clusters = clusterId;
+    }
+
+    const result = await Task.updateMany(match, { $set: { dueDate: to } });
+    return res.json({ moved: result.modifiedCount || 0, from, to, cluster: cluster || null });
+  } catch (e) {
+    console.error('[tasks] carry-forward failed:', e);
+    return res.status(500).json({ error: 'carry-forward failed' });
+  }
+});
+
+// POST /api/tasks/from-entry  { entryId, title?, text?, dueDate?, cluster? }
+router.post('/from-entry', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { entryId, title = '', text = '', dueDate = null, cluster = '' } = req.body || {};
+    if (!entryId || !isValidId(entryId)) return res.status(400).json({ error: 'entryId required' });
+
+    const entry = await Entry.findOne({ _id: entryId, userId }).lean();
+    if (!entry) return res.status(404).json({ error: 'entry not found' });
+
+    let clusterIds = [];
+    if (cluster) {
+      const clusterId = await resolveClusterIdForOwner(userId, cluster);
+      if (clusterId) clusterIds = [clusterId];
+    } else if (Array.isArray(entry.clusters) && entry.clusters.length) {
+      clusterIds = normalizeClusterIds(entry.clusters);
+    }
+
+    const safeTitle = String(title || entry.title || 'Task').trim().slice(0, 200) || 'Task';
+    const safeNotes = String(text || entry.text || entry.content || '').slice(0, 5000);
+
+    const created = await Task.create({
+      userId,
+      title: safeTitle,
+      notes: safeNotes,
+      dueDate: dueDate || entry.date || null,
+      clusters: clusterIds,
+      sections: [],
+      rrule: '',
+      completed: false,
+      status: 'todo',
+      entryId,
+    });
+
+    await created.populate('clusters', 'name slug icon color');
+    return res.status(201).json({ ok: true, task: created });
+  } catch (e) {
+    console.error('[tasks] from-entry failed:', e);
+    return res.status(500).json({ error: 'from-entry failed' });
+  }
+});
+
+// POST /api/tasks/:id/link-entry  { entryId? | date?, autoCreate?, title? }
+router.post('/:id/link-entry', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { id } = req.params;
+    if (!isValidId(id)) return res.status(400).json({ error: 'Invalid task id' });
+
+    const task = await Task.findOne({ _id: id, userId, deletedAt: null });
+    if (!task) return res.status(404).json({ error: 'task not found' });
+
+    const bodyEntryId = String(req.body?.entryId || '').trim();
+    const date = String(req.body?.date || '').trim();
+    const autoCreate = Boolean(req.body?.autoCreate);
+    const title = String(req.body?.title || '').trim();
+
+    let entry = null;
+    if (bodyEntryId) {
+      if (!isValidId(bodyEntryId)) return res.status(400).json({ error: 'Invalid entryId' });
+      entry = await Entry.findOne({ _id: bodyEntryId, userId });
+    } else if (date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+      entry = await Entry.findOne({ userId, date });
+      if (!entry && autoCreate) {
+        entry = await Entry.create({
+          userId,
+          date,
+          text: '',
+          content: '',
+          html: '',
+          title: title || `Journal for ${date}`,
+        });
+      }
+    } else {
+      return res.status(400).json({ error: 'Provide entryId or date' });
+    }
+
+    if (!entry) return res.status(404).json({ error: 'entry not found' });
+
+    task.entryId = entry._id;
+    await task.save();
+
+    return res.json({ ok: true, taskId: task._id, entryId: entry._id, date: entry.date || null });
+  } catch (e) {
+    console.error('[tasks] link-entry failed:', e);
+    return res.status(500).json({ error: 'link-entry failed' });
   }
 });
 
@@ -97,6 +209,7 @@ async function updateTask(req, res) {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const { id } = req.params;
+    if (!isValidId(id)) return res.status(400).json({ error: 'Invalid id' });
     const up = {};
     for (const k of ['title','notes','dueDate','completed','priority','clusters','sections','rrule','status']) {
       if (req.body[k] !== undefined) up[k] = req.body[k];
@@ -148,11 +261,12 @@ router.patch('/:id/toggle', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const { id } = req.params;
+    if (!isValidId(id)) return res.status(400).json({ error: 'Invalid id' });
 
     // Load minimal fields we need for recurrence, but don't save this doc.
     const task = await Task.findOne(
       { _id: id, userId },
-      'completed title notes dueDate priority clusters sections rrule'
+      'completed status title notes dueDate priority clusters sections rrule'
     ).lean();
     if (!task) return res.status(404).json({ error: 'Not found' });
 
@@ -246,6 +360,7 @@ router.delete('/:id', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const { id } = req.params;
+    if (!isValidId(id)) return res.status(400).json({ error: 'Invalid id' });
     const doc = await Task.findOneAndUpdate(
       { _id: id, userId, deletedAt: null },
       { $set: { deletedAt: new Date() } },
@@ -264,8 +379,8 @@ router.post('/bulk-delete', async (req, res) => {
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-    const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter(Boolean) : [];
-    if (ids.length === 0) return res.status(400).json({ error: 'ids required' });
+    const ids = normalizeIdArray(req.body?.ids);
+    if (ids.length === 0) return res.status(400).json({ error: 'valid ids required' });
     const r = await Task.updateMany(
       { _id: { $in: ids }, userId, deletedAt: null },
       { $set: { deletedAt: new Date() } }
@@ -332,9 +447,9 @@ router.post('/bulk/complete', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const { ids } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: 'ids array required' });
+    const ids = normalizeIdArray(req.body?.ids);
+    if (ids.length === 0) {
+      return res.status(400).json({ error: 'valid ids required' });
     }
 
     const result = await Task.updateMany(
@@ -355,9 +470,9 @@ router.post('/bulk/delete', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const { ids } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: 'ids array required' });
+    const ids = normalizeIdArray(req.body?.ids);
+    if (ids.length === 0) {
+      return res.status(400).json({ error: 'valid ids required' });
     }
 
     const result = await Task.updateMany(
@@ -378,13 +493,15 @@ router.post('/bulk/move', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const { ids, clusterId } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: 'ids array required' });
+    const ids = normalizeIdArray(req.body?.ids);
+    if (ids.length === 0) {
+      return res.status(400).json({ error: 'valid ids required' });
     }
 
-    const clusterObjectId = await resolveClusterIdForOwner(userId, clusterId);
-    if (!clusterObjectId && clusterId) {
+    const rawCluster = req.body?.clusterId ?? req.body?.cluster ?? null;
+    const clusterKey = typeof rawCluster === 'string' ? rawCluster.trim() : rawCluster;
+    const clusterObjectId = clusterKey ? await resolveClusterIdForOwner(userId, clusterKey) : null;
+    if (!clusterObjectId && clusterKey) {
       return res.status(404).json({ error: 'Cluster not found' });
     }
 
@@ -429,6 +546,7 @@ router.post('/:id/restore', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const { id } = req.params;
+    if (!isValidId(id)) return res.status(400).json({ error: 'Invalid id' });
 
     const doc = await Task.findOneAndUpdate(
       { _id: id, userId, deletedAt: { $ne: null } },
@@ -450,6 +568,7 @@ router.delete('/:id/permanent', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     const { id } = req.params;
+    if (!isValidId(id)) return res.status(400).json({ error: 'Invalid id' });
 
     const doc = await Task.findOneAndDelete({
       _id: id,

@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTheme } from '../ThemeContext';
+import { useTheme } from '../hooks/useTheme.js';
 
 const commands = [
   // Navigation

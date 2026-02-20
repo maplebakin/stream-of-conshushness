@@ -2,10 +2,10 @@
 // Theme toggle button component
 
 import React from 'react';
-import { useTheme } from '../ThemeContext';
+import { useTheme } from '../hooks/useTheme.js';
 
 export default function ThemeToggle({ variant = 'icon' }) {
-  const { theme, toggleTheme, isDark } = useTheme();
+  const { toggleTheme, isDark } = useTheme();
 
   if (variant === 'button') {
     return (

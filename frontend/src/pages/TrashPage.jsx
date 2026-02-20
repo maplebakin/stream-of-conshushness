@@ -4,7 +4,7 @@
 import React, { useEffect, useState, useContext } from 'react';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
-import { useToast } from '../ToastContext.jsx';
+import { useToast } from '../hooks/useToast.js';
 
 export default function TrashPage() {
   const { token } = useContext(AuthContext);

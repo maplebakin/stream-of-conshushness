@@ -4,24 +4,26 @@ import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
-import { useToast } from './ToastContext.jsx';
+import { useToast } from './hooks/useToast.js';
 import { todayISOInToronto } from './utils/date.js';
 import './Main.css';
 import './TaskList.css';
 import { describeRepeat } from './utils/repeat.js';
+import { useTasks } from './hooks/useTasks.js';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function TaskList({ date, header = 'Tasks' }) {
   const { token } = useContext(AuthContext);
   const { showUndo } = useToast();
   const today = useMemo(() => todayISOInToronto(), []);
   const isToday = date === today;
-
-  const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   // Today-only toggles
   const [includeOverdue, setIncludeOverdue] = useState(true);
   const [includeRecurring, setIncludeRecurring] = useState(true);
+
+  const { data: tasks = [], isLoading: loading } = useTasks(date, includeOverdue, includeRecurring, isToday);
 
   // Inbox panel
   const [showInbox, setShowInbox] = useState(false);
@@ -39,26 +41,6 @@ export default function TaskList({ date, header = 'Tasks' }) {
 
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
-  async function fetchTasks() {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams(
-        isToday
-          ? {
-              view: 'today',
-              date,
-              includeOverdue: includeOverdue ? '1' : '0',
-              includeRecurring: includeRecurring ? '1' : '0',
-            }
-          : { view: 'date', date }
-      );
-      const { data } = await axios.get(`/api/tasks?${params.toString()}`, { headers: authHeaders });
-      setTasks(data);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function fetchInboxCount() {
     const { data } = await axios.get('/api/tasks?view=inbox&countOnly=1', { headers: authHeaders });
     setInboxCount(data?.count || 0);
@@ -70,7 +52,6 @@ export default function TaskList({ date, header = 'Tasks' }) {
   }
 
   useEffect(() => {
-    fetchTasks();
     fetchInboxCount();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, includeOverdue, includeRecurring]);
@@ -78,27 +59,20 @@ export default function TaskList({ date, header = 'Tasks' }) {
   async function toggleComplete(task) {
     // Repeating: advance schedule
     if (!task.completed && task.repeat) {
-      const { data: updated } = await axios.post(
+      await axios.post(
         `/api/tasks/${task._id}/complete`,
         { fromDate: date },
         { headers: authHeaders }
       );
-      // If it moved to a different date, remove from this list
-      if (updated.dueDate !== date) {
-        setTasks(prev => prev.filter(t => t._id !== task._id));
-      } else {
-        setTasks(prev => prev.map(t => (t._id === task._id ? updated : t)));
-      }
-      return;
+    } else {
+      // Non-repeating: toggle completed
+      await axios.patch(
+        `/api/tasks/${task._id}`,
+        { completed: !task.completed },
+        { headers: authHeaders }
+      );
     }
-
-    // Non-repeating: toggle completed
-    const { data: updated } = await axios.patch(
-      `/api/tasks/${task._id}`,
-      { completed: !task.completed },
-      { headers: authHeaders }
-    );
-    setTasks(prev => prev.map(t => (t._id === task._id ? updated : t)));
+    queryClient.invalidateQueries(['tasks']);
   }
 
   // --- helper: link a task to the day's journal entry (create entry if missing)
@@ -124,7 +98,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
     // Optimistic UI first
     setInbox(prev => prev.filter(x => x._id !== task._id));
     setInboxCount(c => Math.max(0, c - 1));
-    setTasks(prev => [updated, ...prev]);
+    queryClient.invalidateQueries(['tasks']);
     // Then try to link to journal entry for that date
     linkEntryForDate(updated._id, date);
   }
@@ -140,7 +114,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
         { title, dueDate: date },
         { headers: authHeaders }
       );
-      setTasks(prev => [data, ...prev]);
+      queryClient.invalidateQueries(['tasks']);
       setNewTitle('');
       setShowComposer(false);
       // Link the freshly created task to this day's journal
@@ -192,7 +166,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
       const ids = Array.from(selectedTasks);
       await axios.post('/api/tasks/bulk/complete', { ids }, { headers: authHeaders });
       // Refresh tasks
-      await fetchTasks();
+      await queryClient.invalidateQueries(['tasks']);
       setSelectedTasks(new Set());
     } catch (e) {
       console.error('Bulk complete failed:', e);
@@ -214,7 +188,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
       await axios.post('/api/tasks/bulk/delete', { ids }, { headers: authHeaders });
 
       // Optimistically update UI
-      setTasks(prev => prev.filter(t => !selectedTasks.has(t._id)));
+      queryClient.invalidateQueries(['tasks']);
       setSelectedTasks(new Set());
 
       // Show undo toast
@@ -238,7 +212,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
             );
             await Promise.all(recreatePromises);
             // Refresh tasks after undo
-            await fetchTasks();
+            await queryClient.invalidateQueries(['tasks']);
           } catch (e) {
             console.error('Undo failed:', e);
             alert('Failed to undo deletion. Please try again.');
@@ -249,7 +223,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
       console.error('Bulk delete failed:', e);
       alert('Failed to delete tasks. Please try again.');
       // Refresh to restore correct state
-      await fetchTasks();
+      await queryClient.invalidateQueries(['tasks']);
     } finally {
       setBulkActionLoading(false);
     }

@@ -1,35 +1,29 @@
 // frontend/src/ToastContext.jsx
-// Toast notification context with undo support
+// Toast notification context provider with undo support
 
-import React, { createContext, useContext, useState, useCallback } from 'react';
-
-const ToastContext = createContext();
-
-export function useToast() {
-  const context = useContext(ToastContext);
-  if (!context) {
-    throw new Error('useToast must be used within ToastProvider');
-  }
-  return context;
-}
+import React, { useState, useCallback } from 'react';
+import { ToastContext } from './toast-context.js';
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
+
+  const removeToast = useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   const showToast = useCallback((message, options = {}) => {
     const id = Date.now() + Math.random();
     const toast = {
       id,
       message,
-      type: options.type || 'info', // 'info', 'success', 'error', 'undo'
+      type: options.type || 'info',
       duration: options.duration || 5000,
       onUndo: options.onUndo,
       undoData: options.undoData,
     };
 
-    setToasts(prev => [...prev, toast]);
+    setToasts((prev) => [...prev, toast]);
 
-    // Auto-dismiss after duration
     if (toast.duration > 0) {
       setTimeout(() => {
         removeToast(id);
@@ -37,11 +31,7 @@ export function ToastProvider({ children }) {
     }
 
     return id;
-  }, []);
-
-  const removeToast = useCallback((id) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  }, []);
+  }, [removeToast]);
 
   const showUndo = useCallback((message, undoCallback, undoData) => {
     return showToast(message, {
@@ -64,17 +54,8 @@ function ToastContainer({ toasts, removeToast }) {
   if (toasts.length === 0) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      bottom: 24,
-      right: 24,
-      zIndex: 10000,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 12,
-      maxWidth: '400px',
-    }}>
-      {toasts.map(toast => (
+    <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 10000, display: 'flex', flexDirection: 'column', gap: 12, maxWidth: '400px' }}>
+      {toasts.map((toast) => (
         <Toast key={toast.id} toast={toast} onClose={() => removeToast(toast.id)} />
       ))}
     </div>
@@ -97,30 +78,11 @@ function Toast({ toast, onClose }) {
   };
 
   return (
-    <div style={{
-      background: bgColors[toast.type] || bgColors.info,
-      color: toast.type === 'undo' ? 'var(--color-mist, white)' : 'var(--text-primary)',
-      padding: '14px 16px',
-      borderRadius: '8px',
-      boxShadow: 'var(--shadow-elevated)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 16,
-      minWidth: '300px',
-      border: '1px solid var(--border-primary)',
-      animation: 'slideIn 0.3s ease-out',
-    }}>
+    <div style={{ background: bgColors[toast.type] || bgColors.info, color: toast.type === 'undo' ? 'var(--color-mist, white)' : 'var(--text-primary)', padding: '14px 16px', borderRadius: '8px', boxShadow: 'var(--shadow-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, minWidth: '300px', border: '1px solid var(--border-primary)', animation: 'slideIn 0.3s ease-out' }}>
       <style>{`
         @keyframes slideIn {
-          from {
-            transform: translateX(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
         }
       `}</style>
 
@@ -128,35 +90,11 @@ function Toast({ toast, onClose }) {
 
       <div style={{ display: 'flex', gap: 8 }}>
         {toast.type === 'undo' && toast.onUndo && (
-          <button
-            onClick={handleUndo}
-            style={{
-              padding: '6px 12px',
-              background: 'var(--color-spool, #0ea5e9)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '0.9rem',
-              fontWeight: 500,
-            }}
-          >
+          <button onClick={handleUndo} style={{ padding: '6px 12px', background: 'var(--color-spool, #0ea5e9)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
             Undo
           </button>
         )}
-        <button
-          onClick={onClose}
-          style={{
-            padding: '4px 8px',
-            background: 'transparent',
-            color: toast.type === 'undo' ? 'var(--color-mist, white)' : 'var(--text-secondary)',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '1.2rem',
-            lineHeight: 1,
-          }}
-          aria-label="Close"
-        >
+        <button onClick={onClose} style={{ padding: '4px 8px', background: 'transparent', color: toast.type === 'undo' ? 'var(--color-mist, white)' : 'var(--text-secondary)', border: 'none', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1 }} aria-label="Close">
           ×
         </button>
       </div>
