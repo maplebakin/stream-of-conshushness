@@ -17,7 +17,6 @@ A comprehensive personal productivity and life management application that combi
 ### Advanced Features
 - **Recurrence Rules** - Standard iCalendar format for repeating tasks and appointments
 - **Timezone-Safe Operations** - All dates normalized to Toronto timezone
-- **GraphQL Endpoint** - Alternative query interface alongside REST API
 - **Extensible Adapter System** - Plugin-like UI enhancements
 
 ## Tech Stack
@@ -173,7 +172,6 @@ streamofconshushness/
 ├── models/                # Mongoose schemas
 ├── middleware/            # Express middleware (auth, etc.)
 ├── utils/                 # Shared utilities and NLP logic
-├── graphql/               # GraphQL schema and resolvers
 ├── scripts/               # Utility scripts and migrations
 ├── uploads/               # File upload directory
 ├── server.js              # Express server entry point
@@ -207,7 +205,7 @@ streamofconshushness/
 
 ### Utilities
 - `GET /health` - Health check endpoint
-- `GET /graphql` - GraphQL endpoint
+- GraphQL endpoint is currently not enabled in this build
 - `GET /uploads/*` - Static file serving
 - `GET /__routes_full` - Route inspector (development only)
 

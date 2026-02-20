@@ -8,7 +8,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import mongoose from "mongoose";
-import jwt from "jsonwebtoken";
 
 /* ───────────── Utils & Middleware ───────────── */
 import cors from "cors";
@@ -45,10 +44,7 @@ import Ripple from "./models/Ripple.js";
 /* ───────────── Compat (ESM) ───────────── */
 import compatRouter from "./routes/compat.js";
 
-/* ───────────── GraphQL ───────────── */
-import { createHandler } from "graphql-http/lib/use/express";
-import schema from "./graphql/schema.js";
-import root from "./graphql/resolvers.js";
+
 
 /* ───────────── App Setup ───────────── */
 const __filename = fileURLToPath(import.meta.url);
@@ -59,6 +55,9 @@ const PORT = process.env.PORT || 3000;
 
 app.set("trust proxy", true);
 app.disable("x-powered-by");
+
+// Mount compat router under /routes to avoid conflicts with main API
+app.use('/routes', compatRouter);
 
 /* ───────────── Global Middleware ───────────── */
 app.use(
@@ -79,8 +78,6 @@ app.use(express.json({ limit: "5mb" }));
 /* ───────────── Rate Limiting ───────────── */
 app.use(generalLimiter); // Apply general rate limiting to all routes
 app.use(writeLimiter);   // Additional limit on write operations
-
-app.use('/routes', compatRouter);
 
 // ── Legacy note-by-date shim (quiet 200 on "no note yet") ───────────
 import Note from './models/Note.js'; // put at top with other imports if not already
@@ -121,7 +118,17 @@ app.get("/health", (_req, res) => {
 });
 
 /* ───────────── Static: uploads ───────────── */
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use(
+  "/uploads",
+  express.static(path.join(__dirname, "uploads"), {
+    setHeaders: (res, filePath) => {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      if (/\.(pdf|txt|md)$/i.test(filePath)) {
+        res.setHeader("Content-Disposition", "attachment");
+      }
+    },
+  })
+);
 
 
 /* ───────────── REST Routes ───────────── */
@@ -160,27 +167,6 @@ app.use("/api/admin", auth, adminRoutes);
 app.use("/api/export", auth, exportRoutes);
 app.use("/api/search", auth, searchRoutes);
 
-/** Compat LAST: public auth aliases + protected alias bridges */
-app.use("/api", compatRouter);
-
-/* ───────────── GraphQL Endpoint ───────────── */
-app.use(
-  "/graphql",
-  createHandler({
-    schema,
-    rootValue: root,
-    context: (req) => {
-      const h = req.headers?.authorization || "";
-      const token = h.replace(/^Bearer\s+/i, "").trim();
-      try {
-        const decoded = token ? jwt.verify(token, process.env.JWT_SECRET) : null;
-        return { user: decoded };
-      } catch {
-        return { user: null };
-      }
-    },
-  })
-);
 
 // ── Dev route inspector (shows full mount paths, supports arrays) ─────────────
 if (process.env.NODE_ENV !== "production") {
@@ -248,7 +234,6 @@ if (hasDist) {
   app.get("*", (req, res, next) => {
     if (
       req.path.startsWith("/api") ||
-      req.path.startsWith("/graphql") ||
       req.path.startsWith("/uploads")
     ) return next();
     res.sendFile(path.join(CLIENT_BUILD_PATH, "index.html"));
@@ -281,6 +266,7 @@ app.use(globalErrorHandler);
     console.log("✅ Connected to MongoDB");
   } catch (err) {
     console.error("❌ MongoDB connection error:", err);
+    process.exit(1);
   }
 })();
 

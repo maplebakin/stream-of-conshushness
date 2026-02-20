@@ -310,16 +310,24 @@ router.post('/change-password', auth, async (req, res) => {
   }
 });
 
-/** ADMIN RESET (manual override)
+/** ADMIN RESET (hardened)
  * POST /api/admin/reset-password  or  /api/auth/admin/reset-password
+ * Default: requires authenticated admin user.
+ * Optional legacy shared-secret path can be enabled in non-production with ALLOW_SHARED_ADMIN_RESET=true.
  */
-router.post('/admin/reset-password', async (req, res) => {
+router.post('/admin/reset-password', auth, passwordResetLimiter, async (req, res) => {
   try {
     const { adminSecret, username, newPassword } = req.body || {};
-    if (adminSecret !== ADMIN_SECRET || !ADMIN_SECRET) return fail(res, 403, 'forbidden');
-    if (!username || !newPassword || newPassword.length < 6) {
-      return fail(res, 400, 'username and newPassword (>=6) required');
+    if (!username || !newPassword || newPassword.length < 8) {
+      return fail(res, 400, 'username and newPassword (>=8) required');
     }
+
+    const requester = await User.findById(req.user.userId).select('_id username isAdmin');
+    const legacyAllowed = NODE_ENV !== 'production' && process.env.ALLOW_SHARED_ADMIN_RESET === 'true';
+    const secretOk = legacyAllowed && !!ADMIN_SECRET && adminSecret === ADMIN_SECRET;
+    const adminOk = !!requester?.isAdmin;
+
+    if (!adminOk && !secretOk) return fail(res, 403, 'forbidden');
 
     const user = await User.findOne({ username });
     if (!user) return fail(res, 404, 'user not found');
@@ -330,6 +338,9 @@ router.post('/admin/reset-password', async (req, res) => {
     user.resetCodeHash = null;
     user.resetCodeExpiry = null;
     await user.save();
+
+    const actor = requester?.username || 'unknown';
+    console.warn('[audit] admin reset password: actor=' + actor + ' target=' + user.username + ' mode=' + (adminOk ? 'admin' : 'shared-secret'));
 
     return ok(res, { user: { id: user._id, username: user.username } });
   } catch (e) {
