@@ -12,6 +12,7 @@ export const generalLimiter = rateLimit({
   },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  validate: false, // Avoid proxy/env false positives crashing requests in mixed dev setups
   // Skip rate limiting for health checks and static files
   skip: (req) => {
     return req.path === '/health' ||
@@ -29,6 +30,7 @@ export const authLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
   skipSuccessfulRequests: true, // Don't count successful login/register
 });
 
@@ -41,6 +43,7 @@ export const passwordResetLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
 });
 
 // Moderate rate limiter for write operations (POST, PUT, PATCH, DELETE)
@@ -52,6 +55,7 @@ export const writeLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
   skip: (req) => {
     // Only apply to write operations
     return !['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);

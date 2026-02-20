@@ -14,7 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 export default function TaskList({ date, header = 'Tasks' }) {
   const { token } = useContext(AuthContext);
-  const { showUndo } = useToast();
+  const { showUndo, showToast } = useToast();
   const today = useMemo(() => todayISOInToronto(), []);
   const isToday = date === today;
   const queryClient = useQueryClient();
@@ -57,22 +57,27 @@ export default function TaskList({ date, header = 'Tasks' }) {
   }, [date, includeOverdue, includeRecurring]);
 
   async function toggleComplete(task) {
-    // Repeating: advance schedule
-    if (!task.completed && task.repeat) {
-      await axios.post(
-        `/api/tasks/${task._id}/complete`,
-        { fromDate: date },
-        { headers: authHeaders }
-      );
-    } else {
-      // Non-repeating: toggle completed
-      await axios.patch(
-        `/api/tasks/${task._id}`,
-        { completed: !task.completed },
-        { headers: authHeaders }
-      );
+    try {
+      // Repeating: advance schedule
+      if (!task.completed && (task.repeat || task.rrule)) {
+        await axios.post(
+          `/api/tasks/${task._id}/complete`,
+          { fromDate: date },
+          { headers: authHeaders }
+        );
+      } else {
+        // Non-repeating: toggle completed
+        await axios.patch(
+          `/api/tasks/${task._id}`,
+          { completed: !task.completed },
+          { headers: authHeaders }
+        );
+      }
+      queryClient.invalidateQueries(['tasks']);
+    } catch (e) {
+      console.error('Toggle complete failed:', e);
+      showToast('Could not update task status. Please try again.', { type: 'error' });
     }
-    queryClient.invalidateQueries(['tasks']);
   }
 
   // --- helper: link a task to the day's journal entry (create entry if missing)
@@ -90,17 +95,22 @@ export default function TaskList({ date, header = 'Tasks' }) {
   }
 
   async function addInboxTaskToDay(task) {
-    const { data: updated } = await axios.patch(
-      `/api/tasks/${task._id}`,
-      { dueDate: date },
-      { headers: authHeaders }
-    );
-    // Optimistic UI first
-    setInbox(prev => prev.filter(x => x._id !== task._id));
-    setInboxCount(c => Math.max(0, c - 1));
-    queryClient.invalidateQueries(['tasks']);
-    // Then try to link to journal entry for that date
-    linkEntryForDate(updated._id, date);
+    try {
+      const { data: updated } = await axios.patch(
+        `/api/tasks/${task._id}`,
+        { dueDate: date },
+        { headers: authHeaders }
+      );
+      // Optimistic UI first
+      setInbox((prev) => prev.filter((x) => x._id !== task._id));
+      setInboxCount((c) => Math.max(0, c - 1));
+      queryClient.invalidateQueries(['tasks']);
+      // Then try to link to journal entry for that date
+      linkEntryForDate(updated._id, date);
+    } catch (e) {
+      console.error('Move inbox task failed:', e);
+      showToast('Could not schedule this inbox task.', { type: 'error' });
+    }
   }
 
   // NEW: create task directly from header composer (and link it to the day)
@@ -121,7 +131,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
       linkEntryForDate(data._id || data.id, date);
     } catch (e) {
       console.error('Failed to create task', e);
-      // optional: toast
+      showToast('Could not create task. Please try again.', { type: 'error' });
     } finally {
       setAdding(false);
     }
@@ -170,7 +180,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
       setSelectedTasks(new Set());
     } catch (e) {
       console.error('Bulk complete failed:', e);
-      alert('Failed to complete tasks. Please try again.');
+      showToast('Failed to complete tasks. Please try again.', { type: 'error' });
     } finally {
       setBulkActionLoading(false);
     }
@@ -215,13 +225,13 @@ export default function TaskList({ date, header = 'Tasks' }) {
             await queryClient.invalidateQueries(['tasks']);
           } catch (e) {
             console.error('Undo failed:', e);
-            alert('Failed to undo deletion. Please try again.');
+            showToast('Failed to undo deletion. Please try again.', { type: 'error' });
           }
         }
       );
     } catch (e) {
       console.error('Bulk delete failed:', e);
-      alert('Failed to delete tasks. Please try again.');
+      showToast('Failed to delete tasks. Please try again.', { type: 'error' });
       // Refresh to restore correct state
       await queryClient.invalidateQueries(['tasks']);
     } finally {
