@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
 
@@ -45,7 +45,7 @@ export default function InboxTasksPage() {
   const [editTitle, setEditTitle] = useState('');
   const today = todayISOInToronto();
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true); setErr('');
     try {
       const res = await axios.get('/api/tasks', { headers });
@@ -57,9 +57,9 @@ export default function InboxTasksPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [headers]);
 
-  useEffect(() => { load();   }, []);
+  useEffect(() => { load(); }, [load]);
 
   const filtered = useMemo(() => {
     const text = q.trim().toLowerCase();

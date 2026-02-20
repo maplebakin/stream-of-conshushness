@@ -1,5 +1,5 @@
 // frontend/src/SuggestedTasksInbox.jsx
-import React, { useEffect, useState, useContext, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useContext, useMemo } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 
@@ -27,7 +27,7 @@ export default function SuggestedTasksInbox({ dateISO, onAccepted, onRejected })
   const [busy, setBusy] = useState({});
   const [err, setErr] = useState('');
 
-  const fetchList = async () => {
+  const fetchList = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setErr('');
@@ -41,9 +41,9 @@ export default function SuggestedTasksInbox({ dateISO, onAccepted, onRejected })
     } finally {
       setLoading(false);
     }
-  };
+  }, [auth, token]);
 
-  useEffect(() => { fetchList();   }, [token]);
+  useEffect(() => { fetchList(); }, [fetchList]);
 
   const act = async (id, action) => {
     if (!token) return;

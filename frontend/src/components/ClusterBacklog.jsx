@@ -1,24 +1,25 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import axios from '@/api/axiosInstance';
 import { AuthContext } from '@/AuthContext.jsx';
 
 export default function ClusterBacklog({ clusterName, dateISO, onScheduled }) {
   const { token } = useContext(AuthContext);
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
   const [open, setOpen] = useState(false);
   const [count, setCount] = useState(0);
   const [items, setItems] = useState([]);
 
-  async function refreshCount() {
+  const refreshCount = useCallback(async () => {
     const { data } = await axios.get(`/api/tasks?view=inbox&cluster=${encodeURIComponent(clusterName)}&countOnly=1`, { headers });
     setCount(data?.count || 0);
-  }
-  async function loadItems() {
+  }, [clusterName, headers]);
+
+  const loadItems = useCallback(async () => {
     const { data } = await axios.get(`/api/tasks?view=inbox&cluster=${encodeURIComponent(clusterName)}`, { headers });
     setItems(Array.isArray(data) ? data : []);
-  }
+  }, [clusterName, headers]);
 
-  useEffect(() => { refreshCount(); }, [clusterName]);
+  useEffect(() => { refreshCount(); }, [refreshCount]);
 
   async function scheduleTo(day, id) {
     const { data: updated } = await axios.patch(`/api/tasks/${id}`, { dueDate: day }, { headers });

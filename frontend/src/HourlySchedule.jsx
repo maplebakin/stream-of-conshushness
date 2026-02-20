@@ -16,7 +16,7 @@ export default function HourlySchedule({
   endHour = 18,         // inclusive (0–23)
 }) {
   const { token } = useContext(AuthContext);
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
   const hours = useMemo(() => {
     const list = [];
@@ -63,7 +63,7 @@ export default function HourlySchedule({
       }
     })();
     return () => { cancelled = true; };
-  }, [date, token]); // reload when date changes
+  }, [date, headers, token]); // reload when date changes
 
   function beginEdit(hourKey) {
     setEditingHour(hourKey);

@@ -1,7 +1,7 @@
 // frontend/src/pages/TrashPage.jsx
 // Trash/Archive page for deleted tasks
 
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useContext } from 'react';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
 import { useToast } from '../hooks/useToast.js';
@@ -14,9 +14,9 @@ export default function TrashPage() {
   const [restoring, setRestoring] = useState(null);
   const [deleting, setDeleting] = useState(null);
 
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+  const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
-  async function fetchTrash() {
+  const fetchTrash = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await axios.get('/api/tasks/trash', { headers: authHeaders });
@@ -27,13 +27,13 @@ export default function TrashPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [authHeaders, showToast]);
 
   useEffect(() => {
     if (token) {
       fetchTrash();
     }
-  }, [token]);
+  }, [fetchTrash, token]);
 
   async function handleRestore(taskId) {
     setRestoring(taskId);

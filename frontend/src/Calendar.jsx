@@ -1,5 +1,5 @@
 // frontend/src/Calendar.jsx
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
@@ -42,7 +42,7 @@ function countdownLabel(days) {
 export default function Calendar() {
   const navigate = useNavigate();
   const { token } = useContext(AuthContext);
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
   const tzToday = useMemo(() => todayISOInTZ('America/Toronto'), []);
 
   // current viewed month
@@ -70,7 +70,7 @@ export default function Calendar() {
   const [showApptModal, setShowApptModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
 
-  async function loadMonth() {
+  const loadMonth = useCallback(async () => {
     // Assumes you’ve got an aggregator route; if not, this will just noop the badges.
     try {
       const { data } = await axios.get(`/api/calendar/${monthParam(y, mIdx)}`, { headers });
@@ -78,18 +78,19 @@ export default function Calendar() {
     } catch {
       setDayCounts({});
     }
-  }
-  async function loadUpcoming() {
+  }, [headers, y, mIdx]);
+
+  const loadUpcoming = useCallback(async () => {
     try {
       const { data } = await axios.get(`/api/calendar/upcoming/list?from=${tzToday}`, { headers });
       setUpcoming(data || { appointments: [], events: [], today: tzToday });
     } catch {
       setUpcoming({ appointments: [], events: [], today: tzToday });
     }
-  }
+  }, [headers, tzToday]);
 
-  useEffect(() => { loadMonth(); /* eslint-disable-next-line */ }, [y, mIdx]);
-  useEffect(() => { loadUpcoming();   }, []);
+  useEffect(() => { loadMonth(); }, [loadMonth]);
+  useEffect(() => { loadUpcoming(); }, [loadUpcoming]);
 
   // nav
   function prevMonth() {

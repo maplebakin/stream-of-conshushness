@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
 
@@ -45,7 +45,7 @@ export default function DailyRipples(props) {
   const cluster = pickClusterProp(props);
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true); setErr('');
     try {
       const params = { date: day };
@@ -59,9 +59,9 @@ export default function DailyRipples(props) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [cluster, day, headers]);
 
-  useEffect(() => { load();   }, [token, day, cluster]);
+  useEffect(() => { load(); }, [load]);
 
   // actions
   async function act(id, which) {

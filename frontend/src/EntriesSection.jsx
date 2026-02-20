@@ -42,7 +42,7 @@ export default function EntriesSection({ date, unassignedOnly = false }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
 
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
   useEffect(() => {
     let ignore = false;
@@ -70,7 +70,7 @@ export default function EntriesSection({ date, unassignedOnly = false }) {
     })();
 
     return () => { ignore = true; };
-  }, [date, token, unassignedOnly]);
+  }, [date, headers, token, unassignedOnly]);
 
   const safeEntries = useMemo(() => Array.isArray(entries) ? entries : [], [entries]);
 
