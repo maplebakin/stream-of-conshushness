@@ -103,12 +103,12 @@ export default function TaskModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 rounded-xl shadow-2xl w-full max-w-lg p-4">
-        <div className="flex items-center justify-between mb-3">
+      <div className="w-full max-w-lg rounded-xl bg-white p-4 text-zinc-900 shadow-2xl dark:bg-zinc-900 dark:text-zinc-100">
+        <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">New Task</h2>
           <button
             onClick={onClose}
-            className="px-2 py-1 rounded text-sm bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+            className="rounded bg-zinc-100 px-2 py-1 text-sm hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
           >
             Close
           </button>
@@ -116,34 +116,34 @@ export default function TaskModal({
 
         <form onSubmit={saveTask} className="space-y-3">
           <div>
-            <label className="block text-sm mb-1">Title</label>
+            <label className="mb-1 block text-sm">Title</label>
             <input
               autoFocus
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="e.g., Clean the fish tank"
-              className="w-full border rounded px-3 py-2 bg-white dark:bg-zinc-900"
+              className="w-full rounded border bg-white px-3 py-2 dark:bg-zinc-900"
             />
           </div>
 
           <div className="flex gap-3">
             <div className="flex-1">
-              <label className="block text-sm mb-1">Due date</label>
+              <label className="mb-1 block text-sm">Due date</label>
               <input
                 type="date"
                 value={dueDate}
                 onChange={e => setDueDate(e.target.value)}
-                className="w-full border rounded px-3 py-2 bg-white dark:bg-zinc-900"
+                className="w-full rounded border bg-white px-3 py-2 dark:bg-zinc-900"
               />
             </div>
 
             <div className="flex-1">
-              <label className="block text-sm mb-1">Cluster (optional)</label>
+              <label className="mb-1 block text-sm">Cluster (optional)</label>
               <select
                 value={cluster}
                 onChange={e => setCluster(e.target.value)}
-                className="w-full border rounded px-3 py-2 bg-white dark:bg-zinc-900"
+                className="w-full rounded border bg-white px-3 py-2 dark:bg-zinc-900"
               >
                 <option value="">—</option>
                 {clusters.map((c) => (
@@ -156,30 +156,30 @@ export default function TaskModal({
           </div>
 
           <div>
-            <label className="block text-sm mb-1">Note (optional)</label>
+            <label className="mb-1 block text-sm">Note (optional)</label>
             <textarea
               rows={3}
               value={note}
               onChange={e => setNote(e.target.value)}
               placeholder=""
-              className="w-full border rounded px-3 py-2 bg-white dark:bg-zinc-900"
+              className="w-full rounded border bg-white px-3 py-2 dark:bg-zinc-900"
             />
           </div>
 
-          {err && <div className="text-red-600 text-sm">{err}</div>}
+          {err && <div className="text-sm text-red-600">{err}</div>}
 
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-2 rounded bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+              className="rounded bg-zinc-100 px-3 py-2 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving || !title.trim()}
-              className="px-3 py-2 rounded bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+              className="rounded bg-green-600 px-3 py-2 text-white hover:bg-green-700 disabled:opacity-50"
             >
               {saving ? 'Saving…' : 'Create Task'}
             </button>

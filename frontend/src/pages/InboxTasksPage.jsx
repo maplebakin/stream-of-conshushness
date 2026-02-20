@@ -59,7 +59,7 @@ export default function InboxTasksPage() {
     }
   }
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => { load();   }, []);
 
   const filtered = useMemo(() => {
     const text = q.trim().toLowerCase();

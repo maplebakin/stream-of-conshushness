@@ -67,7 +67,7 @@ export default function DailyRipples({ date, initialRipples }) {
       </div>
 
       {loading && <div className="ripple-empty">summoning ripples…</div>}
-      {error && <div className="text-red-600 text-sm mb-2">{error}</div>}
+      {error && <div className="mb-2 text-sm text-red-600">{error}</div>}
 
       {!loading && ripples?.length === 0 && (
         <div className="ripple-empty">no ripples found</div>

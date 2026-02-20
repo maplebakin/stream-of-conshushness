@@ -278,13 +278,13 @@ export default function DailyPage() {
             </>
           )}
           <button
-            className="button bg-lantern text-ink rounded-button px-4 py-2 font-thread shadow-soft hover:bg-plum hover:text-mist transition-all"
+            className="button bg-lantern text-ink rounded-button font-thread shadow-soft hover:bg-plum hover:text-mist px-4 py-2 transition-all"
             onClick={() => setShowEntryModal(true)}
           >
             + New Entry
           </button>
           <button
-            className="button bg-spool text-ink rounded-button px-4 py-2 font-thread shadow-soft hover:bg-plum hover:text-mist transition-all"
+            className="button bg-spool text-ink rounded-button font-thread shadow-soft hover:bg-plum hover:text-mist px-4 py-2 transition-all"
             onClick={() => setShowApptModal(true)}
           >
             + Add appointment

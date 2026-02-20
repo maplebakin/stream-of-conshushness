@@ -13,7 +13,7 @@ function isReactComponent(v) {
  */
 export function renderSafe(Comp, props = {}, name = 'Anonymous') {
   if (!isReactComponent(Comp)) {
-    // eslint-disable-next-line no-console
+     
     console.error(`[renderSafe] Invalid component for <${name}/>`, { received: Comp, type: typeof Comp });
     return null;
   }

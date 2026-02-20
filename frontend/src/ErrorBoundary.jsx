@@ -9,7 +9,7 @@ export default class ErrorBoundary extends React.Component {
     return { error };
   }
   componentDidCatch(error, info) {
-    // eslint-disable-next-line no-console
+     
     console.error('Adapter crash:', error, info);
   }
   render() {

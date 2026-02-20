@@ -99,7 +99,18 @@ export default function EntriesSection({ date, unassignedOnly = false }) {
                   <span key={i} className="pill pill-muted">#{t}</span>
                 ))}
               {entry.section && <span className="pill pill-muted">{entry.section}</span>}
-              {entry.cluster && <span className="pill">{entry.cluster}</span>}
+              {entry.clusters && entry.clusters.length > 0 && entry.clusters[0]?.slug ? (
+                <Link
+                  to={`/clusters/${entry.clusters[0].slug}`}
+                  className="pill"
+                  style={{ textDecoration: 'none', color: 'inherit' }}
+                  title={`View cluster: ${entry.clusters[0].name}`}
+                >
+                  {entry.clusters[0].icon && `${entry.clusters[0].icon} `}{entry.clusters[0].name}
+                </Link>
+              ) : entry.cluster ? (
+                <span className="pill">{entry.cluster}</span>
+              ) : null}
             </div>
             <div className="entry-text">
               {body || <span className="muted">(no text)</span>}

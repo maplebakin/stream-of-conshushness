@@ -25,7 +25,7 @@ export default function AnalyzeEntryButton({ entryId, text, date, onRipples }) {
       <button className="btn btn-primary" onClick={run} disabled={busy || !text}>
         {busy ? 'analyzing…' : 'analyze entry'}
       </button>
-      {err ? <span className="text-red-600 text-sm">{err}</span> : null}
+      {err ? <span className="text-sm text-red-600">{err}</span> : null}
     </div>
   );
 }

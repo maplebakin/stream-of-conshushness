@@ -61,7 +61,7 @@ export default function DailyRipples(props) {
     }
   }
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [token, day, cluster]);
+  useEffect(() => { load();   }, [token, day, cluster]);
 
   // actions
   async function act(id, which) {

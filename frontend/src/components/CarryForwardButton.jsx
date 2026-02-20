@@ -36,12 +36,12 @@ export default function CarryForwardButton({
       <button
         onClick={handleClick}
         disabled={busy}
-        className="px-3 py-1 rounded-xl border border-gray-600 hover:bg-gray-800 disabled:opacity-50"
+        className="rounded-xl border border-gray-600 px-3 py-1 hover:bg-gray-800 disabled:opacity-50"
         title="Move all incomplete tasks from this day to tomorrow"
       >
         {busy ? 'Moving…' : label}
       </button>
-      {err ? <span className="text-red-400 text-sm">{err}</span> : null}
+      {err ? <span className="text-sm text-red-400">{err}</span> : null}
     </div>
   );
 }

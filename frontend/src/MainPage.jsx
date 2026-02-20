@@ -1,5 +1,6 @@
 // frontend/src/MainPage.jsx
 import React, { useEffect, useState, useContext, useMemo, useCallback, Suspense } from 'react';
+import { Link } from 'react-router-dom';
 import EntryModal from './EntryModal.jsx';
 import axios from './api/axiosInstance';
 import './Main.css';
@@ -186,7 +187,7 @@ export default function MainPage() {
 
           <button
             type="button"
-            className="add-entry-btn bg-lantern text-ink rounded-button px-4 py-2 font-thread shadow-soft hover:bg-plum hover:text-mist transition-all"
+            className="add-entry-btn bg-lantern text-ink rounded-button font-thread shadow-soft hover:bg-plum hover:text-mist px-4 py-2 transition-all"
             onClick={() => setShowModal(true)}
             disabled={!isAuthenticated}
             title={isAuthenticated ? 'New Entry' : 'Log in to add entries'}
@@ -216,7 +217,7 @@ export default function MainPage() {
             </p>
             <button
               type="button"
-              className="add-entry-btn bg-plum text-mist rounded-button px-4 py-2 font-thread shadow-soft hover:bg-lantern hover:text-ink transition-all"
+              className="add-entry-btn bg-plum text-mist rounded-button font-thread shadow-soft hover:bg-lantern hover:text-ink px-4 py-2 transition-all"
               onClick={() => setShowModal(true)}
               disabled={!isAuthenticated}
             >
@@ -232,7 +233,18 @@ export default function MainPage() {
                 <span className="date font-glow text-vein">
                   {toDisplayDate?.(entry.date) || entry.date}
                 </span>
-                {entry.cluster && <span className="cluster-chip">{entry.cluster}</span>}
+                {entry.clusters && entry.clusters.length > 0 && entry.clusters[0]?.slug ? (
+                  <Link
+                    to={`/clusters/${entry.clusters[0].slug}`}
+                    className="cluster-chip"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                    title={`View cluster: ${entry.clusters[0].name}`}
+                  >
+                    {entry.clusters[0].icon && `${entry.clusters[0].icon} `}{entry.clusters[0].name}
+                  </Link>
+                ) : entry.cluster ? (
+                  <span className="cluster-chip">{entry.cluster}</span>
+                ) : null}
                 {Array.isArray(entry.tags) && entry.tags.length > 0 && (
                   <span className="tags">
                     {entry.tags.map((t) => (

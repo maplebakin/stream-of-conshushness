@@ -43,7 +43,7 @@ export default function SuggestedTasksInbox({ dateISO, onAccepted, onRejected })
     }
   };
 
-  useEffect(() => { fetchList(); /* eslint-disable-next-line */ }, [token]);
+  useEffect(() => { fetchList();   }, [token]);
 
   const act = async (id, action) => {
     if (!token) return;
@@ -68,18 +68,18 @@ export default function SuggestedTasksInbox({ dateISO, onAccepted, onRejected })
   if (!list.length) return <p className="p-4 text-gray-400">No suggested tasks 🎉</p>;
 
   return (
-    <div className="p-4 space-y-3">
+    <div className="space-y-3 p-4">
       {list.map(t => (
-        <div key={t._id} className="border p-3 rounded flex items-center justify-between">
+        <div key={t._id} className="flex items-center justify-between rounded border p-3">
           <div className="flex-1 pr-3">
             <div className="font-medium">{t.title || t.extractedText || '(untitled)'}</div>
             {t.originalContext && (
-              <div className="text-xs text-gray-500 italic mt-1">from: {t.originalContext}</div>
+              <div className="mt-1 text-xs italic text-gray-500">from: {t.originalContext}</div>
             )}
           </div>
           <div className="space-x-2">
             <button
-              className="approve-btn px-3 py-1 rounded bg-green-100 hover:bg-green-200 text-green-900 text-sm font-medium disabled:opacity-50"
+              className="approve-btn rounded bg-green-100 px-3 py-1 text-sm font-medium text-green-900 hover:bg-green-200 disabled:opacity-50"
               onClick={() => act(t._id, 'accept')}
               disabled={!!busy[t._id]}
               title={`Accept to ${dayISO}`}
@@ -87,7 +87,7 @@ export default function SuggestedTasksInbox({ dateISO, onAccepted, onRejected })
               Accept → {dayISO}
             </button>
             <button
-              className="dismiss-btn px-3 py-1 rounded bg-red-100 hover:bg-red-200 text-red-900 text-sm font-medium disabled:opacity-50"
+              className="dismiss-btn rounded bg-red-100 px-3 py-1 text-sm font-medium text-red-900 hover:bg-red-200 disabled:opacity-50"
               onClick={() => act(t._id, 'reject')}
               disabled={!!busy[t._id]}
             >

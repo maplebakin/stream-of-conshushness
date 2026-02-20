@@ -89,7 +89,7 @@ export default function Calendar() {
   }
 
   useEffect(() => { loadMonth(); /* eslint-disable-next-line */ }, [y, mIdx]);
-  useEffect(() => { loadUpcoming(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { loadUpcoming();   }, []);
 
   // nav
   function prevMonth() {

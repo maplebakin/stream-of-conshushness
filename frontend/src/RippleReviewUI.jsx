@@ -230,18 +230,18 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
   }, [ripples, filter, hideChatter, minConf]);
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-baseline justify-between mb-4">
+    <div className="mx-auto max-w-5xl p-6">
+      <div className="mb-4 flex items-baseline justify-between">
         <h1 className="text-2xl font-bold">{header}</h1>
         <span className="text-sm text-gray-500">{dayISO}</span>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="mb-4 flex flex-wrap gap-2">
         {['all','pending','approved','dismissed','high','medium','low'].map(t => (
           <button
             key={t}
             onClick={() => setFilter(t)}
-            className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+            className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
               filter === t ? 'bg-blue-200 text-blue-900' : 'bg-gray-100 text-gray-700'
             }`}
           >
@@ -251,7 +251,7 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
 
         <button
           onClick={() => setHideChatter(v => !v)}
-          className={`px-3 py-1 rounded-full text-sm font-medium ${
+          className={`rounded-full px-3 py-1 text-sm font-medium ${
             hideChatter ? 'bg-purple-200 text-purple-900' : 'bg-gray-100 text-gray-700'
           }`}
           title="Require a real action verb and suppress filler"
@@ -259,7 +259,7 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
           Hide chatter: {hideChatter ? 'On' : 'Off'}
         </button>
 
-        <label className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
+        <label className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
           Min conf:
           <select
             className="ml-2 bg-transparent"
@@ -293,27 +293,27 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
         const dueDate = drafts?.[id]?.dueDate || dayISO;
 
         return (
-          <div key={id} className={`p-4 rounded-lg border-2 mb-4 ${colorClass[b]}`}>
-            <div className="mb-2 text-gray-800 font-medium">{toDisplay(r.extractedText || r.text || '')}</div>
+          <div key={id} className={`mb-4 rounded-lg border-2 p-4 ${colorClass[b]}`}>
+            <div className="mb-2 font-medium text-gray-800">{toDisplay(r.extractedText || r.text || '')}</div>
 
             {r.originalContext && typeof r.originalContext === 'string' && (
-              <div className="text-sm text-gray-600 italic mb-2">“{r.originalContext}”</div>
+              <div className="mb-2 text-sm italic text-gray-600">“{r.originalContext}”</div>
             )}
 
             {r.recurrence && (
               <div className="mb-2">
-                <span className="inline-block text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-800">
+                <span className="inline-block rounded-full bg-gray-200 px-2 py-1 text-xs text-gray-800">
                   repeat: {formatRecurrence(r.recurrence)}
                 </span>
               </div>
             )}
 
             {(r.status || 'pending') === 'pending' ? (
-              <div className="flex flex-wrap gap-2 items-center">
+              <div className="flex flex-wrap items-center gap-2">
                 <select
                   value={cluster}
                   onChange={e => setClusterSel(prev => ({ ...prev, [id]: e.target.value }))}
-                  className="border rounded px-2 py-1"
+                  className="rounded border px-2 py-1"
                 >
                   <option value="">Select Cluster</option>
                   {clusters.map(c => (
@@ -323,13 +323,13 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
 
                 <input
                   type="date"
-                  className="border rounded px-2 py-1"
+                  className="rounded border px-2 py-1"
                   value={dueDate}
                   onChange={e => setDrafts(d => ({ ...d, [id]: { ...(d[id]||{}), dueDate: e.target.value } }))}
                   title="Due date hint"
                 />
 
-                <span className="text-xs text-gray-600 ml-2">conf {Math.round(conf*100)}%</span>
+                <span className="ml-2 text-xs text-gray-600">conf {Math.round(conf*100)}%</span>
 
                 <button
                   onClick={() => setTaskDraft({
@@ -339,19 +339,19 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
                     rippleId: id
                   })}
                   disabled={false}
-                  className="px-3 py-1 rounded bg-green-100 hover:bg-green-200 text-green-900 text-sm font-medium"
+                  className="rounded bg-green-100 px-3 py-1 text-sm font-medium text-green-900 hover:bg-green-200"
                 >
                   Make Task
                 </button>
                 <button
                   onClick={() => actDismiss(id)}
-                  className="px-3 py-1 rounded bg-red-100 hover:bg-red-200 text-red-900 text-sm font-medium"
+                  className="rounded bg-red-100 px-3 py-1 text-sm font-medium text-red-900 hover:bg-red-200"
                 >
                   Dismiss
                 </button>
               </div>
             ) : (
-              <div className="text-sm mt-2 text-gray-500">
+              <div className="mt-2 text-sm text-gray-500">
                 Status: <span className="font-semibold">{(r.status||'pending')}</span>
               </div>
             )}
