@@ -4,8 +4,11 @@ import ImportantEvent from "../models/ImportantEvent.js";
 import Appointment from "../models/Appointment.js";
 import Ripple from "../models/Ripple.js";
 import SuggestedTask from "../models/SuggestedTask.js";
+import Task from "../models/Task.js";
+import Cluster from "../models/Cluster.js";
 import { normalizeClusterIds } from "./clusterIds.js";
 
+import * as chrono from "chrono-node";
 import analyzeEntry from "./analyzeEntry.js";
 import { extractEntrySuggestions, extractRipplesFromEntry } from "./rippleExtractor.js";
 import { sieveRipples } from "./rippleSieve.js";
@@ -267,6 +270,56 @@ function isoDateToUTCDate(iso) {
   return new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
 }
 
+function toISODateString(value) {
+  if (!value) return "";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
+}
+
+function parseAppointmentsFromText(text = "", entryDateISO = null) {
+  try {
+    const raw = String(text || "").trim();
+    if (!raw) return { appointments: [], importantEvents: [] };
+
+    const base = entryDateISO ? new Date(`${entryDateISO}T12:00:00`) : new Date();
+    const results = chrono.parse(raw, base, { forwardDate: true }) || [];
+
+    const appointments = [];
+    const importantEvents = [];
+
+    const eventHint = /(birthday|anniversary|holiday|christmas|easter|thanksgiving|new year)/i;
+    const apptHint = /(appointment|dentist|doctor|clinic|meeting|call|pickup|drop[- ]?off|therapy|vet|interview|at\s+[A-Za-z0-9'’.-]+)/i;
+
+    for (const r of results) {
+      const date = r.start?.date?.();
+      if (!date || Number.isNaN(date.getTime())) continue;
+      const dateISO = toISODateString(date);
+      if (!dateISO) continue;
+
+      const hasTime = r.start?.isCertain?.("hour") || r.start?.isCertain?.("minute");
+      const idx = typeof r.index === "number" ? r.index : raw.toLowerCase().indexOf(String(r.text || "").toLowerCase());
+      const titleRaw = idx > 0 ? raw.slice(0, idx).trim() : raw.trim();
+      const title = titleRaw.replace(/[,:-]+$/g, "").trim() || String(r.text || "").trim();
+      if (!title) continue;
+
+      if (hasTime || apptHint.test(raw)) {
+        const hh = String(date.getHours()).padStart(2, "0");
+        const mm = String(date.getMinutes()).padStart(2, "0");
+        appointments.push({ title, date: dateISO, timeStart: `${hh}:${mm}` });
+      } else if (eventHint.test(raw)) {
+        importantEvents.push({ title, date: dateISO, details: "" });
+      }
+    }
+
+    return { appointments, importantEvents };
+  } catch (err) {
+    console.warn("[entryAutomation] parseAppointmentsFromText failed:", err?.message || err);
+    return { appointments: [], importantEvents: [] };
+  }
+}
+
 export async function clearRippleArtifacts({ userId, entryId }) {
   if (!userId || !entryId) return;
   const rippleIds = await Ripple.find({ userId, entryId }).select("_id");
@@ -351,6 +404,25 @@ async function generateRipplesAndSuggestions({ entry, text, userId }) {
     .filter((p) => p.title);
 
   await safeInsertMany(SuggestedTask, suggestionPayloads);
+
+  try {
+    const taskPayloads = suggestionPayloads
+      .map((payload) => ({
+        userId,
+        title: String(payload?.title || "").trim(),
+        dueDate: toISODateString(payload?.dueDate) || null,
+        rrule: payload?.repeat ? String(payload.repeat) : "",
+        clusters: Array.isArray(entry?.clusters) ? normalizeClusterIds(entry.clusters) : [],
+        entryId: entry?._id || null,
+        status: "todo",
+      }))
+      .filter((t) => t.title);
+
+    await safeInsertMany(Task, taskPayloads);
+  } catch (err) {
+    console.warn("[entryAutomation] task auto-create failed:", err?.message || err);
+  }
+
   return { ripples: rippleDocs, suggestedTasks: suggestionPayloads };
 }
 
@@ -479,7 +551,65 @@ export async function createEntryWithAutomation({ userId, payload = {} }) {
     suggestedTasks,
   });
 
+  try {
+    const textForMatch = String(entry?.text || "").toLowerCase();
+    if (textForMatch) {
+      const ownedClusters = await Cluster.find({ ownerId: userId }).select("_id name").lean();
+      const current = new Set((entry.clusters || []).map((id) => String(id)));
+      let changed = false;
+
+      for (const cluster of ownedClusters || []) {
+        const name = String(cluster?.name || "").trim().toLowerCase();
+        const id = cluster?._id ? String(cluster._id) : "";
+        if (!name || !id) continue;
+        if (!textForMatch.includes(name)) continue;
+        if (current.has(id)) continue;
+        entry.clusters.push(cluster._id);
+        current.add(id);
+        changed = true;
+      }
+
+      if (changed) await entry.save();
+    }
+  } catch (err) {
+    console.warn("[entryAutomation] cluster auto-assign failed:", err?.message || err);
+  }
+
   await runNlpSideEffects({ entry, analysis, userId });
+
+  try {
+    const parsed = parseAppointmentsFromText(entry?.text || "", entry?.date);
+
+    if (Array.isArray(parsed?.appointments)) {
+      for (const ap of parsed.appointments) {
+        const timeStart = normalizeHHMM(ap.timeStart);
+        if (!timeStart) continue;
+        await upsertAppointment({
+          userId,
+          title: ap.title,
+          date: normalizeDate(ap.date),
+          timeStart,
+          cluster: entry.cluster || null,
+          entryId: entry._id,
+        });
+      }
+    }
+
+    if (Array.isArray(parsed?.importantEvents)) {
+      for (const ev of parsed.importantEvents) {
+        await upsertImportantEvent({
+          userId,
+          title: ev.title,
+          date: normalizeDate(ev.date),
+          details: ev.details || "",
+          cluster: entry.cluster || null,
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("[entryAutomation] parsed appointment/event side-effects failed:", err?.message || err);
+  }
+
   await generateRipplesAndSuggestions({ entry, text: normalized.text, userId });
 
   return entry;
