@@ -41,12 +41,16 @@ async function listTasks(req, res) {
 // GET /api/tasks
 router.get('/', listTasks);
 
-// Alias: GET /api/tasks/day/:date  (includes completed by default)
 router.get('/day/:date', async (req, res) => {
   try {
-    req.query.dueDate = req.params.date;
-    if (req.query.includeCompleted == null) req.query.includeCompleted = '1';
-    return listTasks(req, res);
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const date = req.params.date;
+    const [dueToday, onYourRadar] = await Promise.all([
+      Task.find({ userId, dueDate: { $lte: date }, completed: false, deletedAt: null }).sort({ dueDate: 1 }),
+      Task.find({ userId, $or: [{ dueDate: null }, { dueDate: '' }, { dueDate: { $exists: false } }], completed: false, deletedAt: null })
+    ]);
+    res.json({ dueToday, onYourRadar });
   } catch (e) {
     console.error('[tasks] day list failed:', e);
     res.status(500).json({ error: 'list failed' });

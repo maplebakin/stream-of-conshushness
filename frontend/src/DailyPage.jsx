@@ -295,9 +295,16 @@ export default function DailyPage() {
       <section className="daily-layout">
         <div className="daily-main">
           <div className="panel">
+            <h3>Due Today</h3>
             {renderSafe(
               TaskList,
-              { key: taskListKey, date: dateISO, header: "Today’s Tasks", keepCompleted: true },
+              { key: `due-${taskListKey}`, date: dateISO, bucket: 'dueToday', header: null, keepCompleted: false },
+              'TaskList'
+            )}
+            <h3>On Your Radar</h3>
+            {renderSafe(
+              TaskList,
+              { key: `radar-${taskListKey}`, date: dateISO, bucket: 'onYourRadar', header: null, keepCompleted: false },
               'TaskList'
             )}
             <DailyRipples key={rippleListKey} date={dateISO} />

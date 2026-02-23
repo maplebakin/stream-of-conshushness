@@ -12,7 +12,7 @@ import { describeRepeat } from './utils/repeat.js';
 import { useTasks } from './hooks/useTasks.js';
 import { useQueryClient } from '@tanstack/react-query';
 
-export default function TaskList({ date, header = 'Tasks' }) {
+export default function TaskList({ date, header = 'Tasks', bucket }) {
   const { token } = useContext(AuthContext);
   const { showUndo, showToast } = useToast();
   const today = useMemo(() => todayISOInToronto(), []);
@@ -23,7 +23,47 @@ export default function TaskList({ date, header = 'Tasks' }) {
   const [includeOverdue, setIncludeOverdue] = useState(true);
   const [includeRecurring, setIncludeRecurring] = useState(true);
 
-  const { data: tasks = [], isLoading: loading } = useTasks(date, includeOverdue, includeRecurring, isToday);
+  const { data: queriedTasks = [], isLoading: queryLoading } = useTasks(date, includeOverdue, includeRecurring, isToday);
+
+  const [bucketTasks, setBucketTasks] = useState([]);
+  const [bucketLoading, setBucketLoading] = useState(false);
+  const [bucketRefreshTick, setBucketRefreshTick] = useState(0);
+
+  useEffect(() => {
+    let ignore = false;
+
+    if (!bucket) {
+      setBucketTasks([]);
+      setBucketLoading(false);
+      return () => { ignore = true; };
+    }
+
+    setBucketLoading(true);
+    axios
+      .get(`/api/tasks/day/${date}`, { headers: authHeaders })
+      .then(({ data }) => {
+        if (ignore) return;
+        const arr = Array.isArray(data?.[bucket]) ? data[bucket] : [];
+        setBucketTasks(arr);
+      })
+      .catch((e) => {
+        if (!ignore) {
+          console.error('Bucket task fetch failed:', e);
+          setBucketTasks([]);
+          showToast('Could not load tasks. Please try again.', { type: 'error' });
+        }
+      })
+      .finally(() => {
+        if (!ignore) setBucketLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [bucket, date, token, bucketRefreshTick]);
+
+  const tasks = bucket ? bucketTasks : queriedTasks;
+  const loading = bucket ? bucketLoading : queryLoading;
 
   // Inbox panel
   const [showInbox, setShowInbox] = useState(false);
@@ -74,6 +114,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
         );
       }
       queryClient.invalidateQueries(['tasks']);
+      if (bucket) setBucketRefreshTick((x) => x + 1);
     } catch (e) {
       console.error('Toggle complete failed:', e);
       showToast('Could not update task status. Please try again.', { type: 'error' });
@@ -105,6 +146,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
       setInbox((prev) => prev.filter((x) => x._id !== task._id));
       setInboxCount((c) => Math.max(0, c - 1));
       queryClient.invalidateQueries(['tasks']);
+      if (bucket) setBucketRefreshTick((x) => x + 1);
       // Then try to link to journal entry for that date
       linkEntryForDate(updated._id, date);
     } catch (e) {
@@ -125,6 +167,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
         { headers: authHeaders }
       );
       queryClient.invalidateQueries(['tasks']);
+      if (bucket) setBucketRefreshTick((x) => x + 1);
       setNewTitle('');
       setShowComposer(false);
       // Link the freshly created task to this day's journal
@@ -177,6 +220,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
       await axios.post('/api/tasks/bulk/complete', { ids }, { headers: authHeaders });
       // Refresh tasks
       await queryClient.invalidateQueries(['tasks']);
+      if (bucket) setBucketRefreshTick((x) => x + 1);
       setSelectedTasks(new Set());
     } catch (e) {
       console.error('Bulk complete failed:', e);
@@ -199,6 +243,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
 
       // Optimistically update UI
       queryClient.invalidateQueries(['tasks']);
+      if (bucket) setBucketRefreshTick((x) => x + 1);
       setSelectedTasks(new Set());
 
       // Show undo toast
@@ -223,6 +268,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
             await Promise.all(recreatePromises);
             // Refresh tasks after undo
             await queryClient.invalidateQueries(['tasks']);
+      if (bucket) setBucketRefreshTick((x) => x + 1);
           } catch (e) {
             console.error('Undo failed:', e);
             showToast('Failed to undo deletion. Please try again.', { type: 'error' });
@@ -234,6 +280,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
       showToast('Failed to delete tasks. Please try again.', { type: 'error' });
       // Refresh to restore correct state
       await queryClient.invalidateQueries(['tasks']);
+      if (bucket) setBucketRefreshTick((x) => x + 1);
     } finally {
       setBulkActionLoading(false);
     }
@@ -242,7 +289,7 @@ export default function TaskList({ date, header = 'Tasks' }) {
   return (
     <div className="task-list">
       <div className="task-list-header">
-        <h3 className="font-thread text-vein">{header}</h3>
+        {header ? <h3 className="font-thread text-vein">{header}</h3> : <span />}
 
         {/* Right side: toggles + add task */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
