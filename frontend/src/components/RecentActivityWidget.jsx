@@ -46,19 +46,16 @@ export default function RecentActivityWidget() {
           headers: { Authorization: `Bearer ${token}` }
         });
 
-        // Count entries with suggested tasks (ripples)
-        const allEntriesRes = await axios.get('/api/entries', {
+        // Count entries with suggested tasks (ripples) — dedicated count endpoint, no bulk fetch
+        const rippleCountRes = await axios.get('/api/entries/count?hasSuggestedTasks=1', {
           headers: { Authorization: `Bearer ${token}` }
         });
-        const entriesWithRipples = Array.isArray(allEntriesRes.data)
-          ? allEntriesRes.data.filter(e => e.suggestedTasks && e.suggestedTasks.length > 0)
-          : [];
 
         setData({
           recentCompletions: Array.isArray(completedRes.data) ? completedRes.data.slice(0, 5) : [],
           upcomingTasks: Array.isArray(upcomingRes.data) ? upcomingRes.data.slice(0, 5) : [],
           todayTasksCount: Array.isArray(todayRes.data) ? todayRes.data.filter(t => !t.completed).length : 0,
-          activeRipplesCount: entriesWithRipples.length,
+          activeRipplesCount: rippleCountRes.data?.count ?? 0,
           recentEntries: Array.isArray(entriesRes.data) ? entriesRes.data.slice(0, 3) : [],
           loading: false,
         });

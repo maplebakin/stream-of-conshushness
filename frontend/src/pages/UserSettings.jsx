@@ -1,30 +1,9 @@
 // src/pages/UserSettings.jsx
-import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { AuthContext } from '../AuthContext.jsx';
+import React, { useEffect, useState } from 'react';
+import axios from '../api/axiosInstance';
 import '../Settings.css';
 
-function useAuthedFetch(token) {
-  return useMemo(
-    () => async (path, opts = {}) => {
-      const res = await fetch(path, {
-        ...opts,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(opts.headers || {}),
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || `Request failed: ${res.status}`);
-      return data;
-    },
-    [token]
-  );
-}
-
 export default function UserSettings() {
-  const { token } = useContext(AuthContext);
-  const api = useAuthedFetch(token);
 
   // profile state
   const [loading, setLoading] = useState(true);
@@ -43,7 +22,7 @@ export default function UserSettings() {
     let mounted = true;
     (async () => {
       try {
-        const { user } = await api('/api/me');
+        const { data: { user } } = await axios.get('/api/me');
         if (!mounted) return;
         setUsername(user?.username || '');
         setEmail(user?.email || '');
@@ -54,18 +33,14 @@ export default function UserSettings() {
       }
     })();
     return () => { mounted = false; };
-  }, [api]);
+  }, []);
 
   async function saveProfile(e) {
     e?.preventDefault?.();
     setMsg('');
     setSaving(true);
     try {
-      const payload = { email, username };
-      const { user } = await api('/api/me', {
-        method: 'PATCH',
-        body: JSON.stringify(payload),
-      });
+      const { data: { user } } = await axios.patch('/api/me', { email, username });
       setUsername(user.username);
       setEmail(user.email || '');
       setMsg('Profile updated.');
@@ -81,10 +56,7 @@ export default function UserSettings() {
     setPwMsg('');
     setPwBusy(true);
     try {
-      await api('/api/change-password', {
-        method: 'POST',
-        body: JSON.stringify({ oldPassword, newPassword }),
-      });
+      await axios.post('/api/change-password', { oldPassword, newPassword });
       setOld(''); setNew('');
       setPwMsg('Password updated.');
     } catch (e) {

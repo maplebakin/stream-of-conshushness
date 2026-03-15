@@ -39,7 +39,7 @@ jobs:
           mkdir -p deploy
           cp -r frontend/dist deploy/
           cp package.json package-lock.json deploy/
-          cp -r models routes middleware utils graphql deploy/
+          cp -r models routes middleware utils deploy/
           cp server.js deploy/
           echo "Deployment artifact created"
 

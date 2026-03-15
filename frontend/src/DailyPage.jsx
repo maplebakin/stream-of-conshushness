@@ -181,16 +181,12 @@ export default function DailyPage() {
     if (!token || !dateISO) return;
     setLoadingAgenda(true);
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const qs = `from=${dateISO}&to=${dateISO}`;
-      const [apptRes, evtRes, impRes] = await Promise.all([
-        axios.get(`/api/appointments?${qs}`,      { headers }),
-        axios.get(`/api/events?${qs}`,            { headers }),
-        axios.get(`/api/important-events?${qs}`,  { headers }).catch(() => ({ data: [] })),
-      ]);
-      setAppointments(Array.isArray(apptRes.data) ? apptRes.data : []);
-      setEvents(Array.isArray(evtRes.data) ? evtRes.data : []);
-      setImportant(Array.isArray(impRes.data) ? impRes.data : []);
+      const { data } = await axios.get(`/api/calendar/day/${dateISO}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setAppointments(Array.isArray(data.appointments) ? data.appointments : []);
+      setEvents(Array.isArray(data.events) ? data.events : []);
+      setImportant(Array.isArray(data.importantEvents) ? data.importantEvents : []);
     } catch (err) {
       console.error('loadAgenda error', err?.message || err);
       setAppointments([]); setEvents([]); setImportant([]);

@@ -132,9 +132,14 @@ app.use(
 
 
 /* ───────────── REST Routes ───────────── */
-/** Auth: expose at /api/login AND /api/auth/login for compatibility */
+/**
+ * Auth routes are mounted twice intentionally:
+ *   /api        → canonical paths: POST /api/login, POST /api/register, GET /api/me …
+ *   /api/auth   → aliased paths:   POST /api/auth/login, POST /api/auth/register …
+ * Both are kept for backwards compatibility with existing clients.
+ */
 app.use("/api", authRoutes);
-app.use("/api/auth", authRoutes); // ← added line to support /api/auth/* callers
+app.use("/api/auth", authRoutes);
 
 /** Protected APIs */
 app.use("/api/habits", auth, habitRoutes);
@@ -156,7 +161,10 @@ app.use("/api/schedule", auth, scheduleRouter);
 app.use("/api/calendar", auth, calendarRoutes);
 
 
-/** Ripples mounted once under /api */
+/**
+ * Ripples router defines its own sub-paths (e.g. /ripples, /ripples/analyze).
+ * Mounted at /api so they resolve to /api/ripples, /api/ripples/analyze, etc.
+ */
 app.use("/api", auth, ripplesRouter);
 
 /** Other feature routers */

@@ -2,6 +2,7 @@
 import React, { useState, useContext, useRef, useEffect } from 'react';
 import { AuthContext } from './AuthContext.jsx';
 import { useNavigate, Link } from 'react-router-dom';
+import axios from './api/axiosInstance';
 import './login.css';
 
 export default function LoginPage() {
@@ -22,13 +23,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Login failed');
+      const { data } = await axios.post('/api/login', { username, password });
       login(data.token);
       navigate('/');
     } catch (err) {

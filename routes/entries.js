@@ -21,6 +21,34 @@ const { ObjectId } = mongoose.Types;
 
 /* --------------------------- Routes --------------------------- */
 
+// Count with the same filters as the list endpoint
+// GET /api/entries/count?hasSuggestedTasks=1&date=YYYY-MM-DD&...
+router.get('/count', async (req, res) => {
+  try {
+    const userId = getUserIdFromRequest(req);
+    const q = { userId };
+
+    if (req.query.date) q.date = normalizeDate(req.query.date);
+    if (req.query.startDate || req.query.endDate) {
+      const range = {};
+      if (req.query.startDate) range.$gte = normalizeDate(req.query.startDate);
+      if (req.query.endDate) range.$lte = normalizeDate(req.query.endDate);
+      q.date = range;
+    }
+    if (req.query.cluster) q.cluster = String(req.query.cluster);
+    if (req.query.mood) q.mood = String(req.query.mood);
+    if (req.query.hasSuggestedTasks) {
+      q['suggestedTasks.0'] = { $exists: true };
+    }
+
+    const count = await Entry.countDocuments(q);
+    res.json({ count });
+  } catch (e) {
+    console.error('GET /entries/count error', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // List with flexible filters
 // GET /api/entries?date=YYYY-MM-DD&cluster=Home&section=Games&sectionPageId=...&limit=50
 router.get("/", async (req, res) => {

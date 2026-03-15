@@ -135,7 +135,13 @@ export default function InboxTasksPage() {
   }
 
   async function bulkComplete(ids) {
-    for (const id of ids) await toggleDone(id);
+    const idArr = [...ids];
+    try {
+      await axios.post('/api/tasks/bulk/complete', { ids: idArr }, { headers });
+      setAllTasks(ts => ts.map(t => idArr.includes(t._id) ? { ...t, completed: true } : t));
+    } catch (e) {
+      console.warn('[InboxTasks] bulk complete failed', e?.response?.data || e);
+    }
     setSelected(new Set());
   }
   async function bulkSetDate(ids, dateISO) {

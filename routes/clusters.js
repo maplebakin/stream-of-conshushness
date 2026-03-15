@@ -4,7 +4,7 @@ import Cluster, { slugifyClusterSlug } from '../models/Cluster.js';
 const router = express.Router();
 
 function getOwnerId(req) {
-  return req.user?.id;
+  return req.user?.userId;
 }
 
 router.get('/', async (req, res) => {

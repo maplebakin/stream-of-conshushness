@@ -25,6 +25,11 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
 
   const { data: queriedTasks = [], isLoading: queryLoading } = useTasks(date, includeOverdue, includeRecurring, isToday);
 
+  const authHeaders = useMemo(
+    () => (token ? { Authorization: `Bearer ${token}` } : {}),
+    [token]
+  );
+
   const [bucketTasks, setBucketTasks] = useState([]);
   const [bucketLoading, setBucketLoading] = useState(false);
   const [bucketRefreshTick, setBucketRefreshTick] = useState(0);
@@ -60,7 +65,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
     return () => {
       ignore = true;
     };
-  }, [bucket, date, token, bucketRefreshTick]);
+  }, [bucket, date, authHeaders, showToast, bucketRefreshTick]);
 
   const tasks = bucket ? bucketTasks : queriedTasks;
   const loading = bucket ? bucketLoading : queryLoading;
@@ -78,8 +83,6 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
   // Bulk operations state
   const [selectedTasks, setSelectedTasks] = useState(new Set());
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
-
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
   async function fetchInboxCount() {
     const { data } = await axios.get('/api/tasks?view=inbox&countOnly=1', { headers: authHeaders });

@@ -2,6 +2,7 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from './AuthContext.jsx';
+import axios from './api/axiosInstance';
 import './login.css';
 
 export default function RegisterPage() {
@@ -24,17 +25,11 @@ export default function RegisterPage() {
     }
     setLoading(true);
     try {
-      const res = await fetch('/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username,
-          password,
-          email: email.trim() || undefined
-        }),
+      const { data } = await axios.post('/api/register', {
+        username,
+        password,
+        email: email.trim() || undefined,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Registration failed');
       login(data.token);
       navigate('/');
     } catch (err) {
