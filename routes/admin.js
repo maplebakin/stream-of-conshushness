@@ -1,8 +1,12 @@
 // /routes/admin.js
 import express from 'express';
-import bcrypt from 'bcrypt'; // or 'bcryptjs' if you swapped
+import mongoose from 'mongoose';
+import bcrypt from 'bcrypt';
 import User from '../models/User.js';
 import auth from '../middleware/auth.js';
+
+const { ObjectId } = mongoose.Types;
+const BCRYPT_ROUNDS = 12;
 
 const router = express.Router();
 
@@ -15,13 +19,16 @@ async function requireAdmin(req, res, next) {
     req.adminUser = me;
     next();
   } catch (e) {
-    console.error(e);
+    console.error('[admin] requireAdmin check failed:', e);
     res.status(500).json({ error: 'admin check failed' });
   }
 }
 
-/* ───────── one-time bootstrap: promote a user to admin (CLI/curl only) ───────── */
-router.post('/grant', async (req, res) => {
+/* ───────── one-time bootstrap: promote a user to admin (CLI/curl only) ─────────
+ * Protected by ADMIN_SECRET only — no existing-admin required so the first
+ * admin can be bootstrapped via: POST /api/admin/grant { adminSecret, username }
+ */
+router.post('/grant', auth, async (req, res) => {
   try {
     const { ADMIN_SECRET } = process.env;
     const { adminSecret, username } = req.body || {};
@@ -34,7 +41,7 @@ router.post('/grant', async (req, res) => {
     await user.save();
     res.json({ ok: true, user: { id: user._id, username: user.username, isAdmin: user.isAdmin } });
   } catch (e) {
-    console.error(e);
+    console.error('[admin] grant failed:', e);
     res.status(500).json({ error: 'grant failed' });
   }
 });
@@ -51,7 +58,8 @@ router.get('/users', auth, requireAdmin, async (req, res) => {
     const find = q
       ? { username: new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }
       : {};
-    const crit = cursor ? { ...find, _id: { $gt: cursor } } : find;
+    const validCursor = cursor && ObjectId.isValid(cursor);
+    const crit = validCursor ? { ...find, _id: { $gt: new ObjectId(cursor) } } : find;
 
     const docs = await User.find(crit)
       .select('_id username email isAdmin createdAt')
@@ -61,7 +69,7 @@ router.get('/users', auth, requireAdmin, async (req, res) => {
     const nextCursor = docs.length ? String(docs[docs.length - 1]._id) : null;
     res.json({ ok: true, users: docs, nextCursor });
   } catch (e) {
-    console.error(e);
+    console.error('[admin] list users failed:', e);
     res.status(500).json({ error: 'list users failed' });
   }
 });
@@ -77,7 +85,7 @@ router.put('/users/:id/password', auth, requireAdmin, async (req, res) => {
     const user = await User.findById(id);
     if (!user) return res.status(404).json({ error: 'user not found' });
 
-    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    user.passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     user.resetTokenHash = null;
     user.resetTokenExpiry = null;
     user.resetCodeHash = null;
@@ -86,7 +94,7 @@ router.put('/users/:id/password', auth, requireAdmin, async (req, res) => {
 
     res.json({ ok: true, user: { id: user._id, username: user.username } });
   } catch (e) {
-    console.error(e);
+    console.error('[admin] id reset failed:', e);
     res.status(500).json({ error: 'admin id reset failed' });
   }
 });
@@ -102,7 +110,7 @@ router.post('/reset-username', auth, requireAdmin, async (req, res) => {
     const user = await User.findOne({ username });
     if (!user) return res.status(404).json({ error: 'user not found' });
 
-    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    user.passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     user.resetTokenHash = null;
     user.resetTokenExpiry = null;
     user.resetCodeHash = null;
@@ -111,7 +119,7 @@ router.post('/reset-username', auth, requireAdmin, async (req, res) => {
 
     res.json({ ok: true, user: { id: user._id, username: user.username } });
   } catch (e) {
-    console.error(e);
+    console.error('[admin] username reset failed:', e);
     res.status(500).json({ error: 'admin username reset failed' });
   }
 });

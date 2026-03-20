@@ -14,11 +14,34 @@ import SectionPage from '../models/SectionPage.js';
 import Appointment from '../models/Appointment.js';
 import ImportantEvent from '../models/ImportantEvent.js';
 import Ripple from '../models/Ripple.js';
+import auth from '../middleware/auth.js';
 
 const router = express.Router();
+router.use(auth);
 
 function getUserId(req) {
   return req.user?.userId || req.user?._id || req.user?.id || null;
+}
+
+async function streamArray(res, cursor) {
+  let first = true;
+  for await (const doc of cursor) {
+    const payload = JSON.stringify(doc);
+    res.write(first ? payload : `,${payload}`);
+    first = false;
+  }
+}
+
+function sanitizeCsvValue(value) {
+  const raw = value == null ? "" : String(value);
+  const trimmed = raw.replace(/^\s+/, "");
+  const needsGuard = /^[=+\-@]/.test(trimmed);
+  return needsGuard ? `'${raw}` : raw;
+}
+
+function csvCell(value) {
+  const safe = sanitizeCsvValue(value);
+  return `"${safe.replace(/"/g, '""')}"`;
 }
 
 /**
@@ -29,6 +52,113 @@ router.get('/json', async (req, res) => {
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const stream = String(req.query.stream ?? '1') !== '0' && typeof res.write === 'function';
+
+    if (stream) {
+      const [
+        user,
+        entriesCount,
+        tasksCount,
+        goalsCount,
+        notesCount,
+        habitsCount,
+        clustersCount,
+        sectionsCount,
+        sectionPagesCount,
+        appointmentsCount,
+        importantEventsCount,
+        ripplesCount,
+      ] = await Promise.all([
+        User.findById(userId)
+          .select('_id username email isAdmin profilePicture createdAt updatedAt emailVerifiedAt')
+          .lean(),
+        Entry.countDocuments({ userId }),
+        Task.countDocuments({ userId }),
+        Goal.countDocuments({ userId }),
+        Note.countDocuments({ userId }),
+        Habit.countDocuments({ userId }),
+        Cluster.countDocuments({ ownerId: userId }),
+        Section.countDocuments({ ownerId: userId }),
+        SectionPage.countDocuments({ userId }),
+        Appointment.countDocuments({ userId }),
+        ImportantEvent.countDocuments({ userId }),
+        Ripple.countDocuments({ userId }),
+      ]);
+
+      const statistics = {
+        totalEntries: entriesCount,
+        totalTasks: tasksCount,
+        totalGoals: goalsCount,
+        totalNotes: notesCount,
+        totalHabits: habitsCount,
+        totalClusters: clustersCount,
+        totalSections: sectionsCount,
+        totalSectionPages: sectionPagesCount,
+        totalAppointments: appointmentsCount,
+        totalImportantEvents: importantEventsCount,
+        totalRipples: ripplesCount,
+      };
+
+      // Set headers for download
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="streamofconshushness-export-${Date.now()}.json"`);
+
+      res.write('{');
+      res.write(`"exportedAt":${JSON.stringify(new Date().toISOString())},`);
+      res.write('"version":"1.0",');
+      res.write(`"user":${JSON.stringify(user || {})},`);
+      res.write('"data":{');
+
+      res.write('"entries":[');
+      await streamArray(res, Entry.find({ userId }).lean().cursor());
+      res.write('],');
+
+      res.write('"tasks":[');
+      await streamArray(res, Task.find({ userId }).lean().cursor());
+      res.write('],');
+
+      res.write('"goals":[');
+      await streamArray(res, Goal.find({ userId }).lean().cursor());
+      res.write('],');
+
+      res.write('"notes":[');
+      await streamArray(res, Note.find({ userId }).lean().cursor());
+      res.write('],');
+
+      res.write('"habits":[');
+      await streamArray(res, Habit.find({ userId }).lean().cursor());
+      res.write('],');
+
+      res.write('"clusters":[');
+      await streamArray(res, Cluster.find({ ownerId: userId }).lean().cursor());
+      res.write('],');
+
+      res.write('"sections":[');
+      await streamArray(res, Section.find({ ownerId: userId }).lean().cursor());
+      res.write('],');
+
+      res.write('"sectionPages":[');
+      await streamArray(res, SectionPage.find({ userId }).lean().cursor());
+      res.write('],');
+
+      res.write('"appointments":[');
+      await streamArray(res, Appointment.find({ userId }).lean().cursor());
+      res.write('],');
+
+      res.write('"importantEvents":[');
+      await streamArray(res, ImportantEvent.find({ userId }).lean().cursor());
+      res.write('],');
+
+      res.write('"ripples":[');
+      await streamArray(res, Ripple.find({ userId }).lean().cursor());
+      res.write(']');
+
+      res.write('},');
+      res.write(`"statistics":${JSON.stringify(statistics)}`);
+      res.write('}');
+      return res.end();
+    }
 
     // Fetch all user data
     const [
@@ -45,7 +175,9 @@ router.get('/json', async (req, res) => {
       importantEvents,
       ripples
     ] = await Promise.all([
-      User.findById(userId).select('-passwordHash -resetTokenHash -emailVerifyCodeHash').lean(),
+      User.findById(userId)
+        .select('_id username email isAdmin profilePicture createdAt updatedAt emailVerifiedAt')
+        .lean(),
       Entry.find({ userId }).lean(),
       Task.find({ userId }).lean(),
       Goal.find({ userId }).lean(),
@@ -84,7 +216,10 @@ router.get('/json', async (req, res) => {
         totalHabits: habits.length,
         totalClusters: clusters.length,
         totalSections: sections.length,
-        totalAppointments: appointments.length
+        totalSectionPages: sectionPages.length,
+        totalAppointments: appointments.length,
+        totalImportantEvents: importantEvents.length,
+        totalRipples: ripples.length,
       }
     };
 
@@ -95,6 +230,9 @@ router.get('/json', async (req, res) => {
     res.json(exportData);
   } catch (error) {
     console.error('[export] JSON export failed:', error);
+    if (res.headersSent) {
+      return res.end();
+    }
     res.status(500).json({ error: 'Export failed' });
   }
 });
@@ -117,12 +255,12 @@ router.get('/csv/entries', async (req, res) => {
     // CSV rows
     for (const entry of entries) {
       const row = [
-        entry.date || '',
-        `"${(entry.text || entry.content || '').replace(/"/g, '""')}"`, // Escape quotes
-        entry.mood || '',
-        `"${(entry.tags || []).join(', ')}"`,
-        entry.pinned ? 'Yes' : 'No',
-        entry.createdAt ? new Date(entry.createdAt).toISOString() : ''
+        csvCell(entry.date || ""),
+        csvCell(entry.text || entry.content || ""),
+        csvCell(entry.mood || ""),
+        csvCell((entry.tags || []).join(", ")),
+        csvCell(entry.pinned ? "Yes" : "No"),
+        csvCell(entry.createdAt ? new Date(entry.createdAt).toISOString() : "")
       ];
       csvRows.push(row.join(','));
     }
@@ -156,14 +294,14 @@ router.get('/csv/tasks', async (req, res) => {
     // CSV rows
     for (const task of tasks) {
       const row = [
-        `"${(task.title || '').replace(/"/g, '""')}"`,
-        task.status || 'todo',
-        task.completed ? 'Yes' : 'No',
-        task.dueDate || '',
-        task.priority || '',
-        `"${(task.notes || '').replace(/"/g, '""')}"`,
-        task.createdAt ? new Date(task.createdAt).toISOString() : '',
-        task.completedAt ? new Date(task.completedAt).toISOString() : ''
+        csvCell(task.title || ""),
+        csvCell(task.status || "todo"),
+        csvCell(task.completed ? "Yes" : "No"),
+        csvCell(task.dueDate || ""),
+        csvCell(task.priority ?? ""),
+        csvCell(task.notes || ""),
+        csvCell(task.createdAt ? new Date(task.createdAt).toISOString() : ""),
+        csvCell(task.completedAt ? new Date(task.completedAt).toISOString() : "")
       ];
       csvRows.push(row.join(','));
     }
@@ -201,10 +339,10 @@ router.get('/csv/goals', async (req, res) => {
         .join('; ');
 
       const row = [
-        `"${(goal.title || '').replace(/"/g, '""')}"`,
-        `"${(goal.description || '').replace(/"/g, '""')}"`,
-        `"${stepsText.replace(/"/g, '""')}"`,
-        goal.createdAt ? new Date(goal.createdAt).toISOString() : ''
+        csvCell(goal.title || ""),
+        csvCell(goal.description || ""),
+        csvCell(stepsText),
+        csvCell(goal.createdAt ? new Date(goal.createdAt).toISOString() : "")
       ];
       csvRows.push(row.join(','));
     }

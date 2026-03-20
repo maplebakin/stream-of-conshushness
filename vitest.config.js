@@ -8,7 +8,8 @@ export default defineConfig({
     include: [
       'utils/__tests__/**/*.test.js',
       'routes/__tests__/**/*.test.js',
-      'middleware/__tests__/**/*.test.js'
+      'middleware/__tests__/**/*.test.js',
+      'services/__tests__/**/*.test.js',
     ],
     coverage: {
       provider: 'v8',

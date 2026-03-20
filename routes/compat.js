@@ -99,24 +99,6 @@ r.post('/tasks/carry-forward', async (req, res) => {
   try {
     const userId = req.user.userId;
 
-    const str = (v) => (v == null ? '' : String(v)).trim();
-    const ymdToronto = (date = new Date()) => {
-      const parts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'America/Toronto',
-        year: 'numeric', month: '2-digit', day: '2-digit'
-      }).formatToParts(date);
-      const y = parts.find(p => p.type === 'year').value;
-      const m = parts.find(p => p.type === 'month').value;
-      const d = parts.find(p => p.type === 'day').value;
-      return `${y}-${m}-${d}`;
-    };
-    const addDaysISO = (iso, days) => {
-      const [y,m,d] = String(iso).split('-').map(Number);
-      const dt = new Date(Date.UTC(y, (m||1)-1, d||1, 12)); // noon UTC to avoid TZ drift
-      dt.setUTCDate(dt.getUTCDate() + Number(days || 0));
-      return ymdToronto(dt);
-    };
-
     let from = str(req.body?.from) || str(req.query?.from);
     let to   = str(req.body?.to)   || str(req.query?.to);
     const cluster = str(req.body?.cluster) || str(req.query?.cluster);
@@ -213,12 +195,13 @@ r.get('/calendar/upcoming/list', (req, res) => {
   return res.redirect(307, `/api/calendar/upcoming/list?${q}`);
 });
 
-/* ─── AUTH legacy passthroughs ──────────────────────────────────────── */
-r.post('/login',        expressJsonReplay(() => ({ url: '/api/auth/login',           body: {} })));
-r.post('/register',     expressJsonReplay(() => ({ url: '/api/auth/register',        body: {} })));
-r.post('/forgot',       expressJsonReplay(() => ({ url: '/api/auth/forgot',          body: {} })));
-r.post('/reset',        expressJsonReplay(() => ({ url: '/api/auth/reset',           body: {} })));
-r.get('/change-password',  (_req,res)=>res.status(405).json({error:'use POST /api/auth/change-password'}));
-r.post('/change-password', expressJsonReplay(() => ({ url: '/api/auth/change-password', body: {} })));
+/* ─── AUTH legacy passthroughs (commented out to avoid duplicates) ────────────────────────────────────── */
+// These are commented out to avoid creating duplicate routes
+// r.post('/login',        expressJsonReplay(() => ({ url: '/api/auth/login',           body: {} })));
+// r.post('/register',     expressJsonReplay(() => ({ url: '/api/auth/register',        body: {} })));
+// r.post('/forgot',       expressJsonReplay(() => ({ url: '/api/auth/forgot',          body: {} })));
+// r.post('/reset',        expressJsonReplay(() => ({ url: '/api/auth/reset',           body: {} })));
+// r.get('/change-password',  (_req,res)=>res.status(405).json({error:'use POST /api/auth/change-password'}));
+// r.post('/change-password', expressJsonReplay(() => ({ url: '/api/auth/change-password', body: {} })));
 
 export default r;

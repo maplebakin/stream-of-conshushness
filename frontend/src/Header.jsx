@@ -19,8 +19,25 @@ function isActivePath(pathname, to) {
     // user/account settings variants
     return pathname === '/settings' || pathname.startsWith('/account');
   }
+  if (to === '/ripples') {
+    // /ripples and any child routes
+    return pathname === '/ripples' || pathname.startsWith('/ripples/');
+  }
   // exact match for everything else
   return pathname === to;
+}
+
+function NavItem({ to, label, pathname }) {
+  const active = isActivePath(pathname, to);
+  return (
+    <Link
+      to={to}
+      className={`nav-pill${active ? ' nav-pill--active' : ''}`}
+      aria-current={active ? 'page' : undefined}
+    >
+      {label}
+    </Link>
+  );
 }
 
 export default function Header() {
@@ -43,19 +60,6 @@ export default function Header() {
     fetchUser();
   }, [isAuthenticated]);
 
-  const NavItem = ({ to, label }) => {
-    const active = isActivePath(location.pathname, to);
-    return (
-      <Link
-        to={to}
-        className={`nav-pill${active ? ' nav-pill--active' : ''}`}
-        aria-current={active ? 'page' : undefined}
-      >
-        {label}
-      </Link>
-    );
-  };
-
   return (
     <header className="app-header" role="banner">
       {/* Title */}
@@ -65,11 +69,12 @@ export default function Header() {
 
       {/* Main Nav */}
       <nav className="primary-nav" aria-label="Primary navigation">
-        <NavItem to="/" label="🌊 Stream" />
-        <NavItem to="/today" label="📍 Today" />
-        <NavItem to="/calendar" label="📆 Calendar" />
-        <NavItem to="/sections" label="🎛️ Sections" />
-        {isAuthenticated && <NavItem to="/settings" label="⚙️ User Settings" />}
+        <NavItem to="/" label="🌊 Stream" pathname={location.pathname} />
+        <NavItem to="/today" label="📍 Today" pathname={location.pathname} />
+        <NavItem to="/calendar" label="📆 Calendar" pathname={location.pathname} />
+        <NavItem to="/sections" label="🎛️ Sections" pathname={location.pathname} />
+        <NavItem to="/ripples" label="💡 Ripples" pathname={location.pathname} />
+        {isAuthenticated && <NavItem to="/settings" label="⚙️ User Settings" pathname={location.pathname} />}
 
         {isAuthenticated && user && (
           <Link

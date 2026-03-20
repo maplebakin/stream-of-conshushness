@@ -1,5 +1,5 @@
 // frontend/src/MainPage.jsx
-import React, { useEffect, useState, useContext, useMemo, useCallback, Suspense } from 'react';
+import React, { useEffect, useState, useContext, useMemo, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import EntryModal from './EntryModal.jsx';
 import axios from './api/axiosInstance';
@@ -76,6 +76,9 @@ export default function MainPage() {
   // quick filters
   const [query, setQuery] = useState('');
   const [clusterFilter, setClusterFilter] = useState('all');
+  const [quickEntryText, setQuickEntryText] = useState('');
+  const [recentActivityOpen, setRecentActivityOpen] = useState(false);
+  const quickEntryRef = useRef(null);
 
   const fetchEntries = useCallback(async () => {
     if (!token) {
@@ -106,6 +109,8 @@ export default function MainPage() {
     fetchEntries();
   }, [fetchEntries]);
 
+  const todayISO = getLocalTodayISO?.() || new Date().toISOString().slice(0, 10);
+
   const handleDelete = async (id) => {
     try {
       await axios.delete(`/api/entries/${id}`);
@@ -123,17 +128,62 @@ export default function MainPage() {
     setShowModal(false);
   };
 
+  const autoResizeQuickEntry = useCallback(() => {
+    const el = quickEntryRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
+
+  const resetQuickEntry = useCallback(() => {
+    setQuickEntryText('');
+    const el = quickEntryRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+  }, []);
+
+  const submitQuickEntry = useCallback(async () => {
+    const text = quickEntryText.trim();
+    if (!text || !isAuthenticated) return;
+
+    try {
+      const res = await axios.post('/api/entries', { text, date: todayISO });
+      const created = normalizeEntry(res.data || {});
+      setEntries((prev) => [created, ...prev]);
+      resetQuickEntry();
+    } catch (err) {
+      console.error('quick entry create error:', err);
+      toast.error('Could not create entry');
+    }
+  }, [quickEntryText, isAuthenticated, todayISO, resetQuickEntry]);
+
   const clusters = useMemo(() => {
-    const setVals = new Set();
-    entries.forEach((e) => e.cluster && setVals.add(e.cluster));
-    const rest = Array.from(setVals).sort((a, b) => a.localeCompare(b));
+    const seen = new Map();
+    entries.forEach((e) => {
+      if (Array.isArray(e.clusters)) {
+        e.clusters.forEach((c) => {
+          const slug = c?.slug || (typeof c === 'string' ? c : null);
+          const name = c?.name || slug;
+          if (slug && !seen.has(slug)) seen.set(slug, name);
+        });
+      } else if (e.cluster) {
+        if (!seen.has(e.cluster)) seen.set(e.cluster, e.cluster);
+      }
+    });
+    const rest = Array.from(seen.entries())
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([slug]) => slug);
     return ['all', ...rest];
   }, [entries]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return entries.filter((e) => {
-      const passesCluster = clusterFilter === 'all' || e.cluster === clusterFilter;
+      const passesCluster =
+        clusterFilter === 'all' ||
+        (Array.isArray(e.clusters)
+          ? e.clusters.some((c) => (c?.slug || c) === clusterFilter)
+          : e.cluster === clusterFilter);
       const passesQuery =
         !q ||
         (e.text && e.text.toLowerCase().includes(q)) ||
@@ -143,8 +193,6 @@ export default function MainPage() {
       return passesCluster && passesQuery;
     });
   }, [entries, query, clusterFilter]);
-
-  const todayISO = getLocalTodayISO?.() || new Date().toISOString().slice(0, 10);
 
   return (
     <main className="stream-page">
@@ -185,23 +233,58 @@ export default function MainPage() {
             ))}
           </select>
 
-          <button
-            type="button"
-            className="add-entry-btn bg-lantern text-ink rounded-button font-thread shadow-soft hover:bg-plum hover:text-mist px-4 py-2 transition-all"
-            onClick={() => setShowModal(true)}
-            disabled={!isAuthenticated}
-            title={isAuthenticated ? 'New Entry' : 'Log in to add entries'}
-          >
-            + New Entry
-          </button>
+
         </div>
       </section>
 
       {/* Recent Activity Widget */}
-      <RecentActivityWidget />
+      <section className="recent-activity-collapsible">
+        <button
+          type="button"
+          className="recent-activity-toggle"
+          onClick={() => setRecentActivityOpen((v) => !v)}
+          aria-expanded={recentActivityOpen}
+        >
+          {recentActivityOpen ? '▾' : '▸'} Recent Activity
+        </button>
+        {recentActivityOpen && <RecentActivityWidget />}
+      </section>
 
       {/* Body */}
       <section className="entry-feed">
+        <form
+          className="quick-entry"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitQuickEntry();
+          }}
+        >
+          <textarea
+            ref={quickEntryRef}
+            rows={1}
+            className="quick-entry-input"
+            placeholder="What's on your mind?"
+            value={quickEntryText}
+            onChange={(e) => setQuickEntryText(e.target.value)}
+            onInput={autoResizeQuickEntry}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submitQuickEntry();
+              }
+            }}
+            disabled={!isAuthenticated}
+          />
+          <button
+            type="submit"
+            className="quick-entry-send"
+            disabled={!isAuthenticated || !quickEntryText.trim()}
+            title="Send"
+            aria-label="Create entry"
+          >
+            ↵
+          </button>
+        </form>
         {loading && (
           <div className="loading font-glow text-vein" role="status" aria-live="polite">
             Loading entries…
@@ -218,7 +301,14 @@ export default function MainPage() {
             <button
               type="button"
               className="add-entry-btn bg-plum text-mist rounded-button font-thread shadow-soft hover:bg-lantern hover:text-ink px-4 py-2 transition-all"
-              onClick={() => setShowModal(true)}
+              onClick={() => {
+                if (query || clusterFilter !== 'all') {
+                  setQuery('');
+                  setClusterFilter('all');
+                } else {
+                  setShowModal(true);
+                }
+              }}
               disabled={!isAuthenticated}
             >
               {query || clusterFilter !== 'all' ? 'Clear filters' : 'Write first entry'}

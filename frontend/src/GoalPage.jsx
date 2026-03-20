@@ -3,34 +3,43 @@ import axios from './api/axiosInstance.js';
 import { AuthContext } from './AuthContext.jsx';
 
 export default function GoalPage() {
-  const { token } = useContext(AuthContext);
+  const { isAuthenticated } = useContext(AuthContext);
   const [goals, setGoals] = useState([]);
   const [newGoal, setNewGoal] = useState({ title: '', description: '', steps: [] });
 
   useEffect(() => {
-    axios.get('/api/goals', {
-      headers: { Authorization: `Bearer ${token}` }
-    }).then((res) => setGoals(res.data));
-  }, [token]);
+    if (!isAuthenticated) {
+      setGoals([]);
+      return;
+    }
+
+    let isMounted = true;
+    axios.get('/api/goals')
+      .then((res) => { if (isMounted) setGoals(Array.isArray(res.data) ? res.data : []); })
+      .catch((err) => { console.error('Failed to load goals', err); if (isMounted) setGoals([]); });
+
+    return () => { isMounted = false; };
+  }, [isAuthenticated]);
 
   const handleCreate = async () => {
-    await axios.post('/api/goals', newGoal, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    setNewGoal({ title: '', description: '', steps: [] });
-    const updated = await axios.get('/api/goals', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    setGoals(updated.data);
+    if (!isAuthenticated) return;
+    try {
+      const { data } = await axios.post('/api/goals', newGoal);
+      setNewGoal({ title: '', description: '', steps: [] });
+      setGoals((prev) => [data, ...prev]);
+    } catch (error) {
+      console.error('Failed to create goal', error);
+    }
   };
 
   const toggleStep = async (goalId, stepIndex) => {
-    const goal = goals.find(g => g._id === goalId);
-    goal.steps[stepIndex].completed = !goal.steps[stepIndex].completed;
-    await axios.put(`/api/goals/${goalId}`, goal, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    setGoals([...goals]);
+    if (!isAuthenticated) return;
+    try {
+      const { data } = await axios.patch(`/api/goals/${goalId}/step/${stepIndex}`, {});
+      setGoals((prev) => prev.map((g) => (g._id === goalId ? data : g)));
+    } catch (error) {
+      console.error('Failed to toggle goal step', error);
+    }
   };
 
   return (

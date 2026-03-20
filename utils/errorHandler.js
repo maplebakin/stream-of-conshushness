@@ -15,12 +15,11 @@ export function sanitizeError(error, context = '') {
     console.error('Error:', error);
   }
 
-  // Return safe message to client
+  // Return safe message to client — never include stack traces in HTTP responses
   if (isDev) {
     return {
       error: error.message || 'An error occurred',
       context: context || undefined,
-      stack: error.stack?.split('\n').slice(0, 3).join('\n') // First 3 lines of stack
     };
   }
 
@@ -82,6 +81,26 @@ export const errorResponses = {
   }
 };
 
+const REDACT_KEYS = ['password', 'token', 'secret', 'authorization', 'pass', 'jwt', 'reset'];
+function shouldRedact(key = '') {
+  const lower = String(key).toLowerCase();
+  return REDACT_KEYS.some((needle) => lower.includes(needle));
+}
+function redactValue(value, depth = 0) {
+  if (depth > 2) return '[redacted]';
+  if (Array.isArray(value)) {
+    return value.map((item) => redactValue(item, depth + 1));
+  }
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [key, val] of Object.entries(value)) {
+      out[key] = shouldRedact(key) ? '[redacted]' : redactValue(val, depth + 1);
+    }
+    return out;
+  }
+  return value;
+}
+
 /**
  * Express error handling middleware
  * Place this at the end of your middleware stack
@@ -93,8 +112,8 @@ export function globalErrorHandler(err, req, res, next) {
     stack: err.stack,
     path: req.path,
     method: req.method,
-    body: req.body,
-    query: req.query
+    body: redactValue(req.body),
+    query: redactValue(req.query)
   });
 
   // Determine status code

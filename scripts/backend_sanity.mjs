@@ -12,9 +12,9 @@ const endpoints = [
   '/api/notes',
   '/api/sections',
   '/api/section-pages',
-  '/api/games',
   '/api/habits',
-  '/graphql'
+  '/api/clusters',
+  '/api/suggested-tasks',
 ];
 
 const timeout = (ms) => new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms));
@@ -23,16 +23,11 @@ async function hit(path, auth = false, method = 'GET') {
   const url = `${API_BASE}${path}`;
   const headers = {};
   if (auth && TOKEN) headers.Authorization = `Bearer ${TOKEN}`;
-  if (path === '/graphql' && method === 'POST') headers['Content-Type'] = 'application/json';
-
-  const body = path === '/graphql' && method === 'POST'
-    ? JSON.stringify({ query: '{ __typename }' })
-    : undefined;
 
   const controller = new AbortController();
   const started = Date.now();
 
-  const p = fetch(url, { method, headers, body, signal: controller.signal })
+  const p = fetch(url, { method, headers, signal: controller.signal })
     .then(async (r) => ({
       url, status: r.status, ok: r.ok, ms: Date.now() - started
     }))
@@ -63,9 +58,8 @@ function verdict(r) {
 
   const rows = [];
   for (const ep of endpoints) {
-    const method = ep === '/graphql' ? 'POST' : 'GET';
-    const unauth = await hit(ep, false, method);
-    const withAuth = TOKEN ? await hit(ep, true, method) : null;
+    const unauth = await hit(ep, false);
+    const withAuth = TOKEN ? await hit(ep, true) : null;
     rows.push({ ep, unauth, withAuth });
   }
 
