@@ -33,6 +33,7 @@ import ExportData from './pages/ExportData.jsx';
 import GlobalSearch from './pages/GlobalSearch.jsx';
 import HabitAnalytics from './pages/HabitAnalytics.jsx';
 import TrashPage from './pages/TrashPage.jsx';
+import ResearchSectionPage from './pages/ResearchSectionPage.jsx';
 
 // Auth / Search / Theme / Toast Contexts
 import { AuthProvider, AuthContext } from './AuthContext.jsx';
@@ -97,6 +98,9 @@ function AppRoutes() {
           <Route path="/sections/:key" element={<SectionPage />} />            {/* section detail */}
           <Route path="/sections/:sectionSlug/:pageSlug" element={<SectionPageRoom />} />             {/* room default -> journal */}
           <Route path="/sections/:sectionSlug/:pageSlug/:tab" element={<SectionPageRoom />} />        {/* room tabbed */}
+
+          {/* Research projects */}
+          <Route path="/research/:sectionKey" element={<ResearchSectionPage />} />
 
           {/* Clusters */}
           <Route path="/clusters" element={<ClustersIndex />} />

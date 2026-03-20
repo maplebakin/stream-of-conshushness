@@ -12,6 +12,7 @@ const sectionSchema = new Schema(
     icon:        { type: String, default: '' },
     theme:       { type: Schema.Types.Mixed, default: () => ({}) },
     layout:      { type: String, enum: ['flow', 'grid', 'kanban', 'tree'], default: 'flow' },
+    type:        { type: String, enum: ['journal', 'research', 'wiki'], default: 'journal' },
     public:      { type: Boolean, default: false },
   },
   { timestamps: true }

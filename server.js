@@ -39,6 +39,7 @@ import uploadRouter from "./utils/upload.js";
 import adminRoutes from "./routes/admin.js";
 import exportRoutes from "./routes/export.js";
 import searchRoutes from "./routes/search.js";
+import researchRoutes from "./routes/research.js";
 import Ripple from "./models/Ripple.js";
 
 /* ───────────── Compat (ESM) ───────────── */
@@ -174,6 +175,7 @@ app.use("/api/upload", auth, uploadRouter);
 app.use("/api/admin", auth, adminRoutes);
 app.use("/api/export", auth, exportRoutes);
 app.use("/api/search", auth, searchRoutes);
+app.use("/api/research", auth, researchRoutes);
 
 
 // ── Dev route inspector (shows full mount paths, supports arrays) ─────────────

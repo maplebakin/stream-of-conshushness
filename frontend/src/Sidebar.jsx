@@ -23,7 +23,8 @@ function normalizeSections(raw) {
       const emoji = s.icon || s.emoji || '';
       const pinned = !!s.pinned;
       const order = Number.isFinite(s.order) ? s.order : 0;
-      return { key, label, emoji, pinned, order };
+      const type = s.type || 'journal';
+      return { key, label, emoji, pinned, order, type };
     })
     .filter((s) => s.key) // drop invalid
     // Sort: pinned first, then by order, then A→Z
@@ -118,8 +119,11 @@ export default function Sidebar() {
         ) : (
           <ul className="section-list">
             {filtered.map((s) => {
-              const path = `/sections/${encodeURIComponent(s.key)}`;
+              const path = s.type === 'research'
+                ? `/research/${encodeURIComponent(s.key)}`
+                : `/sections/${encodeURIComponent(s.key)}`;
               const active = isActive(path);
+              const defaultEmoji = s.type === 'research' ? '🔬' : '📚';
               return (
                 <li key={s.key}>
                   <Link
@@ -129,7 +133,7 @@ export default function Sidebar() {
                     title={s.label}
                   >
                     <span style={{ marginRight: 6 }}>
-                      {s.emoji || '📚'}
+                      {s.emoji || defaultEmoji}
                     </span>
                     <span>{s.label}</span>
                   </Link>
