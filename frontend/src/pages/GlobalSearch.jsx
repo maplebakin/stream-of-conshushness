@@ -125,10 +125,12 @@ export default function GlobalSearch() {
     return colors[itemType] || '#6B7280';
   };
 
+  const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
   const highlightMatch = (text, query) => {
     if (!text || !query) return text;
 
-    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    const parts = text.split(new RegExp(`(${escapeRegExp(query)})`, 'gi'));
     return parts.map((part, i) =>
       part.toLowerCase() === query.toLowerCase() ? (
         <mark key={i} style={{ background: '#fef08a', padding: '2px 4px', borderRadius: '2px' }}>

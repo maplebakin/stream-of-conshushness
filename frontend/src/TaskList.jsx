@@ -84,6 +84,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
   const [selectedTasks, setSelectedTasks] = useState(new Set());
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
+
   async function fetchInboxCount() {
     const { data } = await axios.get('/api/tasks?view=inbox&countOnly=1', { headers: authHeaders });
     setInboxCount(data?.count || 0);

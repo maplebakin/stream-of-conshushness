@@ -54,8 +54,10 @@ r.get('/upcoming/list', async (req, res) => {
 r.get('/:ym', async (req, res) => {
   const userId = req.user.userId;
   const ym = req.params.ym;
+  const [year, month] = ym.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const from = `${ym}-01`;
-  const to   = `${ym}-31`;
+  const to   = `${ym}-${String(lastDay).padStart(2, '0')}`;
   const [tasks, appts, events] = await Promise.all([
     Task.find({ userId, dueDate: { $gte: from, $lte: to } }, 'dueDate'),
     Appointment.find({ userId, date: { $gte: from, $lte: to } }, 'date'),

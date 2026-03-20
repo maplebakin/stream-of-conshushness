@@ -50,6 +50,7 @@ export default function InboxTasksPage() {
     try {
       const res = await axios.get('/api/tasks', { headers });
       setAllTasks(normalizeTasks(res));
+      setSelected(new Set());
     } catch (e) {
       console.error('[InboxTasks] load failed', e?.response?.data || e);
       setErr(e?.response?.data?.error || 'Failed to load tasks.');
@@ -126,7 +127,12 @@ export default function InboxTasksPage() {
     setBusyIds(s => new Set(s).add(id));
     try {
       const { data } = await axios.patch(`/api/tasks/${id}/toggle`, null, { headers });
-      setAllTasks(ts => ts.map(t => t._id === id ? { ...t, completed: data?.completed ?? !t.completed } : t));
+      setAllTasks(ts => ts.map(t => {
+        if (t._id !== id) return t;
+        const normalized = data?.task ? normalizeTasks([data.task])[0] : null;
+        if (normalized) return { ...t, ...normalized };
+        return { ...t, completed: !t.completed };
+      }));
     } catch (e) {
       console.warn('[InboxTasks] toggle failed', e?.response?.data || e);
     } finally {
@@ -180,7 +186,7 @@ export default function InboxTasksPage() {
           <button className="btn" disabled={!anySelected} onClick={()=>bulkSetDate(selected, bulkDate || null)}>
             {bulkDate ? 'Set date' : 'Clear date'}
           </button>
-          <button className="btn ghost" onClick={load}>Refresh</button>
+          <button className="btn ghost" onClick={()=>{ setSelected(new Set()); load(); }}>Refresh</button>
         </div>
       </header>
 

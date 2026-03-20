@@ -91,7 +91,7 @@ app.get('/api/note/:date(\\d{4}-\\d{2}-\\d{2})', auth, async (req, res) => {
     return res.json({ ok: true, item: item || null, content: item?.content || '' });
   } catch (e) {
     console.error('[note-by-date shim] failed:', e);
-    return res.json({ ok: true, item: null, content: '' });
+    return res.status(500).json({ error: 'note lookup failed', detail: e.message });
   }
 });
 
@@ -99,12 +99,12 @@ app.get('/api/note', auth, async (req, res) => {
   try {
     const userId = req.user.userId;
     const date = (req.query?.date || '').toString().trim();
-  if (!date) return res.json({ ok: true, item: null, content: '' });
+    if (!date) return res.json({ ok: true, item: null, content: '' });
     const item = await Note.findOne({ userId, date }).lean();
     return res.json({ ok: true, item: item || null, content: item?.content || '' });
   } catch (e) {
     console.error('[note-by-query shim] failed:', e);
-    return res.json({ ok: true, item: null, content: '' });
+    return res.status(500).json({ error: 'note lookup failed', detail: e.message });
   }
 });
 
@@ -269,18 +269,21 @@ if (hasDist) {
 /* ───────────── Error Handling ───────────── */
 app.use(globalErrorHandler);
 
-/* ───────────── MongoDB Connection ───────────── */
-(async () => {
-  try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log("✅ Connected to MongoDB");
-  } catch (err) {
-    console.error("❌ MongoDB connection error:", err);
-    process.exit(1);
-  }
-})();
+export default app;
 
-/* ───────────── Start Server ───────────── */
-app.listen(PORT, () => {
-  console.log(`🌿 Listening on http://localhost:${PORT}`);
-});
+/* ───────────── MongoDB Connection ───────────── */
+if (process.env.NODE_ENV !== "test") {
+  (async () => {
+    try {
+      await mongoose.connect(process.env.MONGODB_URI);
+      console.log("✅ Connected to MongoDB");
+    } catch (err) {
+      console.error("❌ MongoDB connection error:", err);
+    }
+  })();
+
+  /* ───────────── Start Server ───────────── */
+  app.listen(PORT, () => {
+    console.log(`🌿 Listening on http://localhost:${PORT}`);
+  });
+}

@@ -186,8 +186,8 @@ r.get('/note', async (req, res) => {
 
 /* ─── SCHEDULE / CALENDAR redirects ─────────────────────────────────── */
 r.get('/schedule/:date', (req, res) => {
-  const q = new URLSearchParams({ date: req.params.date }).toString();
-  return res.redirect(307, `/api/schedule?${q}`);
+  const { date } = req.params;
+  return res.redirect(307, `/api/schedule/${encodeURIComponent(date)}`);
 });
 
 r.get('/calendar/upcoming/list', (req, res) => {
@@ -195,13 +195,12 @@ r.get('/calendar/upcoming/list', (req, res) => {
   return res.redirect(307, `/api/calendar/upcoming/list?${q}`);
 });
 
-/* ─── AUTH legacy passthroughs (commented out to avoid duplicates) ────────────────────────────────────── */
-// These are commented out to avoid creating duplicate routes
-// r.post('/login',        expressJsonReplay(() => ({ url: '/api/auth/login',           body: {} })));
-// r.post('/register',     expressJsonReplay(() => ({ url: '/api/auth/register',        body: {} })));
-// r.post('/forgot',       expressJsonReplay(() => ({ url: '/api/auth/forgot',          body: {} })));
-// r.post('/reset',        expressJsonReplay(() => ({ url: '/api/auth/reset',           body: {} })));
-// r.get('/change-password',  (_req,res)=>res.status(405).json({error:'use POST /api/auth/change-password'}));
-// r.post('/change-password', expressJsonReplay(() => ({ url: '/api/auth/change-password', body: {} })));
+/* ─── AUTH legacy passthroughs ──────────────────────────────────────── */
+r.post('/login',        expressJsonReplay((req) => ({ url: '/api/auth/login',           body: req.body })));
+r.post('/register',     expressJsonReplay((req) => ({ url: '/api/auth/register',        body: req.body })));
+r.post('/forgot',       expressJsonReplay((req) => ({ url: '/api/auth/forgot',          body: req.body })));
+r.post('/reset',        expressJsonReplay((req) => ({ url: '/api/auth/reset',           body: req.body })));
+r.get('/change-password',  (_req,res)=>res.status(405).json({error:'use POST /api/auth/change-password'}));
+r.post('/change-password', expressJsonReplay((req) => ({ url: '/api/auth/change-password', body: req.body })));
 
 export default r;

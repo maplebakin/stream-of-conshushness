@@ -21,8 +21,14 @@ router.post('/', auth, async (req, res) => {
   const { title, description, imageUrl } = req.body;
   const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
+  const userId = getUserId(req);
+  const existingSlug = await Game.exists({ userId, slug });
+  if (existingSlug) {
+    return res.status(409).json({ error: 'You already have a game with this slug' });
+  }
+
   const game = new Game({
-    userId: getUserId(req),
+    userId,
     title,
     slug,
     description: description || '',

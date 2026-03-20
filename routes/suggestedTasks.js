@@ -3,12 +3,10 @@ import express from 'express';
 import mongoose from 'mongoose';
 import SuggestedTask from '../models/SuggestedTask.js';
 import Task from '../models/Task.js';
-import auth from '../middleware/auth.js';
 import { resolveClusterIdForOwner } from '../utils/clusterIds.js';
 
 const router = express.Router();
 const { ObjectId } = mongoose.Types;
-router.use(auth);
 
 const isYMD = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 const toDateString = (value) => {
@@ -60,14 +58,12 @@ router.put('/:id/accept', async (req, res) => {
     const task = await Task.create({
       userId,
       title: sug.title,
-      notes,
-      dueDate,
       priority,
+      dueDate,
+      rrule: sug.repeat || sug.rrule || '',
       clusters,
-      sections,
-      rrule: '',
-      completed: false,
-      status: 'todo',
+      ...(sections.length ? { sections } : {}),
+      ...(notes ? { notes } : {}),
     });
 
     sug.status = 'accepted';

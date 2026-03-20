@@ -56,6 +56,21 @@ const ok = (res, payload = {}) => res.json({ ok: true, ...payload });
 const fail = (res, code, message) => res.status(code).json({ error: message });
 const escapeRegex = (s = '') => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+function serializeUser(user) {
+  if (!user) return null;
+  return {
+    id: user._id,
+    username: user.username,
+    email: user.email,
+    pendingEmail: user.pendingEmail,
+    isAdmin: user.isAdmin,
+    profilePicture: user.profilePicture,
+    emailVerified: !!user.emailVerifiedAt,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+}
+
 function isEmail(s = '') {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
 }
@@ -354,10 +369,11 @@ router.post('/admin/reset-password', auth, passwordResetLimiter, async (req, res
 // GET /api/me
 router.get('/me', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId)
-      .select('_id username email isAdmin profilePicture createdAt updatedAt');
+    const user = await User.findById(req.user.userId).select(
+      '_id username email pendingEmail isAdmin profilePicture emailVerifiedAt createdAt updatedAt'
+    );
     if (!user) return res.status(404).json({ error: 'user not found' });
-    res.json({ ok: true, user });
+    res.json({ ok: true, user: serializeUser(user) });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'me failed' });
@@ -393,13 +409,7 @@ router.patch('/me', auth, async (req, res) => {
     await user.save();
     res.json({
       ok: true,
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        isAdmin: user.isAdmin,
-        profilePicture: user.profilePicture,
-      },
+      user: serializeUser(user),
     });
   } catch (e) {
     console.error(e);
@@ -484,14 +494,7 @@ router.post('/email/verify', auth, async (req, res) => {
     user.emailVerifyCodeExpiry = null;
     await user.save();
 
-    return ok(res, {
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        emailVerified: !!user.emailVerifiedAt,
-      },
-    });
+    return ok(res, { user: serializeUser(user) });
   } catch (e) {
     console.error(e);
     return fail(res, 500, 'email verify failed');

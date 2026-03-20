@@ -17,6 +17,7 @@ import NotesSection from './NotesSection.jsx';
 import { renderSafe } from './utils/safeRender.js';
 import { toDisplayDate, todayISOInToronto, formatHM as formatHMUtil } from './utils/date.js';
 import { toDisplay } from './utils/display.js';
+import { isClustered } from './utils/isClustered.js';
 
 import './Main.css';
 import './dailypage.css';
@@ -129,7 +130,7 @@ export default function DailyPage() {
       let list = Array.isArray(res.data) ? res.data : [];
       list = list.filter(e => entryDateISO(e) === dateISO);
       list = list.filter(entryHasMeaningfulText);
-      if (unassignedOnly) list = list.filter(e => !e?.cluster || e.cluster === '');
+      if (unassignedOnly) list = list.filter(entry => !isClustered(entry));
       setEntries(list);
     } catch (err) {
       console.error('loadEntries error', err?.message || err);
@@ -145,11 +146,14 @@ export default function DailyPage() {
     const stillToday = entryDateISO(updated) === dateISO && entryHasMeaningfulText(updated);
     setEntries(prev => {
       const next = prev.map(e => e._id === updated._id ? updated : e);
-      return stillToday ? next : next.filter(e => e._id !== updated._id);
+      if (!stillToday) {
+        return next.filter(e => e._id !== updated._id);
+      }
+      if (unassignedOnly && isClustered(updated)) {
+        return next.filter(e => e._id !== updated._id);
+      }
+      return next;
     });
-    if (stillToday && unassignedOnly && updated.cluster && updated.cluster !== '') {
-      setEntries(prev => prev.filter(e => e._id !== updated._id));
-    }
   }
   function handleTaskCreated() {
     setTaskListKey(k => k + 1);

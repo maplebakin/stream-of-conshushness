@@ -1,6 +1,7 @@
 import { test, expect } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const BINARY_EXTENSIONS = new Set([
   ".png",
