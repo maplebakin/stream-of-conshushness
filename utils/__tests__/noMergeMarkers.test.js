@@ -1,7 +1,5 @@
-import test from "node:test";
-import assert from "node:assert/strict";
-import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { test, expect } from "vitest";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const BINARY_EXTENSIONS = new Set([
@@ -13,31 +11,50 @@ const BINARY_EXTENSIONS = new Set([
   ".ico",
   ".bmp",
 ]);
+const SKIP_DIRS = new Set([".git", "node_modules", "dist", "coverage"]);
+
+function listFiles(root, dir = ".") {
+  const absDir = path.join(root, dir);
+  const entries = readdirSync(absDir, { withFileTypes: true });
+  const out = [];
+  for (const entry of entries) {
+    if (entry.name.startsWith(".") && entry.name !== ".env.example") {
+      if (entry.name !== ".github") continue;
+    }
+    if (SKIP_DIRS.has(entry.name)) continue;
+
+    const relPath = path.join(dir, entry.name);
+    const absPath = path.join(root, relPath);
+    if (entry.isDirectory()) {
+      out.push(...listFiles(root, relPath));
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    out.push({ relPath, absPath });
+  }
+  return out;
+}
 
 test("repository contains no merge conflict markers", () => {
-  const root = execSync("git rev-parse --show-toplevel", { encoding: "utf8" }).trim();
-  const files = execSync("git ls-files", { encoding: "utf8" })
-    .split("\n")
-    .map((f) => f.trim())
-    .filter(Boolean);
+  const root = process.cwd();
+  const files = listFiles(root);
 
   const offenders = [];
 
-  for (const file of files) {
-    const ext = path.extname(file).toLowerCase();
+  for (const { relPath, absPath } of files) {
+    const ext = path.extname(relPath).toLowerCase();
     if (BINARY_EXTENSIONS.has(ext)) continue;
 
-    const contents = readFileSync(path.join(root, file), "utf8");
-    if (contents.includes("<<<<<<<") || contents.includes(">>>>>>>")) {
-      offenders.push(file);
+    const contents = readFileSync(absPath, "utf8");
+    if (/^(<{7}(?: .*)?$|={7}$|>{7}(?: .*)?$)/m.test(contents)) {
+      offenders.push(relPath);
     }
   }
 
-  assert.strictEqual(
+  expect(
     offenders.length,
-    0,
     offenders.length
       ? `Merge conflict markers found in: ${offenders.join(", ")}`
       : "Expected no merge conflict markers"
-  );
+  ).toBe(0);
 });

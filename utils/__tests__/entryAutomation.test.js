@@ -1,5 +1,4 @@
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
+import { test, expect } from 'vitest';
 
 import { __testables } from '../entryAutomation.js';
 
@@ -20,14 +19,14 @@ const normalizeCases = [
 
 test('normalizeOptionalString trims strings and clears non-strings', () => {
   for (const [input, expected] of normalizeCases) {
-    assert.equal(normalizeOptionalString(input), expected);
+    expect(normalizeOptionalString(input)).toBe(expected);
   }
 });
 
 test('buildSuggestedTasks tolerates missing options', () => {
-  assert.deepEqual(buildSuggestedTasks(), []);
-  assert.deepEqual(buildSuggestedTasks(null), []);
-  assert.deepEqual(buildSuggestedTasks({}), []);
+  expect(buildSuggestedTasks()).toEqual([]);
+  expect(buildSuggestedTasks(null)).toEqual([]);
+  expect(buildSuggestedTasks({})).toEqual([]);
 });
 
 test('buildSuggestedTasks preserves provided cluster and section', () => {
@@ -38,9 +37,9 @@ test('buildSuggestedTasks preserves provided cluster and section', () => {
     section: 'wellness',
   });
 
-  assert.equal(tasks.length, 1);
-  assert.equal(tasks[0].cluster, 'health');
-  assert.equal(tasks[0].section, 'wellness');
+  expect(tasks.length).toBe(1);
+  expect(tasks[0].cluster).toBe('health');
+  expect(tasks[0].section).toBe('wellness');
 });
 
 test('buildSuggestedTasks normalizes non-string cluster and section values', () => {
@@ -51,7 +50,7 @@ test('buildSuggestedTasks normalizes non-string cluster and section values', () 
     section: 99,
   });
 
-  assert.equal(tasks.length, 1);
-  assert.equal(tasks[0].cluster, '');
-  assert.equal(tasks[0].section, '');
+  expect(tasks.length).toBe(1);
+  expect(tasks[0].cluster).toBe('');
+  expect(tasks[0].section).toBe('');
 });
