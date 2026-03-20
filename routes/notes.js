@@ -94,7 +94,9 @@ router.post('/', async (req, res) => {
     const created = await Note.create(doc);
     return res.status(201).json({ ok: true, item: created });
   } catch (e) {
-    if (IS_PROD) return res.status(400).json({ error: 'note create failed', detail: e.message });
+    if (IS_PROD || !DEV_FALLBACKS) {
+      return res.status(400).json({ error: 'note create failed', detail: e.message });
+    }
     try {
       const coll = mongoose.connection.collection(Note?.collection?.name || 'notes');
       const r = await coll.insertOne({ ...doc, createdAt: new Date(), updatedAt: new Date() });
@@ -109,8 +111,9 @@ router.post('/', async (req, res) => {
 
 /* ---------- DATE BRIDGES (fixes FE calls to /api/note/:date) ---------- */
 /**
-// GET /api/notes/:date (YYYY-MM-DD)
-// Return 200 with { ok:true, item:null } if not found (quiet UI)
+ * GET /api/notes/:date (YYYY-MM-DD)
+ * Return 200 with { ok:true, item:null } if not found (quiet UI)
+ */
 router.get('/:date(\\d{4}-\\d{2}-\\d{2})', async (req, res) => {
   try {
     const userId = req.user?.userId;

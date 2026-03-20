@@ -16,6 +16,8 @@ const RippleSchema = new mongoose.Schema(
       index: true,
     },
     source: { type: String, default: 'analyze' }, // free text: 'analyze', 'manual', etc.
+    type: { type: String, default: '' },           // e.g. 'suggestedTask', 'appointment', etc.
+    meta: { type: mongoose.Schema.Types.Mixed, default: {} }, // stores dueDate, recurrence, etc.
   },
   { timestamps: true }
 );

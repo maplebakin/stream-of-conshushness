@@ -12,7 +12,13 @@ const lower = (s) => toStr(s).toLowerCase();
 const uniq = (arr) => [...new Set(arr)];
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const tokens = (s) => lower(stripHTML(s)).match(/[a-z0-9#@]+(?:'[a-z]+)?/g) || [];
-const includesWord = (s, w) => new RegExp(`\\b${w}\\b`, 'i').test(s);
+const escapeRegex = (s = '') => toStr(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const includesWord = (s, w) => {
+  const phrase = lower(toStr(w)).trim();
+  if (!phrase) return false;
+  const escaped = escapeRegex(phrase).replace(/\s+/g, '\\s+');
+  return new RegExp(`(^|[^a-z0-9])${escaped}($|[^a-z0-9])`, 'i').test(lower(toStr(s)));
+};
 
 // date/time helpers
 const ymd = (d) => {
@@ -69,6 +75,10 @@ const MAYBE_WORDS   = ['maybe','might','possibly','someday'];
 const TIME_IMMEDIATE = ['today','now','asap','immediately','right away','tonight','this morning','this afternoon','this evening'];
 const TIME_SOON      = ['tomorrow','soon','this week','by friday','by monday','over the weekend'];
 const TIME_LATER     = ['next week','next month','eventually','someday','later'];
+const TAG_STOPWORDS = new Set([
+  'a', 'an', 'and', 'the', 'to', 'for', 'of', 'in', 'on', 'at', 'from', 'with',
+  'today', 'tomorrow', 'week', 'month'
+]);
 
 /* ---------------- exports: analyzers used elsewhere ---------------- */
 export function analyzeMood(text = '') {
@@ -159,7 +169,7 @@ export function calculateConfidence(match, type) {
 /* ---------------- local helpers ---------------- */
 function gatherHashtags(text) {
   const m = toStr(text).match(/(^|\s)#([a-z0-9_-]{2,30})\b/gi) || [];
-  return m.map(s => s.replace(/^.*#/, '').toLowerCase());
+  return m.map((s) => sanitizeTag(s.replace(/^.*#/, ''))).filter(Boolean);
 }
 
 function gatherBracketTags(text) {
@@ -168,9 +178,22 @@ function gatherBracketTags(text) {
   const re = /[\[\{]([a-z0-9 _-]{2,30})[\]\}]/gi;
   let m;
   while ((m = re.exec(text))) {
-    out.push(m[1].trim().toLowerCase().replace(/\s+/g, '-'));
+    const tag = sanitizeTag(m[1]);
+    if (tag) out.push(tag);
   }
   return out;
+}
+
+function sanitizeTag(raw) {
+  const cleaned = lower(toStr(raw))
+    .replace(/[_\s]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  if (!cleaned || cleaned.length < 2 || cleaned.length > 30) return null;
+  if (!/[a-z]/.test(cleaned)) return null;
+  if (TAG_STOPWORDS.has(cleaned)) return null;
+  return cleaned;
 }
 
 function guessTagsFromKeywords(text) {
@@ -185,10 +208,13 @@ function guessTagsFromKeywords(text) {
 function guessClusters(text) {
   const t = lower(stripHTML(text));
   const hits = [];
+  const tTokens = tokens(t);
   Object.entries(CLUSTER_HINTS).forEach(([cluster, keys]) => {
     // require at least 2 distinct hits to avoid overfiring (except exact name)
     const count = keys.reduce((acc, k) => acc + (includesWord(t, k) ? 1 : 0), 0);
-    if (includesWord(t, cluster) || count >= 2) hits.push(cluster);
+    const explicitCluster = includesWord(t, cluster);
+    const enoughContext = tTokens.length >= 4;
+    if (explicitCluster || (enoughContext && count >= 2)) hits.push(cluster);
   });
   return hits;
 }
@@ -208,20 +234,61 @@ function extractWhen(text, baseDate = new Date()) {
   for (const p of parsed) {
     const start = p.start?.date?.();
     if (!start) continue;
-    const title = (clean.slice(0, p.index).trim() || clean.trim()).replace(/\s+/g, " ");
+    const title = deriveEventTitle(clean, p);
+    if (!title) continue;
     const item = { title, date: ymd(start) };
-    const hour = p.start.get("hour");
-    if (typeof hour === "number") item.timeStart = hhmm(start);
+    if (p.start?.isCertain?.("hour")) item.timeStart = hhmm(start);
     out.push(item);
   }
 
   // de-dup by title|date
   const uniqMap = new Map();
   for (const ev of out) {
-    const key = `${ev.title.toLowerCase()}|${ev.date}`;
+    const key = `${ev.title.toLowerCase()}|${ev.date}|${ev.timeStart || ''}`;
     if (!uniqMap.has(key)) uniqMap.set(key, ev);
   }
   return [...uniqMap.values()];
+}
+
+function deriveEventTitle(clean, parsedHit) {
+  if (!clean || !parsedHit) return '';
+  const sentence = sentenceAroundIndex(clean, parsedHit.index);
+  const hitText = toStr(parsedHit.text || '').trim();
+  let title = sentence;
+
+  if (hitText) {
+    const hitRe = new RegExp(`\\b${escapeRegex(hitText).replace(/\s+/g, '\\s+')}\\b`, 'i');
+    title = title.replace(hitRe, ' ');
+  }
+
+  title = title
+    .replace(/\b(on|at|by|before|after|around|during)\s*$/i, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^[,;:\-\s]+|[,;:\-\s]+$/g, '')
+    .trim();
+
+  if (!title) {
+    title = clean
+      .slice(0, Math.max(0, parsedHit.index))
+      .split(/[.!?\n]/)
+      .pop()
+      ?.replace(/\s+/g, ' ')
+      .trim() || '';
+  }
+
+  if (title.length > 120) title = `${title.slice(0, 117).trim()}...`;
+  return title;
+}
+
+function sentenceAroundIndex(text, idx) {
+  const input = toStr(text);
+  let start = Math.max(0, Math.min(idx, input.length));
+  let end = start;
+
+  while (start > 0 && !/[.!?\n]/.test(input[start - 1])) start -= 1;
+  while (end < input.length && !/[.!?\n]/.test(input[end])) end += 1;
+
+  return input.slice(start, end).replace(/\s+/g, ' ').trim();
 }
 
 /* ---------------- default export ---------------- */
@@ -278,13 +345,17 @@ export default function suggestMetadata(content, baseDate = new Date()) {
 
   // 7) Overall confidence (soft heuristic)
   let conf = 0;
-  if (tagsExplicit.length) conf += 0.3;
-  if (moods.length)        conf += 0.2;
-  if (clusters.length)     conf += 0.25;
+  if (tagsExplicit.length) conf += Math.min(0.36, tagsExplicit.length * 0.18);
+  if (tagsImplicit.length) conf += Math.min(0.1, tagsImplicit.length * 0.05);
+  if (moods.length)        conf += Math.min(0.2, moods.length * 0.1);
+  if (clusters.length)     conf += Math.min(0.24, clusters.length * 0.12);
+  if (when.length)         conf += Math.min(0.18, when.length * 0.09);
 
   // urgency bumps
   if (PRIORITY_HIGH.some(w => includesWord(textLC, w))) conf += 0.15;
   if (PRIORITY_MED.some(w => includesWord(textLC, w)))  conf += 0.05;
+  if (MAYBE_WORDS.some(w => includesWord(textLC, w)))   conf -= 0.08;
+  if (tok.length >= 8) conf += 0.04;
 
   // hedge if everything is super short/vague
   if (clean.split(/\s+/).length < 4) conf = Math.min(conf, 0.35);
