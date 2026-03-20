@@ -23,8 +23,6 @@
 
 - Frontend cluster views share slug normalization helpers in `frontend/src/utils/clusterHelpers.js`; when working with cluster data, reuse those utilities so slug/name/color/icon handling stays consistent across pages and modals.
 - Shared layout primitives live in `frontend/src/base.css`—classes like `.page`, `.card`, `.pill`, and `.alert` keep contrast and spacing consistent across the app. Prefer using them (or extending them) instead of recreating ad-hoc UI styles.
-=======
- main
 
 ## Frontend Guidelines
 - React components are functional and hook-based. Manage per-page state inside `frontend/src/pages/` and shared UI/state inside `frontend/src/components/` or `frontend/src/contexts/`.
