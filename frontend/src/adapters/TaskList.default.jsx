@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import axios from '../api/axiosInstance.js';
 import { AuthContext } from '../AuthContext.jsx';
 
@@ -17,8 +18,9 @@ function normalizeTask(raw = {}) {
     : raw.section
       ? [String(raw.section)]
       : [];
+  // Preserve cluster objects if they have slug property (populated), otherwise convert to strings
   const clusters = Array.isArray(raw.clusters)
-    ? raw.clusters.map((c) => String(c))
+    ? raw.clusters.map((c) => (typeof c === 'object' && c?.slug) ? c : String(c))
     : raw.cluster
       ? [String(raw.cluster)]
       : [];
@@ -41,7 +43,10 @@ function filterTasks(list, { view, targetDate, section, cluster }) {
     if (section && !(task.sections || []).some((s) => s.toLowerCase() === section.toLowerCase())) {
       return false;
     }
-    if (cluster && !(task.clusters || []).some((c) => c.toLowerCase() === cluster.toLowerCase())) {
+    if (cluster && !(task.clusters || []).some((c) => {
+      const clusterStr = typeof c === 'object' ? (c.name || c.slug || '') : String(c);
+      return clusterStr.toLowerCase() === cluster.toLowerCase();
+    })) {
       return false;
     }
 
@@ -212,7 +217,25 @@ export default function TaskList({
                 )}
                 <div className="task-meta" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                   {task.dueDate && <span className="pill pill-muted">due {task.dueDate}</span>}
-                  {task.clusters?.length > 0 && <span className="pill">{task.clusters.join(' • ')}</span>}
+                  {task.clusters?.length > 0 && (
+                    <>
+                      {task.clusters.map((c, idx) => (
+                        typeof c === 'object' && c?.slug ? (
+                          <Link
+                            key={idx}
+                            to={`/clusters/${c.slug}`}
+                            className="pill"
+                            style={{ textDecoration: 'none', color: 'inherit' }}
+                            title={`View cluster: ${c.name}`}
+                          >
+                            {c.icon && `${c.icon} `}{c.name}
+                          </Link>
+                        ) : (
+                          <span key={idx} className="pill">{String(c)}</span>
+                        )
+                      ))}
+                    </>
+                  )}
                   {task.sections?.length > 0 && <span className="pill pill-muted">{task.sections.join(' • ')}</span>}
                 </div>
               </div>
