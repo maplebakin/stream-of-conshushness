@@ -23,6 +23,7 @@ export default function CreateSectionModal({ onClose, onCreated }) {
   const [description, setDescription] = useState('');
   const [pinned, setPinned] = useState(true);
   const [order, setOrder] = useState(0);
+  const [type, setType] = useState('journal');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
@@ -37,7 +38,7 @@ export default function CreateSectionModal({ onClose, onCreated }) {
     if (!keyVal.trim()) return setErr('Key is required.');
     setSaving(true);
     try {
-      const payload = { key: keyVal.trim(), label: label.trim(), color, icon, description, pinned, order: +order || 0 };
+      const payload = { key: keyVal.trim(), label: label.trim(), color, icon, description, pinned, order: +order || 0, type };
       const res = await api.post('/api/sections', payload);
       const doc = res?.data || res;
       const created = doc?.data || doc;
@@ -86,6 +87,18 @@ export default function CreateSectionModal({ onClose, onCreated }) {
             <label className="field"><span>Color</span><input type="color" value={color} onChange={e => setColor(e.target.value)} /></label>
             <label className="field"><span>Order</span><input type="number" value={order} onChange={e => setOrder(parseInt(e.target.value, 10))} min={-999} max={999} /></label>
           </div>
+
+          <label className="field">
+            <span>Type</span>
+            <select value={type} onChange={e => setType(e.target.value)}>
+              <option value="journal">📓 Journal (entries, tasks, notes)</option>
+              <option value="research">🔬 Research (genealogy / investigation)</option>
+              <option value="wiki">📖 Wiki (reference pages)</option>
+            </select>
+            {type === 'research' && (
+              <small className="hint">URL: <code>/research/{keyVal || 'key'}</code></small>
+            )}
+          </label>
 
           <label className="field">
             <span>Description</span>

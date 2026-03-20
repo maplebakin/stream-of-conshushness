@@ -28,6 +28,7 @@ function normalizeSection(raw) {
     icon: raw.icon || raw.emoji || DEFAULT_ICON,
     description: typeof raw.description === 'string' ? raw.description : '',
     public: Boolean(raw.public),
+    type: raw.type || 'journal',
     updatedAt: raw.updatedAt || raw.updated_at || raw.modifiedAt || raw.modified_at || null,
   };
 }
@@ -46,6 +47,7 @@ export default function ManageSections() {
   const [newIcon, setNewIcon] = useState(DEFAULT_ICON);
   const [newDescription, setNewDescription] = useState('');
   const [newPublic, setNewPublic] = useState(false);
+  const [newType, setNewType] = useState('journal');
   const [creating, setCreating] = useState(false);
 
   // Edit form state
@@ -55,6 +57,7 @@ export default function ManageSections() {
   const [editIcon, setEditIcon] = useState(DEFAULT_ICON);
   const [editDescription, setEditDescription] = useState('');
   const [editPublic, setEditPublic] = useState(false);
+  const [editType, setEditType] = useState('journal');
   const [saving, setSaving] = useState(false);
 
   const note = useCallback((message) => {
@@ -142,6 +145,7 @@ export default function ManageSections() {
       icon: (newIcon || DEFAULT_ICON).trim() || DEFAULT_ICON,
       description: newDescription.trim(),
       public: newPublic,
+      type: newType,
     };
 
     setCreating(true);
@@ -157,6 +161,7 @@ export default function ManageSections() {
       setNewIcon(DEFAULT_ICON);
       setNewDescription('');
       setNewPublic(false);
+      setNewType('journal');
       note('Section created');
     } catch (error) {
       console.warn('[ManageSections] create failed:', error?.response?.data || error.message);
@@ -173,6 +178,7 @@ export default function ManageSections() {
     setEditIcon(section.icon || DEFAULT_ICON);
     setEditDescription(section.description || '');
     setEditPublic(Boolean(section.public));
+    setEditType(section.type || 'journal');
   }
 
   function cancelEdit() {
@@ -182,6 +188,7 @@ export default function ManageSections() {
     setEditIcon(DEFAULT_ICON);
     setEditDescription('');
     setEditPublic(false);
+    setEditType('journal');
   }
 
   async function handleSaveEdit(event) {
@@ -203,6 +210,7 @@ export default function ManageSections() {
       icon: (editIcon || DEFAULT_ICON).trim() || DEFAULT_ICON,
       description: editDescription.trim(),
       public: editPublic,
+      type: editType,
     };
 
     setSaving(true);
@@ -308,6 +316,20 @@ export default function ManageSections() {
               />
             </div>
 
+            <div className="field">
+              <label htmlFor="new-type">Section type</label>
+              <select
+                id="new-type"
+                className="input"
+                value={newType}
+                onChange={(event) => setNewType(event.target.value)}
+              >
+                <option value="journal">📓 Journal — entries, tasks, notes</option>
+                <option value="research">🔬 Research — genealogy / investigation</option>
+                <option value="wiki">📖 Wiki — reference pages</option>
+              </select>
+            </div>
+
             <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input
                 type="checkbox"
@@ -389,6 +411,20 @@ export default function ManageSections() {
                         />
                       </div>
 
+                      <div className="field">
+                        <label htmlFor="edit-type">Section type</label>
+                        <select
+                          id="edit-type"
+                          className="input"
+                          value={editType}
+                          onChange={(event) => setEditType(event.target.value)}
+                        >
+                          <option value="journal">📓 Journal — entries, tasks, notes</option>
+                          <option value="research">🔬 Research — genealogy / investigation</option>
+                          <option value="wiki">📖 Wiki — reference pages</option>
+                        </select>
+                      </div>
+
                       <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <input
                           type="checkbox"
@@ -430,6 +466,9 @@ export default function ManageSections() {
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                             <strong>{section.title || 'Untitled section'}</strong>
                             {section.public && <span className="pill">Public</span>}
+                            {section.type && section.type !== 'journal' && (
+                              <span className="pill">{section.type === 'research' ? '🔬 Research' : '📖 Wiki'}</span>
+                            )}
                           </div>
                           <span className="muted">Slug: {section.slug || '—'}</span>
                           {section.description && (

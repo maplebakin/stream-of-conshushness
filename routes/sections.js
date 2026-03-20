@@ -95,10 +95,11 @@ router.post('/', async (req, res) => {
     const ownerId = getUserId(req);
     if (!ownerId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const title = String(req.body?.title || '').trim();
+    // Accept title/slug (ManageSections) or label/key (CreateSectionModal)
+    const title = String(req.body?.title || req.body?.label || '').trim();
     if (!title) return res.status(400).json({ error: 'title is required' });
 
-    let slug = sanitizeSlug(req.body?.slug || '');
+    let slug = sanitizeSlug(req.body?.slug || req.body?.key || '');
     if (!slug) {
       slug = sanitizeSlug(title);
     }
@@ -122,6 +123,9 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: err.message });
     }
 
+    const ALLOWED_TYPES = ['journal', 'research', 'wiki'];
+    const type = ALLOWED_TYPES.includes(req.body?.type) ? req.body.type : 'journal';
+
     const payload = {
       ownerId,
       title,
@@ -129,6 +133,7 @@ router.post('/', async (req, res) => {
       description,
       icon,
       public: isPublic,
+      type,
     };
     if (theme !== undefined) payload.theme = theme;
     if (layout) payload.layout = layout;
@@ -303,8 +308,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// PUT /api/sections/:id
-router.put('/:id', async (req, res) => {
+// PUT + PATCH /api/sections/:id
+async function handleSectionUpdate(req, res) {
   try {
     const ownerId = getUserId(req);
     if (!ownerId) return res.status(401).json({ error: 'Unauthorized' });
@@ -357,6 +362,14 @@ router.put('/:id', async (req, res) => {
       }
     }
 
+    if ('type' in req.body) {
+      const ALLOWED_TYPES = ['journal', 'research', 'wiki'];
+      if (!ALLOWED_TYPES.includes(req.body.type)) {
+        return res.status(400).json({ error: `type must be one of: ${ALLOWED_TYPES.join(', ')}` });
+      }
+      update.type = req.body.type;
+    }
+
     if (!Object.keys(update).length) {
       return res.status(400).json({ error: 'No updates supplied' });
     }
@@ -374,10 +387,12 @@ router.put('/:id', async (req, res) => {
     if (err?.code === 11000) {
       return res.status(409).json({ error: 'Section slug already exists for this owner' });
     }
-    console.error('PUT /api/sections/:id error:', err);
+    console.error('PUT/PATCH /api/sections/:id error:', err);
     res.status(500).json({ error: 'Failed to update section' });
   }
-});
+}
+router.put('/:id', handleSectionUpdate);
+router.patch('/:id', handleSectionUpdate);
 
 // DELETE /api/sections/:id
 router.delete('/:id', async (req, res) => {
