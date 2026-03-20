@@ -1,5 +1,5 @@
 // frontend/src/MainPage.jsx
-import React, { useEffect, useState, useContext, useMemo, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useContext, useMemo, useCallback, useRef, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import EntryModal from './EntryModal.jsx';
 import axios from './api/axiosInstance';

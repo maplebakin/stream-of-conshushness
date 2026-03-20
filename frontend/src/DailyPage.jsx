@@ -15,36 +15,20 @@ import HourlySchedule from './HourlySchedule.jsx';
 import NotesSection from './NotesSection.jsx';
 
 import { renderSafe } from './utils/safeRender.js';
-import { toDisplayDate } from './utils/date.js';
+import { toDisplayDate, todayISOInToronto, formatHM as formatHMUtil } from './utils/date.js';
 import { toDisplay } from './utils/display.js';
 
 import './Main.css';
 import './dailypage.css';
 
 /* ---------- Toronto-safe date helpers ---------- */
-function todayISOInToronto() {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Toronto',
-    year: 'numeric', month: '2-digit', day: '2-digit'
-  });
-  const p = fmt.formatToParts(new Date());
-  return `${p.find(x=>x.type==='year').value}-${p.find(x=>x.type==='month').value}-${p.find(x=>x.type==='day').value}`;
-}
 function toISO(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
-function formatHM(hhmm) {
-  if (!hhmm) return null;
-  const [hStr, mStr] = hhmm.split(':');
-  if (hStr == null || mStr == null) return hhmm;
-  const h = Number(hStr), m = Number(mStr);
-  const ampm = h < 12 ? 'AM' : 'PM';
-  const hour12 = ((h % 12) || 12);
-  return `${hour12}:${String(m).padStart(2,'0')} ${ampm}`;
-}
+const formatHM = formatHMUtil;
 
 /* ---------- entry helpers ---------- */
 function isoFromDateLike(val) {
@@ -114,9 +98,7 @@ export default function DailyPage() {
     const last = localStorage.getItem('cf_last_run');
     if (last === todayISO) return;
 
-    axios.post('/api/tasks/carry-forward', null, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    })
+    axios.post('/api/tasks/carry-forward')
     .then(() => {
       localStorage.setItem('cf_last_run', todayISO);
       setTaskListKey(k => k + 1);
@@ -132,9 +114,7 @@ export default function DailyPage() {
 
   async function carryForwardNow() {
     try {
-      await axios.post('/api/tasks/carry-forward', null, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
+      await axios.post('/api/tasks/carry-forward');
       setTaskListKey(k => k + 1);
     } catch (e) {
       console.error('carry-forward failed', e);
@@ -145,9 +125,7 @@ export default function DailyPage() {
     if (!token || !dateISO) return;
     setLoadingEntries(true);
     try {
-      const res = await axios.get(`/api/entries/by-date/${dateISO}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await axios.get(`/api/entries/by-date/${dateISO}`);
       let list = Array.isArray(res.data) ? res.data : [];
       list = list.filter(e => entryDateISO(e) === dateISO);
       list = list.filter(entryHasMeaningfulText);
@@ -181,9 +159,7 @@ export default function DailyPage() {
     if (!token || !dateISO) return;
     setLoadingAgenda(true);
     try {
-      const { data } = await axios.get(`/api/calendar/day/${dateISO}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const { data } = await axios.get(`/api/calendar/day/${dateISO}`);
       setAppointments(Array.isArray(data.appointments) ? data.appointments : []);
       setEvents(Array.isArray(data.events) ? data.events : []);
       setImportant(Array.isArray(data.importantEvents) ? data.importantEvents : []);
@@ -345,6 +321,7 @@ export default function DailyPage() {
                     }, 'EntryQuickAssign')}
 
                     {renderSafe(AnalyzeEntryButton, {
+                      entryId: en._id,
                       text: (typeof en?.text === 'string' ? en.text : ''),
                       date: (en.date || en.dateISO || dateISO),
                       onRipples: () => setRippleListKey(k => k + 1)

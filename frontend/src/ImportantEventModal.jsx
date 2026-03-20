@@ -1,11 +1,8 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from './api/axiosInstance';
-import { AuthContext } from './AuthContext.jsx';
-import './modal.css';   
+import './modal.css';
 
 export default function ImportantEventModal({ date, onClose, onSaved }) {
-  const { token } = useContext(AuthContext);
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
   const [title, setTitle] = useState('');
   const [eventDate, setEventDate] = useState(date || '');
@@ -17,10 +14,10 @@ export default function ImportantEventModal({ date, onClose, onSaved }) {
   // Load entries for that date so the user can link one (optional)
   useEffect(() => {
     if (!eventDate) return;
-    axios.get(`/api/entries/${eventDate}`, { headers })
+    axios.get(`/api/entries/${eventDate}`)
       .then(res => setEntries(res.data || []))
       .catch(() => setEntries([]));
-  }, [eventDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [eventDate]);
 
   async function create(e) {
     e?.preventDefault?.();
@@ -33,7 +30,7 @@ export default function ImportantEventModal({ date, onClose, onSaved }) {
         date: eventDate,
         cluster: cluster || undefined,
         entryId: entryId || undefined
-      }, { headers });
+      });
       onSaved?.();
       onClose?.();
     } catch (err) {

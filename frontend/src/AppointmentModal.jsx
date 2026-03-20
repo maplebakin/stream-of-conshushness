@@ -1,10 +1,9 @@
 // frontend/src/AppointmentModal.jsx
-import React, { useState, useContext } from 'react';
-import './AppointmentModal.css'; // 👈 keep this
-import { AuthContext } from './AuthContext.jsx';
+import React, { useState } from 'react';
+import './AppointmentModal.css';
 import RepeatFields from './components/RepeatFields.jsx';
-// if you have a ClusterPicker already, keep this import; otherwise comment it out
 import ClusterPicker from './components/ClusterPicker.jsx';
+import axios from './api/axiosInstance';
 
 function todayISO() {
   const d = new Date();
@@ -15,7 +14,6 @@ function todayISO() {
 }
 
 export default function AppointmentModal({ onClose, onSaved, defaultCluster = '' }) {
-  const { token } = useContext(AuthContext);
 
   // base fields
   const [title, setTitle] = useState('New Appointment');
@@ -54,19 +52,8 @@ export default function AppointmentModal({ onClose, onSaved, defaultCluster = ''
       body.date = date;
     }
 
-    const res = await fetch('/api/appointments', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify(body)
-    });
-    if (!res.ok) {
-      const e = await res.json().catch(() => ({}));
-      throw new Error(e?.error || 'Failed to create appointment');
-    }
-    return res.json();
+    const { data } = await axios.post('/api/appointments', body);
+    return data;
   }
 
   async function onSubmit(e) {
@@ -76,7 +63,7 @@ export default function AppointmentModal({ onClose, onSaved, defaultCluster = ''
       onSaved?.(appt);
       onClose?.();
     } catch (err) {
-      alert(err.message);
+      console.error('create appointment failed:', err);
     }
   }
 

@@ -1,28 +1,22 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from '../api/axiosInstance';
-import { AuthContext } from '../AuthContext.jsx';
 
 export default function EntryQuickAssign({ entry, onUpdated, onTaskCreated }) {
-  const { token } = useContext(AuthContext);
   const [clusters, setClusters] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let ignore = false;
-    axios.get('/api/clusters', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    axios.get('/api/clusters')
       .then(res => { if (!ignore) setClusters(res.data || []); })
       .catch(() => { if (!ignore) setClusters([]); });
     return () => { ignore = true; };
-  }, [token]);
+  }, []);
 
   async function setCluster(newCluster) {
     setLoading(true);
     try {
-      const res = await axios.patch(`/api/entries/${entry._id}`, { cluster: newCluster }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await axios.patch(`/api/entries/${entry._id}`, { cluster: newCluster });
       onUpdated && onUpdated(res.data);
     } catch (e) {
       console.error('setCluster failed', e);
@@ -35,9 +29,7 @@ export default function EntryQuickAssign({ entry, onUpdated, onTaskCreated }) {
   async function makeTask() {
     setLoading(true);
     try {
-      await axios.post('/api/tasks/from-entry', { entryId: entry._id }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axios.post('/api/tasks/from-entry', { entryId: entry._id });
       onTaskCreated && onTaskCreated();
     } catch (e) {
       console.error('makeTask failed', e);

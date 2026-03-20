@@ -1,25 +1,9 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../AuthContext.jsx';
-
-function useAuthedFetch(token) {
-  return async function authed(path, opts = {}) {
-    const res = await fetch(path, {
-      ...opts,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(opts.headers || {}),
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || `Request failed: ${res.status}`);
-    return data;
-  };
-}
+import axios from '../api/axiosInstance';
 
 export default function AdminPanel() {
-  const { token, user } = useContext(AuthContext);
-  const api = useAuthedFetch(token);
+  const { user } = useContext(AuthContext);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -42,8 +26,8 @@ export default function AdminPanel() {
     let mounted = true;
     (async () => {
       try {
-        const me = await api('/api/admin/me');
-        if (mounted) setIsAdmin(!!me?.user?.isAdmin);
+        const { data } = await axios.get('/api/admin/me');
+        if (mounted) setIsAdmin(!!data?.user?.isAdmin);
       } catch {
         if (mounted) setIsAdmin(false);
       } finally {
@@ -51,7 +35,7 @@ export default function AdminPanel() {
       }
     })();
     return () => { mounted = false; };
-  }, [api]);
+  }, []);
 
   async function loadUsers(reset = true) {
     try {
@@ -61,7 +45,7 @@ export default function AdminPanel() {
       if (!reset && nextCursor) url.searchParams.set('cursor', nextCursor);
       url.searchParams.set('limit', '25');
 
-      const data = await api(url.toString());
+      const { data } = await axios.get(url.toString());
       if (reset) {
         setUsers(data.users || []);
       } else {
@@ -82,10 +66,7 @@ export default function AdminPanel() {
   async function setPasswordFor(id) {
     try {
       const pass = pwMap[id] || '';
-      await api(`/api/admin/users/${id}/password`, {
-        method: 'PUT',
-        body: JSON.stringify({ newPassword: pass }),
-      });
+      await axios.put(`/api/admin/users/${id}/password`, { newPassword: pass });
       setMsg('Password updated.');
       updatePw(id, '');
     } catch (e) {
@@ -95,10 +76,7 @@ export default function AdminPanel() {
 
   async function quickResetByUsername() {
     try {
-      await api('/api/admin/reset-username', {
-        method: 'POST',
-        body: JSON.stringify({ username: targetUser.trim(), newPassword }),
-      });
+      await axios.post('/api/admin/reset-username', { username: targetUser.trim(), newPassword });
       setMsg(`Password updated for ${targetUser.trim()}`);
       setTargetUser('');
       setNewPassword('');
