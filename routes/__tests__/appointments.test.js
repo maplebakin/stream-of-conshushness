@@ -130,6 +130,28 @@ describe('GET /api/appointments date handling', () => {
     expect(res.body).toHaveLength(2);
   });
 
+  it('preserves source entry links on create when entryId is valid', async () => {
+    createMock.mockImplementation(async (doc) => ({ _id: 'appointment-created', ...doc }));
+
+    const res = await request(app)
+      .post('/api/appointments')
+      .send({
+        title: 'Doctor appointment',
+        date: '2024-04-05',
+        timeStart: '15:00',
+        entryId: '507f1f77bcf86cd799439011',
+      });
+
+    expect(res.status).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'user123',
+      title: 'Doctor appointment',
+      date: '2024-04-05',
+      timeStart: '15:00',
+      entryId: '507f1f77bcf86cd799439011',
+    }));
+  });
+
   it('updates an owned one-off appointment', async () => {
     const doc = {
       _id: '507f1f77bcf86cd799439011',

@@ -31,6 +31,7 @@ import noteRoutes from "./routes/notes.js";           // ✅ keep plural, single
 import eventsRouter from "./routes/events.js";
 import scheduleRouter from "./routes/schedule.js";
 import calendarRoutes from "./routes/calendar.js";     // ✅ keep this one
+import horizonRoutes from "./routes/horizon.js";
 
 import ripplesRouter from "./routes/ripples.js";
 import suggestedTaskRoutes from "./routes/suggestedTasks.js";
@@ -162,6 +163,7 @@ app.use("/api/important-events", auth, eventsRouter);
 app.use("/api/events", auth, eventsRouter);
 app.use("/api/schedule", auth, scheduleRouter);
 app.use("/api/calendar", auth, calendarRoutes);
+app.use("/api/horizon", auth, horizonRoutes);
 
 
 /**

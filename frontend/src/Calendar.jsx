@@ -5,12 +5,12 @@ import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import {
   getAppointmentDeleteConfirmation,
-  getAppointmentDetailParts,
   getStoredAppointmentId,
 } from './utils/appointmentIds.js';
 
 import AppointmentModal from './AppointmentModal.jsx';
 import ImportantEventModal from './adapters/ImportantEventModal.default.jsx';
+import OnTheHorizon from './components/OnTheHorizon.jsx';
 
 import './Calendar.css';
 
@@ -36,13 +36,6 @@ function daysInMonth(year, monthIndex) {
 function monthParam(y, mIdx) {
   return `${y}-${String(mIdx + 1).padStart(2, '0')}`; // YYYY-MM
 }
-function countdownLabel(days) {
-  if (days < 0) return null;
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Tomorrow';
-  return `In ${days} days`;
-}
-
 export default function Calendar() {
   const navigate = useNavigate();
   const { token } = useContext(AuthContext);
@@ -67,8 +60,7 @@ export default function Calendar() {
 
   // per-day counts for badges
   const [dayCounts, setDayCounts] = useState({});
-  // sidebar upcoming
-  const [upcoming, setUpcoming] = useState({ appointments: [], events: [], today: tzToday });
+  const [horizonRefreshKey, setHorizonRefreshKey] = useState(0);
 
   // Modals
   const [showApptModal, setShowApptModal] = useState(false);
@@ -85,17 +77,11 @@ export default function Calendar() {
     }
   }, [headers, y, mIdx]);
 
-  const loadUpcoming = useCallback(async () => {
-    try {
-      const { data } = await axios.get(`/api/calendar/upcoming/list?from=${tzToday}`, { headers });
-      setUpcoming(data || { appointments: [], events: [], today: tzToday });
-    } catch {
-      setUpcoming({ appointments: [], events: [], today: tzToday });
-    }
-  }, [headers, tzToday]);
+  const refreshHorizon = useCallback(() => {
+    setHorizonRefreshKey((key) => key + 1);
+  }, []);
 
   useEffect(() => { loadMonth(); }, [loadMonth]);
-  useEffect(() => { loadUpcoming(); }, [loadUpcoming]);
 
   // nav
   function prevMonth() {
@@ -124,7 +110,8 @@ export default function Calendar() {
     if (!id) return;
     if (!window.confirm(getAppointmentDeleteConfirmation(appointment))) return;
     await axios.delete(`/api/appointments/${encodeURIComponent(id)}`, { headers });
-    await Promise.all([loadUpcoming(), loadMonth()]);
+    await loadMonth();
+    refreshHorizon();
   }
 
   const weekLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -134,76 +121,13 @@ export default function Calendar() {
     <main className="calendar-page" style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16 }}>
       {/* Left sidebar — upcoming feed */}
       <aside className="panel" style={{ position: 'sticky', top: 12, alignSelf: 'start', padding: 12 }}>
-        <h3 className="font-thread text-vein" style={{ marginBottom: 8 }}>Upcoming</h3>
-
-        <section style={{ marginBottom: 16 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 6 }}>
-            <h4 className="muted" style={{ margin: 0 }}>Important Events ⭐</h4>
-            <button
-              className="button chip"
-              type="button"
-              onClick={() => setShowEventModal(true)}
-              title="Add important event"
-            >
-              + Add
-            </button>
-          </div>
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
-            {upcoming.events.filter(e => countdownLabel(e.daysUntil)).length === 0 ? (
-              <li className="muted">Nothing soon.</li>
-            ) : (
-              upcoming.events.map(ev => {
-                const label = countdownLabel(ev.daysUntil);
-                if (!label) return null;
-                return (
-                  <li key={ev.id} className="task" style={{ background:'var(--card,#fff)', borderRadius: 12, padding:'8px 10px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                    <span>⭐ {ev.title}</span>
-                    <span className="muted" title={ev.date}>{label}</span>
-                  </li>
-                );
-              })
-            )}
-          </ul>
-        </section>
-
-        <section>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 6 }}>
-            <h4 className="muted" style={{ margin: 0 }}>Appointments 🗓️</h4>
-            <button
-              className="button chip"
-              type="button"
-              onClick={openNewAppointment}
-              title="Add appointment"
-            >
-              + Add
-            </button>
-          </div>
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
-            {upcoming.appointments.filter(a => countdownLabel(a.daysUntil)).length === 0 ? (
-              <li className="muted">Nothing scheduled.</li>
-            ) : (
-              upcoming.appointments.map(ap => {
-                const label = countdownLabel(ap.daysUntil);
-                const detailParts = getAppointmentDetailParts(ap);
-                if (!label) return null;
-                return (
-                  <li key={ap.id} className="task" style={{ background:'var(--card,#fff)', borderRadius: 12, padding:'8px 10px', display:'grid', gap: 4 }}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap: 8 }}>
-                      <span>🗓️ {ap.title}</span>
-                      <span className="muted" title={ap.date}>{label}</span>
-                    </div>
-                    <div className="muted" style={{ fontSize: 13 }}>{detailParts.join(' · ')}</div>
-                    {ap.details && <div className="muted" style={{ fontSize: 13 }}>{ap.details}</div>}
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <button type="button" className="button chip" onClick={() => openEditAppointment(ap)} title="Edit appointment">Edit</button>
-                      <button type="button" className="button chip" onClick={() => deleteAppointment(ap)} title="Delete appointment">Delete</button>
-                    </span>
-                  </li>
-                );
-              })
-            )}
-          </ul>
-        </section>
+        <OnTheHorizon
+          refreshKey={horizonRefreshKey}
+          onAddAppointment={openNewAppointment}
+          onAddEvent={() => setShowEventModal(true)}
+          onEditAppointment={openEditAppointment}
+          onDeleteAppointment={deleteAppointment}
+        />
       </aside>
 
       {/* Main month grid */}
@@ -287,7 +211,7 @@ export default function Calendar() {
           onSaved={() => {
             setShowApptModal(false);
             setEditingAppointment(null);
-            loadUpcoming();
+            refreshHorizon();
             loadMonth();
           }}
         />
@@ -296,7 +220,7 @@ export default function Calendar() {
         <ImportantEventModal
           defaultDate={tzToday}
           onClose={() => setShowEventModal(false)}
-          onSaved={() => { setShowEventModal(false); loadUpcoming(); loadMonth(); }}
+          onSaved={() => { setShowEventModal(false); refreshHorizon(); loadMonth(); }}
         />
       )}
     </main>

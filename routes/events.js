@@ -1,8 +1,10 @@
 // routes/events.js — Important Events CRUD (ESM) with date/pinned filters and alias fields
 import express from "express";
+import mongoose from "mongoose";
 import ImportantEvent from "../models/ImportantEvent.js";
 
 const router = express.Router();
+const { ObjectId } = mongoose.Types;
 
 const isYMD = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
 const toBool = (v) => {
@@ -10,6 +12,7 @@ const toBool = (v) => {
   return s === "1" || s === "true" || s === "yes";
 };
 const trimOr = (v, d = "") => (typeof v === "string" ? v.trim() : d);
+const normalizeEntryId = (v) => (v && ObjectId.isValid(v) ? v : null);
 
 function userIdOf(req) {
   return req.user?.userId || req.user?._id || req.user?.id;
@@ -20,7 +23,7 @@ router.post("/", async (req, res) => {
   try {
     const userId = userIdOf(req);
     // accept both "description" and "details"
-    const { title, date, description, details, cluster, pinned } = req.body || {};
+    const { title, date, description, details, cluster, pinned, entryId } = req.body || {};
     if (!title || !date) return res.status(400).json({ error: "title and date are required (YYYY-MM-DD)" });
     if (!isYMD(date))   return res.status(400).json({ error: "date must be YYYY-MM-DD" });
 
@@ -31,6 +34,7 @@ router.post("/", async (req, res) => {
       description: trimOr(description ?? details ?? ""),
       cluster: cluster || null,
       pinned: !!pinned,
+      entryId: normalizeEntryId(entryId),
     };
 
     // duplicate guard: same user + same date + same exact title
@@ -116,6 +120,7 @@ router.patch("/:id", async (req, res) => {
     }
     if (b.cluster !== undefined) updates.cluster = b.cluster || null;
     if (b.pinned  !== undefined) updates.pinned = !!b.pinned;
+    if (b.entryId !== undefined) updates.entryId = normalizeEntryId(b.entryId);
 
     const ev = await ImportantEvent.findOneAndUpdate(
       { _id: req.params.id, userId },

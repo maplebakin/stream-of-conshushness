@@ -164,16 +164,18 @@ function isGatherOnlyEntry(text = "") {
 /* NLP side effects                                                    */
 /* ------------------------------------------------------------------ */
 
-async function upsertImportantEvent({ userId, title, date, details = "", cluster = null }) {
-  if (!userId || !title || !date) return null;
-  const doc = await ImportantEvent.findOne({ userId, title, date });
+async function upsertImportantEvent({ userId, title, date, details = "", cluster = null, entryId = null }) {
+  const cleanedTitle = cleanCalendarTitle(title) || String(title || "").trim();
+  if (!userId || !cleanedTitle || !date) return null;
+  const doc = await ImportantEvent.findOne({ userId, title: cleanedTitle, date });
   if (doc) return doc;
   return ImportantEvent.create({
     userId,
-    title: String(title).trim(),
+    title: cleanedTitle,
     date,
     description: details || "",
     cluster: cluster || null,
+    ...(entryId ? { entryId } : {}),
     createdAt: new Date(),
   });
 }
@@ -189,12 +191,13 @@ async function upsertAppointment({
   cluster = null,
   entryId = null,
 }) {
-  if (!userId || !title || !date || !timeStart) return null;
-  const existing = await Appointment.findOne({ userId, title, date, timeStart });
+  const cleanedTitle = cleanCalendarTitle(title) || String(title || "").trim();
+  if (!userId || !cleanedTitle || !date || !timeStart) return null;
+  const existing = await Appointment.findOne({ userId, title: cleanedTitle, date, timeStart });
   if (existing) return existing;
   return Appointment.create({
     userId,
-    title: String(title).trim(),
+    title: cleanedTitle,
     date,
     timeStart,
     timeEnd: timeEnd || null,
@@ -220,6 +223,7 @@ async function runNlpSideEffects({ entry, analysis, userId }) {
           date: dateISO,
           details: ev?.details || ev?.description || "",
           cluster: entry.cluster || null,
+          entryId: entry._id,
         });
       }
     }
@@ -248,6 +252,7 @@ async function runNlpSideEffects({ entry, analysis, userId }) {
             date: dateISO,
             details: ap?.details || ap?.notes || "",
             cluster: entry.cluster || null,
+            entryId: entry._id,
           });
         }
       }
@@ -286,7 +291,29 @@ function toISODateString(value) {
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toISOString().slice(0, 10);
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, "0"),
+    String(d.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function cleanCalendarTitle(value = "") {
+  let title = String(value || "")
+    .replace(/[“”]/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+
+  title = title
+    .replace(/^(?:i|we)\s+(?:have|had|got)\s+(?:a|an|the)?\s*/i, "")
+    .replace(/^(?:i|we)['’]ve\s+(?:got\s+)?(?:a|an|the)?\s*/i, "")
+    .replace(/^there(?:'|’)?s\s+(?:a|an|the)?\s*/i, "")
+    .replace(/^(?:a|an|the)\s+/i, "")
+    .replace(/[,:;-]+$/g, "")
+    .trim();
+
+  if (!title) return "";
+  return title.charAt(0).toUpperCase() + title.slice(1);
 }
 
 function parseAppointmentsFromText(text = "", entryDateISO = null) {
@@ -301,7 +328,7 @@ function parseAppointmentsFromText(text = "", entryDateISO = null) {
     const importantEvents = [];
 
     const eventHint = /(birthday|anniversary|holiday|christmas|easter|thanksgiving|new year)/i;
-    const apptHint = /(appointment|dentist|doctor|clinic|meeting|call|pickup|drop[- ]?off|therapy|vet|interview|at\s+[A-Za-z0-9'’.-]+)/i;
+    const apptHint = /(appointment|dentist|doctor|clinic|meeting|call|pickup|drop[- ]?off|therapy|vet|interview)/i;
 
     for (const r of results) {
       const date = r.start?.date?.();
@@ -312,10 +339,10 @@ function parseAppointmentsFromText(text = "", entryDateISO = null) {
       const hasTime = r.start?.isCertain?.("hour") || r.start?.isCertain?.("minute");
       const idx = typeof r.index === "number" ? r.index : raw.toLowerCase().indexOf(String(r.text || "").toLowerCase());
       const titleRaw = idx > 0 ? raw.slice(0, idx).trim() : raw.trim();
-      const title = titleRaw.replace(/[,:-]+$/g, "").trim() || String(r.text || "").trim();
+      const title = cleanCalendarTitle(titleRaw.replace(/[,:-]+$/g, "").trim()) || cleanCalendarTitle(String(r.text || "").trim());
       if (!title) continue;
 
-      if (hasTime || apptHint.test(raw)) {
+      if (hasTime && apptHint.test(raw)) {
         const hh = String(date.getHours()).padStart(2, "0");
         const mm = String(date.getMinutes()).padStart(2, "0");
         appointments.push({ title, date: dateISO, timeStart: `${hh}:${mm}` });
@@ -703,6 +730,7 @@ export async function createEntryWithAutomation({ userId, payload = {} }) {
           date: normalizeDate(ev.date),
           details: ev.details || "",
           cluster: entry.cluster || null,
+          entryId: entry._id,
         });
       }
     }

@@ -1,82 +1,18 @@
 import { Router } from 'express';
 import auth from '../middleware/auth.js';
 import Task from '../models/Task.js';
-import Appointment from '../models/Appointment.js';
 import ImportantEvent from '../models/ImportantEvent.js';
-import { expandDatesInRange } from '../utils/recurrence.js';
+import {
+  addDays,
+  appointmentInstancesInRange,
+  daysBetween,
+  isISODateString,
+} from '../utils/calendarInstances.js';
 
 const r = Router();
 r.use(auth);
 
-function isISO(s) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
-}
-
-function addDays(iso, n) {
-  const d = new Date(`${iso}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return [
-    d.getUTCFullYear(),
-    String(d.getUTCMonth() + 1).padStart(2, '0'),
-    String(d.getUTCDate()).padStart(2, '0'),
-  ].join('-');
-}
-
-function recurringInstance(series, date, userId) {
-  return {
-    _id: `virtual:${series._id}:${date}`,
-    userId,
-    title: series.title,
-    date,
-    rrule: series.rrule,
-    startDate: series.startDate,
-    until: series.until,
-    tz: series.tz || 'America/Toronto',
-    time: series.time || null,
-    timeStart: series.timeStart || null,
-    timeEnd: series.timeEnd || null,
-    location: series.location || '',
-    details: series.details || '',
-    cluster: series.cluster || '',
-    clusters: Array.isArray(series.clusters) ? series.clusters : [],
-    entryId: series.entryId || null,
-    isRecurring: true,
-    seriesId: series._id,
-  };
-}
-
-async function appointmentInstancesInRange(userId, from, to) {
-  const oneOffs = await Appointment.find({
-    userId,
-    date: { $gte: from, $lte: to },
-    rrule: '',
-  });
-
-  const series = await Appointment.find({
-    userId,
-    rrule: { $ne: '' },
-    startDate: { $lte: to },
-    $or: [{ until: null }, { until: { $gte: from } }, { until: '' }],
-  });
-
-  const virtuals = [];
-  for (const item of series) {
-    const expandTo = item.until && item.until < to ? item.until : to;
-    const dates = expandDatesInRange(item.rrule, item.startDate, from, expandTo);
-    for (const date of dates) {
-      virtuals.push(recurringInstance(item, date, userId));
-    }
-  }
-
-  const seen = new Set(oneOffs.map((a) => `${a.date}|${a.timeStart || ''}|${a.title}`));
-  const dedupedVirtuals = virtuals.filter((v) => !seen.has(`${v.date}|${v.timeStart || ''}|${v.title}`));
-
-  return [...oneOffs, ...dedupedVirtuals].sort((a, b) => {
-    const ka = `${a.date || ''}T${a.timeStart || a.time || '99:99'}`;
-    const kb = `${b.date || ''}T${b.timeStart || b.time || '99:99'}`;
-    return ka.localeCompare(kb);
-  });
-}
+const isISO = isISODateString;
 
 // GET /api/calendar/day/:date — appointments + events + important-events for a single day
 // NOTE: must be declared before /:ym to avoid route shadowing
@@ -111,7 +47,7 @@ r.get('/upcoming/list', async (req, res) => {
     appointmentInstancesInRange(userId, from, horizon),
     ImportantEvent.find({ userId, date: { $gte: from, $lte: horizon } }).sort({ date: 1 }),
   ]);
-  const daysUntil = (iso) => Math.round((new Date(iso) - new Date(from)) / 86400000);
+  const daysUntil = (iso) => daysBetween(from, iso);
   res.json({
     today: from,
     appointments: appts.map(a => ({

@@ -1,0 +1,151 @@
+import { Router } from 'express';
+import auth from '../middleware/auth.js';
+import Entry from '../models/Entry.js';
+import ImportantEvent from '../models/ImportantEvent.js';
+import {
+  addDays,
+  appointmentInstancesInRange,
+  countdownLabel,
+  daysBetween,
+  displayLabelFor,
+  isISODateString,
+} from '../utils/calendarInstances.js';
+
+const router = Router();
+router.use(auth);
+
+function userIdOf(req) {
+  return req.user?.userId || req.user?._id || req.user?.id;
+}
+
+function clamp(value, fallback, min, max) {
+  const parsed = parseInt(value, 10);
+  if (Number.isNaN(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+}
+
+function todayISOInTZ(timeZone = 'America/Toronto', base = new Date()) {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const parts = fmt.formatToParts(base);
+  const y = parts.find((part) => part.type === 'year')?.value || '0000';
+  const m = parts.find((part) => part.type === 'month')?.value || '01';
+  const d = parts.find((part) => part.type === 'day')?.value || '01';
+  return `${y}-${m}-${d}`;
+}
+
+async function resolveQuery(query) {
+  if (!query) return [];
+  if (query.lean) return query.lean();
+  return query;
+}
+
+async function loadSourceEntries({ userId, items }) {
+  const ids = [...new Set(
+    items
+      .map((item) => item.entryId || item.sourceEntryId)
+      .filter(Boolean)
+      .map((id) => String(id))
+  )];
+  if (!ids.length) return new Map();
+
+  const query = Entry.find({ userId, _id: { $in: ids } });
+  const selected = query?.select ? query.select('_id text date') : query;
+  const entries = await resolveQuery(selected);
+  return new Map((entries || []).map((entry) => [String(entry._id), entry]));
+}
+
+function baseItemFields({ item, type, from, sourceEntry }) {
+  const daysUntil = daysBetween(from, item.date);
+  const label = countdownLabel(daysUntil);
+  const entryId = item.entryId ? String(item.entryId) : null;
+  return {
+    id: String(item._id || item.id || ''),
+    type,
+    title: item.title || '',
+    date: item.date,
+    time: item.timeStart || item.time || null,
+    timeStart: item.timeStart || null,
+    timeEnd: item.timeEnd || null,
+    daysUntil,
+    countdownLabel: label,
+    displayLabel: displayLabelFor(item.title || '', daysUntil),
+    entryId,
+    sourceEntryId: entryId,
+    sourceText: sourceEntry?.text || '',
+    sourceDate: sourceEntry?.date || null,
+    cluster: item.cluster || '',
+    clusters: Array.isArray(item.clusters) ? item.clusters : [],
+  };
+}
+
+function sortHorizonItems(a, b) {
+  const ka = `${a.date || ''}T${a.time || '99:99'}|${a.title || ''}`;
+  const kb = `${b.date || ''}T${b.time || '99:99'}|${b.title || ''}`;
+  return ka.localeCompare(kb);
+}
+
+router.get('/', async (req, res) => {
+  const userId = userIdOf(req);
+  if (!userId) return res.status(401).json({ error: 'Access denied' });
+
+  const from = isISODateString(req.query.from) ? String(req.query.from) : todayISOInTZ();
+  const days = clamp(req.query.days, 60, 1, 365);
+  const limit = req.query.limit == null ? null : clamp(req.query.limit, 20, 1, 500);
+  const to = addDays(from, days);
+
+  try {
+    const [appointments, eventQuery] = await Promise.all([
+      appointmentInstancesInRange(userId, from, to),
+      ImportantEvent.find({ userId, date: { $gte: from, $lte: to } }).sort({ date: 1, createdAt: 1 }),
+    ]);
+    const events = await resolveQuery(eventQuery);
+
+    const sourceEntries = await loadSourceEntries({
+      userId,
+      items: [...appointments, ...(events || [])],
+    });
+
+    const appointmentItems = (appointments || []).map((appointment) => {
+      const sourceEntry = appointment.entryId ? sourceEntries.get(String(appointment.entryId)) : null;
+      return {
+        ...baseItemFields({ item: appointment, type: 'appointment', from, sourceEntry }),
+        location: appointment.location || '',
+        details: appointment.details || '',
+        rrule: appointment.rrule || '',
+        startDate: appointment.startDate || null,
+        until: appointment.until || null,
+        tz: appointment.tz || 'America/Toronto',
+        isRecurringInstance: !!appointment.isRecurring,
+        isRecurring: !!appointment.isRecurring || !!appointment.rrule,
+        seriesId: appointment.seriesId ? String(appointment.seriesId) : null,
+      };
+    });
+
+    const eventItems = (events || []).map((event) => {
+      const sourceEntry = event.entryId ? sourceEntries.get(String(event.entryId)) : null;
+      return {
+        ...baseItemFields({ item: event, type: 'importantEvent', from, sourceEntry }),
+        description: event.description || '',
+        pinned: !!event.pinned,
+      };
+    });
+
+    let items = [...appointmentItems, ...eventItems]
+      .filter((item) => Number.isFinite(item.daysUntil) && item.daysUntil >= 0)
+      .sort(sortHorizonItems);
+
+    if (limit) items = items.slice(0, limit);
+
+    res.json({ today: from, from, to, days, items });
+  } catch (err) {
+    console.error('[horizon] load failed:', err);
+    res.status(500).json({ error: err?.message || 'Failed to load horizon items' });
+  }
+});
+
+export default router;

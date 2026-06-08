@@ -137,14 +137,18 @@ describe('frontend stability endpoint contracts', () => {
   it('keeps appointment display details and controls visible in calendar and day views', () => {
     const helper = read('frontend/src/utils/appointmentIds.js');
     const calendar = read('frontend/src/Calendar.jsx');
+    const horizon = read('frontend/src/components/OnTheHorizon.jsx');
     const daily = read('frontend/src/DailyPage.jsx');
 
     expect(helper).toContain('getAppointmentDetailParts');
     expect(helper).toContain("parts.push('Recurring')");
-    expect(calendar).toContain('getAppointmentDetailParts(ap)');
-    expect(calendar).toContain('ap.details');
-    expect(calendar).toContain('openEditAppointment(ap)');
-    expect(calendar).toContain('deleteAppointment(ap)');
+    expect(calendar).toContain('OnTheHorizon');
+    expect(calendar).toContain('onEditAppointment={openEditAppointment}');
+    expect(calendar).toContain('onDeleteAppointment={deleteAppointment}');
+    expect(horizon).toContain('getAppointmentDetailParts(item)');
+    expect(horizon).toContain('item.details');
+    expect(horizon).toContain('onEditAppointment(item)');
+    expect(horizon).toContain('onDeleteAppointment(item)');
     expect(daily).toContain('getAppointmentDetailParts(item, formatHM)');
     expect(daily).toContain('item.details');
     expect(daily).toContain('openEditAppointment(item)');

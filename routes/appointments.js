@@ -26,6 +26,10 @@ function isValidId(id) {
 function normalizeNullableString(value) {
   return value === '' || value === undefined ? null : value;
 }
+function normalizeEntryId(value) {
+  if (!value) return null;
+  return ObjectId.isValid(value) ? value : null;
+}
 
 // ---------- CREATE (one-off or series) ----------
 /**
@@ -65,6 +69,7 @@ router.post('/', async (req, res) => {
       cluster : b.cluster || '',
       clusters: clusterIds,
       tz      : b.tz || 'America/Toronto',
+      entryId : normalizeEntryId(b.entryId),
     };
 
     if (!base.title) return res.status(400).json({ error: 'title is required' });
