@@ -1,5 +1,5 @@
 // frontend/src/adapters/EntryQuickAssign.default.jsx
-import React, { useContext, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
 
@@ -43,25 +43,74 @@ function titleFromEntry(en) {
   return base || 'Task from entry';
 }
 
+function normalizeClusters(payload) {
+  const raw = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.data)
+      ? payload.data
+      : [];
+  return raw
+    .map((cluster) => {
+      const name = cluster?.name || cluster?.title || cluster?.label || '';
+      const slug = cluster?.slug || (name ? String(name).toLowerCase().replace(/\s+/g, '-') : '');
+      return {
+        id: cluster?._id || cluster?.id || slug,
+        name,
+        slug,
+        icon: cluster?.icon || cluster?.emoji || '',
+      };
+    })
+    .filter((cluster) => cluster.id && cluster.slug);
+}
+
 // --- component ---------------------------------------------------
 export default function EntryQuickAssign({ entry, onUpdated, onTaskCreated }) {
   const { token } = useContext(AuthContext);
   const [cluster, setCluster] = useState(entry?.cluster || '');
+  const [clusters, setClusters] = useState([]);
   const [savingCluster, setSavingCluster] = useState(false);
   const [makingTask, setMakingTask] = useState(false);
+  const [error, setError] = useState('');
 
   const entryISO = useMemo(() => entryDateISO(entry), [entry]);
 
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-  async function saveCluster() {
+  useEffect(() => {
+    setCluster(entry?.cluster || '');
+  }, [entry?.cluster]);
+
+  useEffect(() => {
+    if (!token) {
+      setClusters([]);
+      return;
+    }
+    let ignore = false;
+    axios.get('/api/clusters', { headers })
+      .then(({ data }) => {
+        if (!ignore) setClusters(normalizeClusters(data));
+      })
+      .catch((e) => {
+        if (!ignore) {
+          console.warn('Failed to load clusters for entry quick assign', e?.response?.data || e.message);
+          setClusters([]);
+        }
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveCluster(nextCluster = cluster) {
     if (!entry?._id) return;
     setSavingCluster(true);
+    setError('');
     try {
-      const { data } = await axios.patch(`/api/entries/${entry._id}`, { cluster }, { headers });
+      const { data } = await axios.patch(`/api/entries/${entry._id}`, { cluster: nextCluster }, { headers });
       onUpdated?.(data);
     } catch (e) {
       console.error('Failed to save cluster', e?.response?.data || e.message);
+      setError('Could not save cluster.');
     } finally {
       setSavingCluster(false);
     }
@@ -69,11 +118,12 @@ export default function EntryQuickAssign({ entry, onUpdated, onTaskCreated }) {
 
   async function clearCluster() {
     setCluster('');
-    await saveCluster();
+    await saveCluster('');
   }
 
   async function makeTaskFromEntry() {
     setMakingTask(true);
+    setError('');
     try {
       // 1) create task
       const title = titleFromEntry(entry);
@@ -97,10 +147,13 @@ export default function EntryQuickAssign({ entry, onUpdated, onTaskCreated }) {
       onTaskCreated?.();
     } catch (e) {
       console.error('Failed to create/link task from entry', e?.response?.data || e.message);
+      setError('Could not create task from entry.');
     } finally {
       setMakingTask(false);
     }
   }
+
+  const selectedClusterKnown = !cluster || clusters.some((item) => item.slug === cluster);
 
   return (
     <div className="eq-assign" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -108,13 +161,21 @@ export default function EntryQuickAssign({ entry, onUpdated, onTaskCreated }) {
         📝
       </span>
 
-      <input
+      <select
         className="input"
-        style={{ minWidth: 160 }}
-        placeholder="Cluster (e.g., Home, Work)"
+        style={{ minWidth: 180 }}
         value={cluster}
         onChange={e => setCluster(e.target.value)}
-      />
+        aria-label="Cluster"
+      >
+        <option value="">No cluster</option>
+        {!selectedClusterKnown && <option value={cluster}>{cluster}</option>}
+        {clusters.map((item) => (
+          <option key={item.id} value={item.slug}>
+            {item.icon ? `${item.icon} ` : ''}{item.name || item.slug}
+          </option>
+        ))}
+      </select>
       <button
         className="button chip"
         onClick={saveCluster}
@@ -144,6 +205,8 @@ export default function EntryQuickAssign({ entry, onUpdated, onTaskCreated }) {
       >
         {makingTask ? 'Adding…' : 'Add task from entry'}
       </button>
+
+      {error && <span className="text-sm text-red-600">{error}</span>}
     </div>
   );
 }
