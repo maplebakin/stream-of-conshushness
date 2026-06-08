@@ -1,5 +1,6 @@
 // server/routes/appointments.js
 import express from 'express';
+import mongoose from 'mongoose';
 import Appointment from '../models/Appointment.js';
 import auth from '../middleware/auth.js';
 import { expandDatesInRange } from '../utils/recurrence.js';
@@ -7,6 +8,7 @@ import { normalizeClusterIds, resolveClusterIdForOwner } from '../utils/clusterI
 
 const router = express.Router();
 router.use(auth);
+const { ObjectId } = mongoose.Types;
 
 // --- Helpers ---
 function clamp(n, lo, hi) {
@@ -15,10 +17,14 @@ function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, x));
 }
 function isISO(s) { return /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')); }
-function pick(obj, keys) {
-  const out = {};
-  for (const k of keys) if (obj[k] !== undefined) out[k] = obj[k];
-  return out;
+function getUserId(req) {
+  return req.user?.id || req.user?._id || req.user?.userId;
+}
+function isValidId(id) {
+  return ObjectId.isValid(id);
+}
+function normalizeNullableString(value) {
+  return value === '' || value === undefined ? null : value;
 }
 
 // ---------- CREATE (one-off or series) ----------
@@ -31,7 +37,7 @@ function pick(obj, keys) {
  */
 router.post('/', async (req, res) => {
   try {
-    const userId = req.user?.id || req.user?._id || req.user?.userId;
+    const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Access denied' });
 
     const b = req.body || {};
@@ -158,7 +164,8 @@ router.get('/', async (req, res) => {
       const series = await Appointment.find(seriesQ).lean();
 
       for (const s of series) {
-        const dates = expandDatesInRange(s.rrule, s.startDate, expandFrom, expandTo);
+        const boundedExpandTo = s.until && s.until < expandTo ? s.until : expandTo;
+        const dates = expandDatesInRange(s.rrule, s.startDate, expandFrom, boundedExpandTo);
         for (const dISO of dates) {
           virtuals.push({
             _id: `virtual:${s._id}:${dISO}`,
@@ -200,6 +207,79 @@ router.get('/', async (req, res) => {
   } catch (err) {
     console.error('[appointments] list failed:', err);
     res.status(500).json({ error: err?.message || 'Failed to load appointments' });
+  }
+});
+
+// ---------- UPDATE ----------
+router.patch('/:id', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Access denied' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid appointment id' });
+
+    const doc = await Appointment.findOne({ _id: req.params.id, userId });
+    if (!doc) return res.status(404).json({ error: 'Appointment not found' });
+
+    const b = req.body || {};
+    if ('title' in b) {
+      const title = String(b.title || '').trim();
+      if (!title) return res.status(400).json({ error: 'title is required' });
+      doc.title = title;
+    }
+    if ('date' in b) doc.date = normalizeNullableString(b.date);
+    if ('startDate' in b) doc.startDate = normalizeNullableString(b.startDate);
+    if ('rrule' in b) doc.rrule = b.rrule || '';
+    if ('until' in b) doc.until = normalizeNullableString(b.until);
+    if ('time' in b) doc.time = normalizeNullableString(b.time);
+    if ('timeStart' in b) doc.timeStart = normalizeNullableString(b.timeStart);
+    if ('timeEnd' in b) doc.timeEnd = normalizeNullableString(b.timeEnd);
+    if ('location' in b) doc.location = b.location || '';
+    if ('details' in b) doc.details = b.details || '';
+    if ('cluster' in b) doc.cluster = b.cluster || '';
+    if ('tz' in b) doc.tz = b.tz || 'America/Toronto';
+    if ('entryId' in b) doc.entryId = b.entryId || null;
+
+    if ('clusters' in b || 'clusterId' in b || 'cluster' in b) {
+      let clusterIds = normalizeClusterIds(b.clusters);
+      if (!clusterIds.length && b.clusterId) {
+        const resolved = await resolveClusterIdForOwner(userId, b.clusterId);
+        if (resolved) clusterIds = [resolved];
+      } else if (!clusterIds.length && b.cluster) {
+        const resolved = await resolveClusterIdForOwner(userId, b.cluster);
+        if (resolved) clusterIds = [resolved];
+      }
+      doc.clusters = clusterIds;
+    }
+
+    if (doc.rrule) {
+      if (!isISO(doc.startDate)) return res.status(400).json({ error: 'startDate (YYYY-MM-DD) is required with rrule' });
+      doc.date = doc.date || null;
+    } else if (!isISO(doc.date)) {
+      return res.status(400).json({ error: 'date (YYYY-MM-DD) is required' });
+    }
+
+    await doc.save();
+    res.json(doc);
+  } catch (err) {
+    console.error('[appointments] update failed:', err);
+    const code = err?.name === 'ValidationError' ? 400 : 500;
+    res.status(code).json({ error: err?.message || 'Failed to update appointment' });
+  }
+});
+
+// ---------- DELETE ----------
+router.delete('/:id', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Access denied' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid appointment id' });
+
+    const deleted = await Appointment.findOneAndDelete({ _id: req.params.id, userId });
+    if (!deleted) return res.status(404).json({ error: 'Appointment not found' });
+    res.json({ ok: true, deleted: deleted._id });
+  } catch (err) {
+    console.error('[appointments] delete failed:', err);
+    res.status(500).json({ error: err?.message || 'Failed to delete appointment' });
   }
 });
 

@@ -3,9 +3,13 @@ import React, { useCallback, useContext, useEffect, useMemo, useState } from 're
 import { useNavigate } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
+import {
+  getAppointmentDeleteConfirmation,
+  getAppointmentDetailParts,
+  getStoredAppointmentId,
+} from './utils/appointmentIds.js';
 
-// ✅ use adapters (matches DailyPage + harness)
-import AppointmentModal from './adapters/AppointmentModal.default.jsx';
+import AppointmentModal from './AppointmentModal.jsx';
 import ImportantEventModal from './adapters/ImportantEventModal.default.jsx';
 
 import './Calendar.css';
@@ -69,6 +73,7 @@ export default function Calendar() {
   // Modals
   const [showApptModal, setShowApptModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
+  const [editingAppointment, setEditingAppointment] = useState(null);
 
   const loadMonth = useCallback(async () => {
     // Assumes you’ve got an aggregator route; if not, this will just noop the badges.
@@ -102,6 +107,24 @@ export default function Calendar() {
     const d = new Date(y, mIdx + 1, 1);
     setY(d.getFullYear());
     setMIdx(d.getMonth());
+  }
+
+  function openNewAppointment() {
+    setEditingAppointment(null);
+    setShowApptModal(true);
+  }
+
+  function openEditAppointment(appointment) {
+    setEditingAppointment(appointment);
+    setShowApptModal(true);
+  }
+
+  async function deleteAppointment(appointment) {
+    const id = getStoredAppointmentId(appointment);
+    if (!id) return;
+    if (!window.confirm(getAppointmentDeleteConfirmation(appointment))) return;
+    await axios.delete(`/api/appointments/${encodeURIComponent(id)}`, { headers });
+    await Promise.all([loadUpcoming(), loadMonth()]);
   }
 
   const weekLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -149,7 +172,7 @@ export default function Calendar() {
             <button
               className="button chip"
               type="button"
-              onClick={() => setShowApptModal(true)}
+              onClick={openNewAppointment}
               title="Add appointment"
             >
               + Add
@@ -161,11 +184,20 @@ export default function Calendar() {
             ) : (
               upcoming.appointments.map(ap => {
                 const label = countdownLabel(ap.daysUntil);
+                const detailParts = getAppointmentDetailParts(ap);
                 if (!label) return null;
                 return (
-                  <li key={ap.id} className="task" style={{ background:'var(--card,#fff)', borderRadius: 12, padding:'8px 10px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                    <span>🗓️ {ap.title}</span>
-                    <span className="muted" title={ap.date}>{label}</span>
+                  <li key={ap.id} className="task" style={{ background:'var(--card,#fff)', borderRadius: 12, padding:'8px 10px', display:'grid', gap: 4 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap: 8 }}>
+                      <span>🗓️ {ap.title}</span>
+                      <span className="muted" title={ap.date}>{label}</span>
+                    </div>
+                    <div className="muted" style={{ fontSize: 13 }}>{detailParts.join(' · ')}</div>
+                    {ap.details && <div className="muted" style={{ fontSize: 13 }}>{ap.details}</div>}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <button type="button" className="button chip" onClick={() => openEditAppointment(ap)} title="Edit appointment">Edit</button>
+                      <button type="button" className="button chip" onClick={() => deleteAppointment(ap)} title="Delete appointment">Delete</button>
+                    </span>
                   </li>
                 );
               })
@@ -247,8 +279,17 @@ export default function Calendar() {
       {showApptModal && (
         <AppointmentModal
           defaultDate={tzToday}
-          onClose={() => setShowApptModal(false)}
-          onSaved={() => { setShowApptModal(false); loadUpcoming(); loadMonth(); }}
+          initialAppointment={editingAppointment}
+          onClose={() => {
+            setShowApptModal(false);
+            setEditingAppointment(null);
+          }}
+          onSaved={() => {
+            setShowApptModal(false);
+            setEditingAppointment(null);
+            loadUpcoming();
+            loadMonth();
+          }}
         />
       )}
       {showEventModal && (

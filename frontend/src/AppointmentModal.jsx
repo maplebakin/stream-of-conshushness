@@ -4,6 +4,7 @@ import './AppointmentModal.css';
 import RepeatFields from './components/RepeatFields.jsx';
 import ClusterPicker from './components/ClusterPicker.jsx';
 import axios from './api/axiosInstance';
+import { getStoredAppointmentId, isRecurringAppointment } from './utils/appointmentIds.js';
 
 function todayISO() {
   const d = new Date();
@@ -13,26 +14,49 @@ function todayISO() {
   return `${y}-${m}-${da}`;
 }
 
-export default function AppointmentModal({ onClose, onSaved, defaultCluster = '' }) {
+function parseRRule(rrule = '') {
+  const out = {};
+  for (const part of String(rrule || '').split(';')) {
+    const [key, value] = part.split('=');
+    if (key) out[key.toUpperCase()] = value || '';
+  }
+  return out;
+}
+
+function initialRepeat(appointment) {
+  const parsed = parseRRule(appointment?.rrule || '');
+  return {
+    repeatOn: Boolean(parsed.FREQ),
+    freq: parsed.FREQ || 'WEEKLY',
+    interval: Number.parseInt(parsed.INTERVAL || '1', 10) || 1,
+    byday: parsed.BYDAY ? parsed.BYDAY.split(',').filter(Boolean) : ['MO'],
+    until: appointment?.until || parsed.UNTIL || '',
+  };
+}
+
+export default function AppointmentModal({ onClose, onSaved, defaultCluster = '', defaultDate = '', initialAppointment = null }) {
+  const editingId = getStoredAppointmentId(initialAppointment);
+  const editingRecurringSeries = Boolean(editingId && isRecurringAppointment(initialAppointment));
+  const repeatInitial = initialRepeat(initialAppointment);
 
   // base fields
-  const [title, setTitle] = useState('New Appointment');
-  const [date, setDate] = useState(todayISO());
-  const [timeStart, setTimeStart] = useState('');
-  const [timeEnd, setTimeEnd] = useState('');
-  const [location, setLocation] = useState('');
-  const [details, setDetails] = useState('');
-  const [cluster, setCluster] = useState(defaultCluster);
+  const [title, setTitle] = useState(initialAppointment?.title || 'New Appointment');
+  const [date, setDate] = useState(initialAppointment?.date || defaultDate || todayISO());
+  const [timeStart, setTimeStart] = useState(initialAppointment?.timeStart || initialAppointment?.time || '');
+  const [timeEnd, setTimeEnd] = useState(initialAppointment?.timeEnd || '');
+  const [location, setLocation] = useState(initialAppointment?.location || '');
+  const [details, setDetails] = useState(initialAppointment?.details || '');
+  const [cluster, setCluster] = useState(initialAppointment?.cluster || defaultCluster);
 
   // repeat state
-  const [repeatOn, setRepeatOn] = useState(false);
-  const [freq, setFreq] = useState('WEEKLY');
-  const [interval, setInterval] = useState(1);
-  const [byday, setByday] = useState(['MO']);
-  const [startDate, setStartDate] = useState(todayISO());
-  const [until, setUntil] = useState('');
+  const [repeatOn, setRepeatOn] = useState(repeatInitial.repeatOn);
+  const [freq, setFreq] = useState(repeatInitial.freq);
+  const [interval, setInterval] = useState(repeatInitial.interval);
+  const [byday, setByday] = useState(repeatInitial.byday);
+  const [startDate, setStartDate] = useState(initialAppointment?.startDate || initialAppointment?.date || defaultDate || todayISO());
+  const [until, setUntil] = useState(repeatInitial.until);
 
-  async function createAppointment() {
+  async function saveAppointment() {
     const body = {
       title,
       timeStart: timeStart || null,
@@ -40,6 +64,7 @@ export default function AppointmentModal({ onClose, onSaved, defaultCluster = ''
       location,
       details,
       cluster,
+      tz: initialAppointment?.tz || 'America/Toronto',
     };
 
     if (repeatOn) {
@@ -48,22 +73,29 @@ export default function AppointmentModal({ onClose, onSaved, defaultCluster = ''
       if (until) r += `;UNTIL=${until}`;
       body.rrule = r;
       body.startDate = startDate;
+      body.until = until || null;
+      body.date = null;
     } else {
       body.date = date;
+      body.rrule = '';
+      body.startDate = null;
+      body.until = null;
     }
 
-    const { data } = await axios.post('/api/appointments', body);
+    const { data } = editingId
+      ? await axios.patch(`/api/appointments/${encodeURIComponent(editingId)}`, body)
+      : await axios.post('/api/appointments', body);
     return data;
   }
 
   async function onSubmit(e) {
     e.preventDefault();
     try {
-      const appt = await createAppointment();
+      const appt = await saveAppointment();
       onSaved?.(appt);
       onClose?.();
     } catch (err) {
-      console.error('create appointment failed:', err);
+      console.error('save appointment failed:', err);
     }
   }
 
@@ -72,11 +104,17 @@ export default function AppointmentModal({ onClose, onSaved, defaultCluster = ''
       <div className="modal">
         <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="appt-title">
           <div className="modal-header">
-            <h3 id="appt-title">Appointment</h3>
+            <h3 id="appt-title">{editingId ? 'Edit Appointment' : 'Appointment'}</h3>
             <button className="modal-close" onClick={onClose} aria-label="Close">×</button>
           </div>
 
           <form className="modal-body" onSubmit={onSubmit}>
+            {editingRecurringSeries && (
+              <p className="muted" style={{ marginTop: 0 }}>
+                This is part of a recurring appointment series. Changes will apply to the whole series.
+              </p>
+            )}
+
             <label>
               <div>Title</div>
               <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title" required />

@@ -9,6 +9,11 @@ import EntryQuickAssign from './adapters/EntryQuickAssign.default.jsx';
 import AnalyzeEntryButton from './adapters/AnalyzeEntryButton.default.jsx';
 import EntryModal from './EntryModal.jsx';
 import AppointmentModal from './AppointmentModal.jsx';
+import {
+  getAppointmentDeleteConfirmation,
+  getAppointmentDetailParts,
+  getStoredAppointmentId,
+} from './utils/appointmentIds.js';
 
 import DailyRipples from './DailyRipples.jsx';
 import HourlySchedule from './HourlySchedule.jsx';
@@ -69,6 +74,7 @@ export default function DailyPage() {
   const [rippleListKey, setRippleListKey] = useState(0);
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [showApptModal, setShowApptModal] = useState(false);
+  const [editingAppointment, setEditingAppointment] = useState(null);
   const [autoCarry, setAutoCarry] = useState(() => localStorage.getItem('auto_cf') === '1');
   const [showSchedule, setShowSchedule] = useState(
     () => localStorage.getItem('show_sched') !== '0'
@@ -179,12 +185,15 @@ export default function DailyPage() {
 
   const timeline = useMemo(() => {
     const appts = (appointments || []).map(a => ({
+      ...a,
       _id: a._id,
       type: 'appointment',
       title: a.title || '(untitled)',
       date: a.date,
       time: a.timeStart || null,
+      timeEnd: a.timeEnd || null,
       location: a.location || '',
+      details: a.details || '',
     }));
     const evs = (events || []).map(e => ({
       _id: e._id,
@@ -212,6 +221,28 @@ export default function DailyPage() {
     });
     return all;
   }, [appointments, events, important]);
+
+  function openNewAppointment() {
+    setEditingAppointment(null);
+    setShowApptModal(true);
+  }
+
+  function openEditAppointment(appointment) {
+    setEditingAppointment(appointment);
+    setShowApptModal(true);
+  }
+
+  async function deleteAppointment(appointment) {
+    const id = getStoredAppointmentId(appointment);
+    if (!id) return;
+    if (!window.confirm(getAppointmentDeleteConfirmation(appointment))) return;
+    try {
+      await axios.delete(`/api/appointments/${encodeURIComponent(id)}`);
+      loadAgenda();
+    } catch (err) {
+      console.error('delete appointment failed', err?.response?.data || err.message);
+    }
+  }
 
   return (
     <main className="daily-page">
@@ -261,7 +292,7 @@ export default function DailyPage() {
           </button>
           <button
             className="button bg-spool text-ink rounded-button font-thread shadow-soft hover:bg-plum hover:text-mist px-4 py-2 transition-all"
-            onClick={() => setShowApptModal(true)}
+            onClick={openNewAppointment}
           >
             + Add appointment
           </button>
@@ -353,29 +384,39 @@ export default function DailyPage() {
 
             {!loadingAgenda && timeline.length > 0 && (
               <ul className="agenda-list">
-                {timeline.map(item => (
-                  <li key={`${item.type}-${item._id}`} className="agenda-item">
-                    <span className="agenda-bullet" aria-hidden="true">
-                      {item.type === 'appointment' ? '🗓️' : item.type === 'important' ? '⭐' : '📌'}
-                    </span>
-                    <div className="agenda-main">
-                      <div className="agenda-title">
-                        {item.title}
-                        {item.type === 'important' && <span className="muted" style={{ marginLeft: 8 }}>(Important)</span>}
-                      </div>
-                      <div className="agenda-meta muted">
-                        {item.type === 'appointment' ? (
-                          <>
-                            {item.time ? formatHM(item.time) : 'All day'}
-                            {item.location ? ` · ${item.location}` : ''}
-                          </>
-                        ) : (
-                          <>All day</>
+                {timeline.map(item => {
+                  const appointmentDetails = item.type === 'appointment'
+                    ? getAppointmentDetailParts(item, formatHM)
+                    : [];
+
+                  return (
+                    <li key={`${item.type}-${item._id}`} className="agenda-item">
+                      <span className="agenda-bullet" aria-hidden="true">
+                        {item.type === 'appointment' ? '🗓️' : item.type === 'important' ? '⭐' : '📌'}
+                      </span>
+                      <div className="agenda-main">
+                        <div className="agenda-title">
+                          {item.title}
+                          {item.type === 'important' && <span className="muted" style={{ marginLeft: 8 }}>(Important)</span>}
+                        </div>
+                        <div className="agenda-meta muted">
+                          {item.type === 'appointment' ? appointmentDetails.join(' · ') : 'All day'}
+                        </div>
+                        {item.type === 'appointment' && item.details && (
+                          <div className="agenda-meta muted" style={{ marginTop: 3 }}>
+                            {item.details}
+                          </div>
+                        )}
+                        {item.type === 'appointment' && (
+                          <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                            <button type="button" className="button chip" onClick={() => openEditAppointment(item)} title="Edit appointment">Edit</button>
+                            <button type="button" className="button chip" onClick={() => deleteAppointment(item)} title="Delete appointment">Delete</button>
+                          </div>
                         )}
                       </div>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -432,8 +473,15 @@ export default function DailyPage() {
       {showApptModal &&
         renderSafe(AppointmentModal, {
           defaultDate: dateISO,
+          initialAppointment: editingAppointment,
           onClose: () => {
             setShowApptModal(false);
+            setEditingAppointment(null);
+            loadAgenda();
+          },
+          onSaved: () => {
+            setShowApptModal(false);
+            setEditingAppointment(null);
             loadAgenda();
           }
         }, 'AppointmentModal')
