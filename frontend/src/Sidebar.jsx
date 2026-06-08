@@ -91,6 +91,13 @@ export default function Sidebar() {
         >
           📆 Calendar
         </Link>
+        <Link
+          to="/gather-lists"
+          className={isActive('/gather-lists') ? 'nav-link active' : 'nav-link'}
+          aria-current={isActive('/gather-lists') ? 'page' : undefined}
+        >
+          🧺 Gather Lists
+        </Link>
       </nav>
 
       <div className="search-block">

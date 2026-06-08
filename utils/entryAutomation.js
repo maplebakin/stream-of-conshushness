@@ -4,14 +4,16 @@ import ImportantEvent from "../models/ImportantEvent.js";
 import Appointment from "../models/Appointment.js";
 import Ripple from "../models/Ripple.js";
 import SuggestedTask from "../models/SuggestedTask.js";
+import SuggestedGatherItem from "../models/SuggestedGatherItem.js";
 import Task from "../models/Task.js";
 import Cluster from "../models/Cluster.js";
-import { normalizeClusterIds } from "./clusterIds.js";
+import { normalizeClusterIds, resolveClusterIdForOwner } from "./clusterIds.js";
 
 import * as chrono from "chrono-node";
 import analyzeEntry from "./analyzeEntry.js";
 import { extractEntrySuggestions, extractRipplesFromEntry } from "./rippleExtractor.js";
 import { sieveRipples } from "./rippleSieve.js";
+import { extractGatherItems } from "./gatherExtractor.js";
 
 const { ObjectId } = mongoose.Types;
 const DEFAULT_TIME_ZONE = "America/Toronto";
@@ -330,6 +332,11 @@ export async function clearRippleArtifacts({ userId, entryId }) {
   await Ripple.deleteMany({ userId, entryId });
 }
 
+export async function clearPendingGatherSuggestions({ userId, entryId }) {
+  if (!userId || !entryId) return;
+  await SuggestedGatherItem.deleteMany({ userId, sourceEntryId: entryId, status: "pending" });
+}
+
 async function safeInsertMany(Model, docs) {
   if (!Array.isArray(docs) || docs.length === 0) return [];
   try {
@@ -424,6 +431,45 @@ async function generateRipplesAndSuggestions({ entry, text, userId }) {
   }
 
   return { ripples: rippleDocs, suggestedTasks: suggestionPayloads };
+}
+
+async function generateGatherSuggestions({ entry, text, userId }) {
+  const basis = String(text || entry?.text || entry?.content || "").trim();
+  if (!basis || !entry?._id || !userId) return [];
+
+  let extracted = [];
+  try {
+    extracted = extractGatherItems(basis) || [];
+  } catch (err) {
+    console.warn("[entryAutomation] extractGatherItems failed:", err?.message || err);
+    return [];
+  }
+
+  if (!Array.isArray(extracted) || !extracted.length) return [];
+
+  let clusters = Array.isArray(entry?.clusters) ? normalizeClusterIds(entry.clusters) : [];
+  if (!clusters.length && entry?.cluster) {
+    const resolvedCluster = await resolveClusterIdForOwner(userId, entry.cluster);
+    if (resolvedCluster) clusters = [resolvedCluster];
+  }
+  const docs = extracted
+    .slice(0, 25)
+    .map((item) => ({
+      userId,
+      title: String(item?.title || "").trim(),
+      description: typeof item?.description === "string" ? item.description.trim() : "",
+      clusters,
+      list: String(item?.list || "Things to Buy").trim() || "Things to Buy",
+      status: "pending",
+      sourceEntryId: entry._id,
+      sourceText: String(item?.sourceText || basis).trim(),
+      confidence: Number.isFinite(Number(item?.confidence)) ? Number(item.confidence) : 0.7,
+      reason: String(item?.reason || "needPhrase"),
+      tags: Array.isArray(item?.tags) ? item.tags.filter((tag) => typeof tag === "string" && tag.trim()) : [],
+    }))
+    .filter((item) => item.title);
+
+  return safeInsertMany(SuggestedGatherItem, docs);
 }
 
 /* ------------------------------------------------------------------ */
@@ -611,6 +657,7 @@ export async function createEntryWithAutomation({ userId, payload = {} }) {
   }
 
   await generateRipplesAndSuggestions({ entry, text: normalized.text, userId });
+  await generateGatherSuggestions({ entry, text: normalized.text, userId });
 
   return entry;
 }
@@ -680,6 +727,8 @@ export async function updateEntryWithAutomation({ userId, entryId, updates = {} 
 
   await clearRippleArtifacts({ userId, entryId: updated._id });
   await generateRipplesAndSuggestions({ entry: updated, text: updated.text, userId });
+  await clearPendingGatherSuggestions({ userId, entryId: updated._id });
+  await generateGatherSuggestions({ entry: updated, text: updated.text, userId });
 
   return updated;
 }
@@ -703,4 +752,5 @@ export default {
   createEntryWithAutomation,
   updateEntryWithAutomation,
   clearRippleArtifacts,
+  clearPendingGatherSuggestions,
 };

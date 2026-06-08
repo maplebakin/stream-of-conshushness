@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import axios from '../api/axiosInstance';
+import { listGatherItems, updateGatherItemStatus } from '../api/gatherItems.js';
 import TaskModal from '../TaskModal.jsx';
 import EntryModal from '../EntryModal.jsx';
 import SafeHTML from '../components/SafeHTML.jsx';
@@ -11,8 +12,11 @@ import './ClusterRoom.css';
 const TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'tasks', label: 'Tasks' },
+  { key: 'gather', label: 'Gather Lists' },
   { key: 'entries', label: 'Entries' }
 ];
+
+const GATHER_STATUSES = ['needed', 'found', 'bought', 'dismissed'];
 
 function torontoParts(date = new Date()) {
   const fmt = new Intl.DateTimeFormat('en-CA', {
@@ -83,6 +87,11 @@ export default function ClusterRoom() {
   const [entriesLoading, setEntriesLoading] = useState(false);
   const [entriesError, setEntriesError] = useState('');
 
+  const [gatherItems, setGatherItems] = useState([]);
+  const [gatherLoading, setGatherLoading] = useState(false);
+  const [gatherError, setGatherError] = useState('');
+  const [gatherBusyIds, setGatherBusyIds] = useState(() => new Set());
+
   const [overview, setOverview] = useState({ openTasks: 0, entriesLast7: 0 });
 
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -95,10 +104,12 @@ export default function ClusterRoom() {
     if (!cluster?.id) return;
     setTasksLoading(true);
     setEntriesLoading(true);
+    setGatherLoading(true);
     setTasksError('');
     setEntriesError('');
+    setGatherError('');
 
-    const [tasksResult, entriesResult] = await Promise.allSettled([
+    const [tasksResult, entriesResult, gatherResult] = await Promise.allSettled([
       axios.get('/api/tasks', {
         params: {
           clusterId: cluster.id,
@@ -113,7 +124,8 @@ export default function ClusterRoom() {
           endDate: todayISO,
           limit: 50
         }
-      })
+      }),
+      listGatherItems({ clusterId: cluster.id })
     ]);
 
     let tasksData = [];
@@ -150,6 +162,24 @@ export default function ClusterRoom() {
       setEntriesError(entriesResult.reason?.response?.data?.error || entriesResult.reason?.message || 'Failed to load entries.');
     }
 
+    if (gatherResult.status === 'fulfilled') {
+      const gatherData = normalizeArray(gatherResult.value).map((item) => ({
+        ...item,
+        title: item.title || 'Untitled Gather item',
+        list: item.list || 'Things to Buy',
+        status: item.status || 'needed',
+      }));
+      gatherData.sort((a, b) => {
+        if ((a.status || '') !== (b.status || '')) return (a.status || '').localeCompare(b.status || '');
+        if ((a.list || '') !== (b.list || '')) return (a.list || '').localeCompare(b.list || '');
+        return (a.title || '').localeCompare(b.title || '');
+      });
+      setGatherItems(gatherData);
+    } else {
+      setGatherItems([]);
+      setGatherError(gatherResult.reason?.response?.data?.error || gatherResult.reason?.message || 'Failed to load Gather items.');
+    }
+
     setOverview({
       openTasks: tasksData.filter((t) => !t.completed).length,
       entriesLast7: entriesData.length
@@ -157,6 +187,7 @@ export default function ClusterRoom() {
 
     setTasksLoading(false);
     setEntriesLoading(false);
+    setGatherLoading(false);
   }, [startISO, todayISO]);
 
   useEffect(() => {
@@ -209,6 +240,29 @@ export default function ClusterRoom() {
     } catch (err) {
       console.error('Toggle task failed:', err);
       setTasksError('Could not update task.');
+    }
+  }
+
+  function markGatherBusy(id, busy) {
+    setGatherBusyIds((current) => {
+      const next = new Set(current);
+      if (busy) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  async function handleGatherStatus(item, status) {
+    if (!item?._id || item.status === status) return;
+    markGatherBusy(item._id, true);
+    try {
+      const updated = await updateGatherItemStatus(item._id, status);
+      setGatherItems((current) => current.map((candidate) => (candidate._id === item._id ? updated : candidate)));
+    } catch (err) {
+      console.error('Update Gather item failed:', err);
+      setGatherError(err?.response?.data?.error || err.message || 'Could not update Gather item.');
+    } finally {
+      markGatherBusy(item._id, false);
     }
   }
 
@@ -395,6 +449,66 @@ export default function ClusterRoom() {
     );
   }
 
+  function renderGather() {
+    const byList = new Map();
+    for (const item of gatherItems) {
+      const list = item.list || 'Things to Buy';
+      if (!byList.has(list)) byList.set(list, []);
+      byList.get(list).push(item);
+    }
+
+    return (
+      <div className="cluster-detail__section" id="gather">
+        <div className="cluster-detail__actions-row">
+          <div className="cluster-detail__actions-group">
+            <button type="button" className="pill pill-muted" onClick={handleRefresh}>Refresh</button>
+          </div>
+        </div>
+        {gatherLoading ? (
+          <p className="muted">Loading Gather items...</p>
+        ) : gatherError ? (
+          <p className="error-text">{gatherError}</p>
+        ) : !gatherItems.length ? (
+          <p className="muted">No Gather items for this cluster yet.</p>
+        ) : (
+          <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+            {Array.from(byList.entries()).map(([list, items]) => (
+              <section key={list} style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                <h3 style={{ margin: 0 }}>{list}</h3>
+                <ul className="cluster-detail__tasks">
+                  {items.map((item) => {
+                    const busy = gatherBusyIds.has(item._id);
+                    return (
+                      <li key={item._id} className="cluster-detail__task">
+                        <div className="cluster-detail__task-title" style={{ display: 'grid', gap: 4 }}>
+                          <span>{item.title}</span>
+                          {item.sourceText && <small className="muted">source: "{item.sourceText}"</small>}
+                        </div>
+                        <div className="cluster-detail__task-meta">
+                          <label className="pill pill-muted">
+                            <span>Status</span>
+                            <select
+                              value={item.status || 'needed'}
+                              onChange={(event) => handleGatherStatus(item, event.target.value)}
+                              disabled={busy}
+                              style={{ border: 0, background: 'transparent', font: 'inherit' }}
+                            >
+                              {GATHER_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+                            </select>
+                          </label>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function renderEntries() {
     return (
       <div className="cluster-detail__section" id="entries">
@@ -541,6 +655,7 @@ export default function ClusterRoom() {
 
       {activeCluster && activeTab === 'overview' && renderOverview()}
       {activeCluster && activeTab === 'tasks' && renderTasks()}
+      {activeCluster && activeTab === 'gather' && renderGather()}
       {activeCluster && activeTab === 'entries' && renderEntries()}
 
       {showTaskModal && activeCluster && (

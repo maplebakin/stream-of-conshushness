@@ -34,6 +34,8 @@ import calendarRoutes from "./routes/calendar.js";     // ✅ keep this one
 
 import ripplesRouter from "./routes/ripples.js";
 import suggestedTaskRoutes from "./routes/suggestedTasks.js";
+import gatherItemRoutes from "./routes/gatherItems.js";
+import suggestedGatherItemRoutes from "./routes/suggestedGatherItems.js";
 import clustersRouter from "./routes/clusters.js";
 import uploadRouter from "./utils/upload.js";
 import adminRoutes from "./routes/admin.js";
@@ -170,6 +172,8 @@ app.use("/api", auth, ripplesRouter);
 
 /** Other feature routers */
 app.use("/api/suggested-tasks", auth, suggestedTaskRoutes);
+app.use("/api/gather-items", auth, gatherItemRoutes);
+app.use("/api/suggested-gather-items", auth, suggestedGatherItemRoutes);
 app.use("/api/clusters", auth, clustersRouter);
 app.use("/api/upload", auth, uploadRouter);
 app.use("/api/admin", auth, adminRoutes);
