@@ -17,20 +17,14 @@ export default function SectionLanding() {
     const run = async () => {
       setLoading(true);
       try {
-        // Preferred: /api/section-pages?section=:sectionSlug
-        let list = [];
-        try {
-          const res = await axios.get(`/api/section-pages?section=${encodeURIComponent(sectionSlug)}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          list = Array.isArray(res.data) ? res.data : [];
-        } catch {
-          // Back-compat: /api/section-pages/:sectionSlug
-          const res = await axios.get(`/api/section-pages/${encodeURIComponent(sectionSlug)}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          list = Array.isArray(res.data) ? res.data : [];
-        }
+        const res = await axios.get(`/api/section-pages/by-section/${encodeURIComponent(sectionSlug)}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const list = Array.isArray(res.data?.items)
+          ? res.data.items
+          : Array.isArray(res.data)
+            ? res.data
+            : [];
         // normalize
         setPages(list.map(p => ({
           id: p._id,

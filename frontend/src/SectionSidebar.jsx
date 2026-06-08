@@ -38,17 +38,12 @@ export default function SectionSidebar() {
       setErr('');
       try {
         const headers = { Authorization: `Bearer ${token}` };
-        let list = [];
-
-        // primary endpoint
-        try {
-          const res = await axios.get(`/api/section-pages?section=${encodeURIComponent(sectionSlug)}`, { headers });
-          list = Array.isArray(res.data) ? res.data : [];
-        } catch {
-          // fallback legacy endpoint
-          const res = await axios.get(`/api/section-pages/${encodeURIComponent(sectionSlug)}`, { headers });
-          list = Array.isArray(res.data) ? res.data : [];
-        }
+        const res = await axios.get(`/api/section-pages/by-section/${encodeURIComponent(sectionSlug)}`, { headers });
+        const list = Array.isArray(res.data?.items)
+          ? res.data.items
+          : Array.isArray(res.data)
+            ? res.data
+            : [];
 
         if (!cancelled) {
           // normalize minimal fields used here
