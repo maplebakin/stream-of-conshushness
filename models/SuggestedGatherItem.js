@@ -6,6 +6,7 @@ const SuggestedGatherItemSchema = new Schema(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     title: { type: String, required: true, trim: true },
+    normalizedTitle: { type: String, default: '', trim: true, index: true },
     description: { type: String, default: '', trim: true },
     clusters: { type: [Schema.Types.ObjectId], ref: 'Cluster', default: [] },
     list: { type: String, default: 'Things to Buy', trim: true, index: true },
@@ -26,5 +27,6 @@ const SuggestedGatherItemSchema = new Schema(
 
 SuggestedGatherItemSchema.index({ userId: 1, sourceEntryId: 1, status: 1 });
 SuggestedGatherItemSchema.index({ userId: 1, status: 1, createdAt: -1 });
+SuggestedGatherItemSchema.index({ userId: 1, list: 1, normalizedTitle: 1, status: 1 });
 
 export default mongoose.model('SuggestedGatherItem', SuggestedGatherItemSchema);

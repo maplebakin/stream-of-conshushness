@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractGatherItems } from '../gatherExtractor.js';
+import { extractGatherItems, normalizeGatherTitleKey } from '../gatherExtractor.js';
 
 describe('gatherExtractor', () => {
   it('extracts a needed container from natural language', () => {
@@ -27,5 +27,66 @@ describe('gatherExtractor', () => {
       const items = extractGatherItems(text);
       expect(items[0]).toMatchObject({ title, list });
     }
+  });
+
+  it('extracts grocery recall items from natural language', () => {
+    const cases = [
+      ['I need to get milk', 'Milk'],
+      ['We need to get bread', 'Bread'],
+      ['I need eggs', 'Eggs'],
+      ['Need more cheese', 'Cheese'],
+      ["We're out of ketchup", 'Ketchup'],
+      ['We are out of cereal', 'Cereal'],
+      ['Out of coffee', 'Coffee'],
+      ['Running low on butter', 'Butter'],
+      ['Low on juice', 'Juice'],
+      ['Colton wants Gatorade', 'Gatorade'],
+      ['Colton needs lunch snacks', 'Lunch snacks'],
+    ];
+
+    for (const [text, title] of cases) {
+      const items = extractGatherItems(text);
+      expect(items[0]).toMatchObject({ title, list: 'Grocery List' });
+    }
+  });
+
+  it('extracts pet and home supplies', () => {
+    expect(extractGatherItems('Need more cat litter')[0]).toMatchObject({
+      title: 'Cat litter',
+      list: 'Pet Supplies',
+    });
+    expect(extractGatherItems("We're out of cat food")[0]).toMatchObject({
+      title: 'Cat food',
+      list: 'Pet Supplies',
+    });
+    expect(extractGatherItems('Need more laundry detergent')[0]).toMatchObject({
+      title: 'Laundry detergent',
+      list: 'Home Supplies',
+    });
+    expect(extractGatherItems('Running low on cleaner')[0]).toMatchObject({
+      title: 'Cleaner',
+      list: 'Home Supplies',
+    });
+  });
+
+  it('removes scheduled context from gather item titles', () => {
+    const items = extractGatherItems("I need to get milk tomorrow while I'm at work");
+
+    expect(items[0]).toMatchObject({
+      title: 'Milk',
+      list: 'Grocery List',
+    });
+  });
+
+  it('normalizes gather titles for duplicate checks', () => {
+    const cases = ['Milk', 'milk', 'get milk', 'buy milk', 'some milk', 'more milk'];
+    expect(cases.map((value) => normalizeGatherTitleKey(value))).toEqual([
+      'milk',
+      'milk',
+      'milk',
+      'milk',
+      'milk',
+      'milk',
+    ]);
   });
 });

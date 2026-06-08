@@ -2,6 +2,7 @@ import express from 'express';
 import mongoose from 'mongoose';
 import GatherItem from '../models/GatherItem.js';
 import { normalizeClusterIds, resolveClusterIdForOwner } from '../utils/clusterIds.js';
+import { normalizeGatherTitleKey } from '../utils/gatherExtractor.js';
 
 const router = express.Router();
 const { ObjectId } = mongoose.Types;
@@ -73,6 +74,7 @@ router.post('/', async (req, res) => {
     const item = await GatherItem.create({
       userId,
       title,
+      normalizedTitle: normalizeGatherTitleKey(title),
       description: cleanString(req.body?.description),
       clusters,
       list: cleanString(req.body?.list, 'Things to Buy') || 'Things to Buy',
@@ -103,6 +105,7 @@ router.patch('/:id', async (req, res) => {
       const title = cleanString(req.body.title);
       if (!title) return res.status(400).json({ error: 'title is required' });
       item.title = title;
+      item.normalizedTitle = normalizeGatherTitleKey(title);
     }
     if (req.body?.description !== undefined) item.description = cleanString(req.body.description);
     if (req.body?.list !== undefined) item.list = cleanString(req.body.list, 'Things to Buy') || 'Things to Buy';

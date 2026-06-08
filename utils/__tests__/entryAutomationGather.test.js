@@ -13,9 +13,13 @@ const mocks = vi.hoisted(() => ({
   suggestedTaskDeleteMany: vi.fn(),
   suggestedTaskInsertMany: vi.fn(),
   suggestedGatherItemDeleteMany: vi.fn(),
+  suggestedGatherItemFind: vi.fn(),
   suggestedGatherItemInsertMany: vi.fn(),
+  gatherItemFind: vi.fn(),
   taskInsertMany: vi.fn(),
   clusterFind: vi.fn(),
+  existingSuggestions: [],
+  existingGatherItems: [],
 }));
 
 vi.mock('../../models/Entry.js', () => ({
@@ -57,8 +61,16 @@ vi.mock('../../models/SuggestedTask.js', () => ({
 vi.mock('../../models/SuggestedGatherItem.js', () => ({
   default: {
     deleteMany: (...args) => mocks.suggestedGatherItemDeleteMany(...args),
+    find: (...args) => mocks.suggestedGatherItemFind(...args),
     insertMany: (...args) => mocks.suggestedGatherItemInsertMany(...args),
     modelName: 'SuggestedGatherItem',
+  },
+}));
+
+vi.mock('../../models/GatherItem.js', () => ({
+  default: {
+    find: (...args) => mocks.gatherItemFind(...args),
+    modelName: 'GatherItem',
   },
 }));
 
@@ -80,6 +92,8 @@ const { createEntryWithAutomation } = await import('../entryAutomation.js');
 describe('entry automation gather suggestions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.existingSuggestions = [];
+    mocks.existingGatherItems = [];
 
     mocks.entryCreate.mockImplementation(async (doc) => ({
       _id: 'entry-1',
@@ -99,13 +113,55 @@ describe('entry automation gather suggestions', () => {
     });
     mocks.rippleInsertMany.mockResolvedValue([]);
     mocks.suggestedTaskInsertMany.mockResolvedValue([]);
-    mocks.suggestedGatherItemInsertMany.mockImplementation(async (docs) => docs);
+    mocks.suggestedGatherItemFind.mockImplementation((query) => ({
+      select: () => ({
+        lean: () => Promise.resolve(
+          mocks.existingSuggestions.filter((item) => (
+            item.userId === query.userId &&
+            item.list === query.list &&
+            item.status === query.status
+          ))
+        ),
+      }),
+    }));
+    mocks.gatherItemFind.mockImplementation((query) => ({
+      select: () => ({
+        lean: () => Promise.resolve(
+          mocks.existingGatherItems.filter((item) => {
+            const statuses = query.status?.$in || [query.status];
+            return (
+              item.userId === query.userId &&
+              item.list === query.list &&
+              statuses.includes(item.status)
+            );
+          })
+        ),
+      }),
+    }));
+    mocks.suggestedGatherItemInsertMany.mockImplementation(async (docs) => {
+      mocks.existingSuggestions.push(...docs);
+      return docs;
+    });
     mocks.taskInsertMany.mockResolvedValue([]);
     mocks.importantEventFindOne.mockResolvedValue(null);
     mocks.importantEventCreate.mockResolvedValue(null);
     mocks.appointmentFindOne.mockResolvedValue(null);
     mocks.appointmentCreate.mockResolvedValue(null);
   });
+
+  async function createGatherEntry(text) {
+    return createEntryWithAutomation({
+      userId: 'user-1',
+      payload: {
+        date: '2026-06-08',
+        text,
+      },
+    });
+  }
+
+  function insertedGatherDocs() {
+    return mocks.suggestedGatherItemInsertMany.mock.calls.flatMap(([docs]) => docs);
+  }
 
   it('creates a pending SuggestedGatherItem for a gather-only entry without creating a task', async () => {
     const entry = await createEntryWithAutomation({
@@ -127,6 +183,7 @@ describe('entry automation gather suggestions', () => {
         expect.objectContaining({
           userId: 'user-1',
           title: 'Container for nail stuff',
+          normalizedTitle: 'container for nail stuff',
           list: 'Needed Containers',
           status: 'pending',
           sourceEntryId: 'entry-1',
@@ -136,5 +193,118 @@ describe('entry automation gather suggestions', () => {
       { ordered: false }
     );
     expect(mocks.taskInsertMany).not.toHaveBeenCalled();
+  });
+
+  it('creates grocery suggestions without creating tasks', async () => {
+    await createGatherEntry('I need to get milk');
+
+    expect(insertedGatherDocs()[0]).toMatchObject({
+      userId: 'user-1',
+      title: 'Milk',
+      normalizedTitle: 'milk',
+      list: 'Grocery List',
+      status: 'pending',
+      sourceEntryId: 'entry-1',
+      sourceText: 'I need to get milk',
+    });
+    expect(mocks.taskInsertMany).not.toHaveBeenCalled();
+  });
+
+  it('extracts grocery recall phrases from entries', async () => {
+    const cases = [
+      ['Colton wants Gatorade', 'Gatorade', 'Grocery List'],
+      ["We're out of ketchup", 'Ketchup', 'Grocery List'],
+      ['Need more cat litter', 'Cat litter', 'Pet Supplies'],
+      ['Running low on laundry detergent', 'Laundry detergent', 'Home Supplies'],
+    ];
+
+    for (const [text, title, list] of cases) {
+      vi.clearAllMocks();
+      mocks.existingSuggestions = [];
+      mocks.existingGatherItems = [];
+      mocks.suggestedGatherItemInsertMany.mockImplementation(async (docs) => {
+        mocks.existingSuggestions.push(...docs);
+        return docs;
+      });
+
+      const entry = await createGatherEntry(text);
+      const doc = insertedGatherDocs()[0];
+
+      expect(entry).toMatchObject({ _id: 'entry-1', text });
+      expect(doc).toMatchObject({
+        title,
+        list,
+        status: 'pending',
+        sourceEntryId: 'entry-1',
+        sourceText: text,
+      });
+      if (text.includes('Colton')) {
+        expect(doc.tags).toContain('colton');
+      }
+      expect(mocks.taskInsertMany).not.toHaveBeenCalled();
+    }
+  });
+
+  it('does not create duplicate suggestions when a pending suggestion already exists', async () => {
+    mocks.existingSuggestions = [{
+      userId: 'user-1',
+      title: 'Milk',
+      normalizedTitle: 'milk',
+      list: 'Grocery List',
+      status: 'pending',
+    }];
+
+    const entry = await createGatherEntry('I need to get milk');
+
+    expect(entry).toMatchObject({ _id: 'entry-1' });
+    expect(mocks.suggestedGatherItemInsertMany).not.toHaveBeenCalled();
+  });
+
+  it('does not create duplicate suggestions when an active GatherItem already exists', async () => {
+    mocks.existingGatherItems = [{
+      userId: 'user-1',
+      title: 'Milk',
+      normalizedTitle: 'milk',
+      list: 'Grocery List',
+      status: 'needed',
+    }];
+
+    const entry = await createGatherEntry('I need to get milk');
+
+    expect(entry).toMatchObject({ _id: 'entry-1' });
+    expect(mocks.suggestedGatherItemInsertMany).not.toHaveBeenCalled();
+  });
+
+  it('allows a new suggestion when an existing GatherItem is bought', async () => {
+    mocks.existingGatherItems = [{
+      userId: 'user-1',
+      title: 'Milk',
+      normalizedTitle: 'milk',
+      list: 'Grocery List',
+      status: 'bought',
+    }];
+
+    await createGatherEntry('I need to get milk');
+
+    expect(insertedGatherDocs()[0]).toMatchObject({
+      title: 'Milk',
+      list: 'Grocery List',
+      status: 'pending',
+    });
+  });
+
+  it('does not duplicate a Gather suggestion for a scheduled action when the item is already active', async () => {
+    mocks.existingGatherItems = [{
+      userId: 'user-1',
+      title: 'Milk',
+      normalizedTitle: 'milk',
+      list: 'Grocery List',
+      status: 'needed',
+    }];
+
+    const entry = await createGatherEntry("I need to get milk tomorrow while I'm at work");
+
+    expect(entry).toMatchObject({ _id: 'entry-1' });
+    expect(mocks.suggestedGatherItemInsertMany).not.toHaveBeenCalled();
   });
 });

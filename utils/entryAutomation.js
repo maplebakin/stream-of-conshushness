@@ -5,6 +5,7 @@ import Appointment from "../models/Appointment.js";
 import Ripple from "../models/Ripple.js";
 import SuggestedTask from "../models/SuggestedTask.js";
 import SuggestedGatherItem from "../models/SuggestedGatherItem.js";
+import GatherItem from "../models/GatherItem.js";
 import Task from "../models/Task.js";
 import Cluster from "../models/Cluster.js";
 import { normalizeClusterIds, resolveClusterIdForOwner } from "./clusterIds.js";
@@ -13,7 +14,7 @@ import * as chrono from "chrono-node";
 import analyzeEntry from "./analyzeEntry.js";
 import { extractEntrySuggestions, extractRipplesFromEntry } from "./rippleExtractor.js";
 import { sieveRipples } from "./rippleSieve.js";
-import { extractGatherItems } from "./gatherExtractor.js";
+import { extractGatherItems, hasScheduledActionSignal, normalizeGatherTitleKey } from "./gatherExtractor.js";
 
 const { ObjectId } = mongoose.Types;
 const DEFAULT_TIME_ZONE = "America/Toronto";
@@ -148,6 +149,14 @@ function buildSuggestedTasks(options = {}) {
   } catch (err) {
     console.warn("[entryAutomation] extractEntrySuggestions failed:", err?.message || err);
     return [];
+  }
+}
+
+function isGatherOnlyEntry(text = "") {
+  try {
+    return !hasScheduledActionSignal(text) && (extractGatherItems(text) || []).length > 0;
+  } catch {
+    return false;
   }
 }
 
@@ -354,6 +363,32 @@ async function safeInsertMany(Model, docs) {
   }
 }
 
+async function findLean(Model, query) {
+  const result = Model.find(query);
+  if (result?.select) {
+    const selected = result.select("title normalizedTitle");
+    if (selected?.lean) return selected.lean();
+    return selected;
+  }
+  if (result?.lean) return result.lean();
+  return result;
+}
+
+async function gatherDuplicateExists({ userId, list, normalizedTitle }) {
+  if (!userId || !list || !normalizedTitle) return false;
+
+  const [pendingSuggestions, activeItems] = await Promise.all([
+    findLean(SuggestedGatherItem, { userId, list, status: "pending" }),
+    findLean(GatherItem, { userId, list, status: { $in: ["needed", "found"] } }),
+  ]);
+
+  const existing = [...(pendingSuggestions || []), ...(activeItems || [])];
+  return existing.some((item) => {
+    const key = item?.normalizedTitle || normalizeGatherTitleKey(item?.title || "");
+    return key === normalizedTitle;
+  });
+}
+
 async function generateRipplesAndSuggestions({ entry, text, userId }) {
   const basis = String(text || entry?.text || entry?.content || "").trim();
   if (!basis) return { ripples: [], suggestedTasks: [] };
@@ -469,7 +504,23 @@ async function generateGatherSuggestions({ entry, text, userId }) {
     }))
     .filter((item) => item.title);
 
-  return safeInsertMany(SuggestedGatherItem, docs);
+  const dedupedDocs = [];
+  const seen = new Set();
+
+  for (const doc of docs) {
+    const normalizedTitle = normalizeGatherTitleKey(doc.title);
+    const list = String(doc.list || "").trim();
+    if (!normalizedTitle || !list) continue;
+
+    const key = `${list.toLowerCase()}|${normalizedTitle}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    if (await gatherDuplicateExists({ userId, list, normalizedTitle })) continue;
+    dedupedDocs.push({ ...doc, normalizedTitle });
+  }
+
+  return safeInsertMany(SuggestedGatherItem, dedupedDocs);
 }
 
 /* ------------------------------------------------------------------ */
@@ -572,12 +623,15 @@ export async function createEntryWithAutomation({ userId, payload = {} }) {
   });
   const mergedTags = deDupeTags([...(normalized.tags || []), ...((analysis?.tags || []))]);
 
-  const suggestedTasks = buildSuggestedTasks({
-    text: normalized.text,
-    date: normalized.date,
-    cluster: normalized.cluster,
-    section: normalized.section,
-  });
+  const gatherOnlyEntry = isGatherOnlyEntry(normalized.text);
+  const suggestedTasks = gatherOnlyEntry
+    ? []
+    : buildSuggestedTasks({
+        text: normalized.text,
+        date: normalized.date,
+        cluster: normalized.cluster,
+        section: normalized.section,
+      });
 
   const entry = await Entry.create({
     userId,
@@ -656,7 +710,9 @@ export async function createEntryWithAutomation({ userId, payload = {} }) {
     console.warn("[entryAutomation] parsed appointment/event side-effects failed:", err?.message || err);
   }
 
-  await generateRipplesAndSuggestions({ entry, text: normalized.text, userId });
+  if (!gatherOnlyEntry) {
+    await generateRipplesAndSuggestions({ entry, text: normalized.text, userId });
+  }
   await generateGatherSuggestions({ entry, text: normalized.text, userId });
 
   return entry;

@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import GatherItem from '../models/GatherItem.js';
 import SuggestedGatherItem from '../models/SuggestedGatherItem.js';
 import { normalizeClusterIds, resolveClusterIdForOwner } from '../utils/clusterIds.js';
+import { normalizeGatherTitleKey } from '../utils/gatherExtractor.js';
 
 const router = express.Router();
 const { ObjectId } = mongoose.Types;
@@ -60,9 +61,11 @@ router.put('/:id/accept', async (req, res) => {
     if (!suggestion) return res.status(404).json({ error: 'Suggested gather item not found' });
 
     const clusters = await resolveClusters(userId, req.body || {}, suggestion.clusters);
+    const title = cleanString(req.body?.title, suggestion.title) || suggestion.title;
     const item = await GatherItem.create({
       userId,
-      title: cleanString(req.body?.title, suggestion.title) || suggestion.title,
+      title,
+      normalizedTitle: normalizeGatherTitleKey(title),
       description: cleanString(req.body?.description, suggestion.description || ''),
       clusters,
       list: cleanString(req.body?.list, suggestion.list) || suggestion.list || 'Things to Buy',
