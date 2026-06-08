@@ -23,6 +23,9 @@ function isActivePath(pathname, to) {
     // /ripples and any child routes
     return pathname === '/ripples' || pathname.startsWith('/ripples/');
   }
+  if (to === '/interests') {
+    return pathname === '/interests' || pathname.startsWith('/interests/');
+  }
   // exact match for everything else
   return pathname === to;
 }
@@ -75,6 +78,7 @@ export default function Header() {
         <NavItem to="/goals" label="🎯 Goals" pathname={location.pathname} />
         <NavItem to="/sections" label="🎛️ Sections" pathname={location.pathname} />
         <NavItem to="/ripples" label="💡 Ripples" pathname={location.pathname} />
+        <NavItem to="/interests" label="✨ Sparks" pathname={location.pathname} />
         {isAuthenticated && <NavItem to="/settings" label="⚙️ User Settings" pathname={location.pathname} />}
 
         {isAuthenticated && user && (

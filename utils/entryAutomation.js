@@ -6,6 +6,8 @@ import Ripple from "../models/Ripple.js";
 import SuggestedTask from "../models/SuggestedTask.js";
 import SuggestedGatherItem from "../models/SuggestedGatherItem.js";
 import GatherItem from "../models/GatherItem.js";
+import SuggestedInterest from "../models/SuggestedInterest.js";
+import Interest from "../models/Interest.js";
 import Task from "../models/Task.js";
 import Cluster from "../models/Cluster.js";
 import { normalizeClusterIds, resolveClusterIdForOwner } from "./clusterIds.js";
@@ -15,6 +17,7 @@ import analyzeEntry from "./analyzeEntry.js";
 import { extractEntrySuggestions, extractRipplesFromEntry } from "./rippleExtractor.js";
 import { sieveRipples } from "./rippleSieve.js";
 import { extractGatherItems, hasScheduledActionSignal, normalizeGatherTitleKey } from "./gatherExtractor.js";
+import { extractInterests, normalizeInterestTitleKey } from "./interestExtractor.js";
 
 const { ObjectId } = mongoose.Types;
 const DEFAULT_TIME_ZONE = "America/Toronto";
@@ -155,6 +158,14 @@ function buildSuggestedTasks(options = {}) {
 function isGatherOnlyEntry(text = "") {
   try {
     return !hasScheduledActionSignal(text) && (extractGatherItems(text) || []).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function isInterestOnlyEntry(text = "") {
+  try {
+    return (extractInterests(text) || []).length > 0;
   } catch {
     return false;
   }
@@ -373,6 +384,11 @@ export async function clearPendingGatherSuggestions({ userId, entryId }) {
   await SuggestedGatherItem.deleteMany({ userId, sourceEntryId: entryId, status: "pending" });
 }
 
+export async function clearPendingInterestSuggestions({ userId, entryId }) {
+  if (!userId || !entryId) return;
+  await SuggestedInterest.deleteMany({ userId, sourceEntryId: entryId, status: "pending" });
+}
+
 async function safeInsertMany(Model, docs) {
   if (!Array.isArray(docs) || docs.length === 0) return [];
   try {
@@ -412,6 +428,21 @@ async function gatherDuplicateExists({ userId, list, normalizedTitle }) {
   const existing = [...(pendingSuggestions || []), ...(activeItems || [])];
   return existing.some((item) => {
     const key = item?.normalizedTitle || normalizeGatherTitleKey(item?.title || "");
+    return key === normalizedTitle;
+  });
+}
+
+async function interestDuplicateExists({ userId, category, normalizedTitle }) {
+  if (!userId || !category || !normalizedTitle) return false;
+
+  const [pendingSuggestions, activeInterests] = await Promise.all([
+    findLean(SuggestedInterest, { userId, category, status: "pending" }),
+    findLean(Interest, { userId, category, status: { $in: ["curious", "exploring", "active", "paused"] } }),
+  ]);
+
+  const existing = [...(pendingSuggestions || []), ...(activeInterests || [])];
+  return existing.some((item) => {
+    const key = item?.normalizedTitle || normalizeInterestTitleKey(item?.title || "");
     return key === normalizedTitle;
   });
 }
@@ -550,6 +581,63 @@ async function generateGatherSuggestions({ entry, text, userId }) {
   return safeInsertMany(SuggestedGatherItem, dedupedDocs);
 }
 
+async function generateInterestSuggestions({ entry, text, userId }) {
+  const basis = String(text || entry?.text || entry?.content || "").trim();
+  if (!basis || !entry?._id || !userId) return [];
+
+  let extracted = [];
+  try {
+    extracted = extractInterests(basis) || [];
+  } catch (err) {
+    console.warn("[entryAutomation] extractInterests failed:", err?.message || err);
+    return [];
+  }
+
+  if (!Array.isArray(extracted) || !extracted.length) return [];
+
+  let clusters = Array.isArray(entry?.clusters) ? normalizeClusterIds(entry.clusters) : [];
+  if (!clusters.length && entry?.cluster) {
+    const resolvedCluster = await resolveClusterIdForOwner(userId, entry.cluster);
+    if (resolvedCluster) clusters = [resolvedCluster];
+  }
+
+  const docs = extracted
+    .slice(0, 25)
+    .map((item) => ({
+      userId,
+      title: String(item?.title || "").trim(),
+      description: typeof item?.description === "string" ? item.description.trim() : "",
+      category: String(item?.category || "Learning Curiosities").trim() || "Learning Curiosities",
+      status: "pending",
+      sourceEntryId: entry._id,
+      sourceText: String(item?.sourceText || basis).trim(),
+      clusters,
+      cluster: entry?.cluster || "",
+      confidence: Number.isFinite(Number(item?.confidence)) ? Number(item.confidence) : 0.7,
+      reason: String(item?.reason || "interestPhrase"),
+      tags: Array.isArray(item?.tags) ? item.tags.filter((tag) => typeof tag === "string" && tag.trim()) : [],
+    }))
+    .filter((item) => item.title);
+
+  const dedupedDocs = [];
+  const seen = new Set();
+
+  for (const doc of docs) {
+    const normalizedTitle = normalizeInterestTitleKey(doc.title);
+    const category = String(doc.category || "").trim();
+    if (!normalizedTitle || !category) continue;
+
+    const key = `${category.toLowerCase()}|${normalizedTitle}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    if (await interestDuplicateExists({ userId, category, normalizedTitle })) continue;
+    dedupedDocs.push({ ...doc, normalizedTitle });
+  }
+
+  return safeInsertMany(SuggestedInterest, dedupedDocs);
+}
+
 /* ------------------------------------------------------------------ */
 /* Entry normalization                                                 */
 /* ------------------------------------------------------------------ */
@@ -651,7 +739,8 @@ export async function createEntryWithAutomation({ userId, payload = {} }) {
   const mergedTags = deDupeTags([...(normalized.tags || []), ...((analysis?.tags || []))]);
 
   const gatherOnlyEntry = isGatherOnlyEntry(normalized.text);
-  const suggestedTasks = gatherOnlyEntry
+  const interestOnlyEntry = isInterestOnlyEntry(normalized.text);
+  const suggestedTasks = gatherOnlyEntry || interestOnlyEntry
     ? []
     : buildSuggestedTasks({
         text: normalized.text,
@@ -738,10 +827,11 @@ export async function createEntryWithAutomation({ userId, payload = {} }) {
     console.warn("[entryAutomation] parsed appointment/event side-effects failed:", err?.message || err);
   }
 
-  if (!gatherOnlyEntry) {
+  if (!gatherOnlyEntry && !interestOnlyEntry) {
     await generateRipplesAndSuggestions({ entry, text: normalized.text, userId });
   }
   await generateGatherSuggestions({ entry, text: normalized.text, userId });
+  await generateInterestSuggestions({ entry, text: normalized.text, userId });
 
   return entry;
 }
@@ -795,12 +885,14 @@ export async function updateEntryWithAutomation({ userId, entryId, updates = {} 
   if (coreChanged) {
     analysis = analyzeEntrySafe({ text: entry.text, html: entry.html, date: entry.date });
     entry.tags = deDupeTags([...(entry.tags || []), ...((analysis?.tags || []))]);
-    entry.suggestedTasks = buildSuggestedTasks({
-      text: entry.text,
-      date: entry.date,
-      cluster: entry.cluster,
-      section: entry.section,
-    });
+    entry.suggestedTasks = (isGatherOnlyEntry(entry.text) || isInterestOnlyEntry(entry.text))
+      ? []
+      : buildSuggestedTasks({
+          text: entry.text,
+          date: entry.date,
+          cluster: entry.cluster,
+          section: entry.section,
+        });
   }
 
   const updated = await entry.save();
@@ -810,9 +902,15 @@ export async function updateEntryWithAutomation({ userId, entryId, updates = {} 
   }
 
   await clearRippleArtifacts({ userId, entryId: updated._id });
-  await generateRipplesAndSuggestions({ entry: updated, text: updated.text, userId });
+  const updatedGatherOnly = isGatherOnlyEntry(updated.text);
+  const updatedInterestOnly = isInterestOnlyEntry(updated.text);
+  if (!updatedGatherOnly && !updatedInterestOnly) {
+    await generateRipplesAndSuggestions({ entry: updated, text: updated.text, userId });
+  }
   await clearPendingGatherSuggestions({ userId, entryId: updated._id });
   await generateGatherSuggestions({ entry: updated, text: updated.text, userId });
+  await clearPendingInterestSuggestions({ userId, entryId: updated._id });
+  await generateInterestSuggestions({ entry: updated, text: updated.text, userId });
 
   return updated;
 }
@@ -837,4 +935,5 @@ export default {
   updateEntryWithAutomation,
   clearRippleArtifacts,
   clearPendingGatherSuggestions,
+  clearPendingInterestSuggestions,
 };

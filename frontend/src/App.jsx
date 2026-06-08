@@ -22,6 +22,7 @@ import SectionPageRoom from './pages/SectionPageRoom.jsx';    // NEW: page room 
 import ClustersIndex from './pages/ClustersIndex.jsx';        // clusters index
 import ClusterRoom from './pages/ClusterRoom.jsx';            // per-cluster room
 import GatherListsPage from './pages/GatherListsPage.jsx';
+import InterestsPage from './pages/InterestsPage.jsx';
 
 import RippleReviewUI from './RippleReviewUI';
 import Layout from './Layout.jsx';
@@ -110,6 +111,7 @@ function AppRoutes() {
           <Route path="/clusters/:clusterSlug" element={<ClusterRoom />} />    {/* param name matches ClusterRoom */}
 
           <Route path="/gather-lists" element={<GatherListsPage />} />
+          <Route path="/interests" element={<InterestsPage />} />
 
           {/* Games */}
           <Route path="/section/games" element={<GameList />} />

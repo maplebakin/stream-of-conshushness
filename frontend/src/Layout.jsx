@@ -61,6 +61,11 @@ export default function Layout() {
                   </NavLink>
                 </li>
                 <li>
+                  <NavLink to="/interests" className={linkClass} title="Sparks & Interests">
+                    ✨ <span>Sparks & Interests</span>
+                  </NavLink>
+                </li>
+                <li>
                   <NavLink to="/inbox/tasks" className={linkClass} title="Task Inbox">
                     ✅ <span>Task Inbox</span>
                   </NavLink>

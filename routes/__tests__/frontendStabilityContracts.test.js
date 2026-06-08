@@ -16,6 +16,7 @@ describe('frontend stability endpoint contracts', () => {
       'path="/sections" element={<SectionsIndex />}',
       'path="/sections/:key" element={<SectionPage />}',
       'path="/clusters" element={<ClustersIndex />}',
+      'path="/interests" element={<InterestsPage />}',
       'path="/ripples" element={<RippleReviewUI />}',
       'path="/inbox/tasks" element={<InboxTasksPage />}',
       'path="/search" element={<GlobalSearch />}',
@@ -38,12 +39,13 @@ describe('frontend stability endpoint contracts', () => {
 
     expect(header).toContain('to="/goals"');
     expect(header).toContain('Goals');
+    expect(header).toContain('to="/interests"');
 
-    for (const target of ['/', '/sections', '/clusters', '/ripples', '/inbox/tasks', '/calendar', '/search', '/trash', '/export', '/account', '/settings']) {
+    for (const target of ['/', '/sections', '/clusters', '/ripples', '/interests', '/inbox/tasks', '/calendar', '/search', '/trash', '/export', '/account', '/settings']) {
       expect(layout).toContain(`to="${target}"`);
     }
 
-    for (const target of ['/', '/today', '/calendar', '/goals', '/sections', '/clusters', '/ripples', '/habits/analytics', '/search', '/export', '/trash', '/account', '/settings']) {
+    for (const target of ['/', '/today', '/calendar', '/goals', '/sections', '/clusters', '/ripples', '/interests', '/habits/analytics', '/search', '/export', '/trash', '/account', '/settings']) {
       expect(commandPalette).toContain(`target: '${target}'`);
       if (target === '/today') {
         expect(app).toContain('path="/today" element={<TodayRedirect />}');
