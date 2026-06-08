@@ -315,7 +315,6 @@ export default function ResearchSectionPage() {
   const { isAuthenticated } = useContext(AuthContext);
 
   const [subjects, setSubjects] = useState([]);
-  const [sectionId, setSectionId] = useState(null);
   const [selected, setSelected] = useState(null);       // full subject with populated rels
   const [view, setView] = useState('list');              // 'list' | 'new' | 'edit'
   const [q, setQ] = useState('');
@@ -329,7 +328,6 @@ export default function ResearchSectionPage() {
       const params = query ? `?q=${encodeURIComponent(query)}` : '';
       const { data } = await axios.get(`/api/research/${sectionKey}/subjects${params}`);
       setSubjects(data.subjects || []);
-      setSectionId(data.sectionId);
       setError(null);
     } catch (e) {
       setError(e.response?.data?.error || 'Failed to load research subjects');
