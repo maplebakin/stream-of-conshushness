@@ -14,7 +14,7 @@ export default function ImportantEventModal({ date, onClose, onSaved }) {
   // Load entries for that date so the user can link one (optional)
   useEffect(() => {
     if (!eventDate) return;
-    axios.get(`/api/entries/${eventDate}`)
+    axios.get(`/api/entries/by-date/${eventDate}`)
       .then(res => setEntries(res.data || []))
       .catch(() => setEntries([]));
   }, [eventDate]);
