@@ -10,6 +10,7 @@ const commands = [
   { id: 'nav-home', label: 'Go to Stream', icon: '🌊', action: 'navigate', target: '/', keywords: ['home', 'main', 'stream'] },
   { id: 'nav-today', label: 'Go to Today', icon: '📅', action: 'navigate', target: '/today', keywords: ['today', 'daily', 'now'] },
   { id: 'nav-calendar', label: 'Go to Calendar', icon: '📆', action: 'navigate', target: '/calendar', keywords: ['calendar', 'dates'] },
+  { id: 'nav-goals', label: 'Go to Goals', icon: '🎯', action: 'navigate', target: '/goals', keywords: ['goals', 'plans', 'progress'] },
   { id: 'nav-sections', label: 'Go to Sections', icon: '🗂️', action: 'navigate', target: '/sections', keywords: ['sections', 'wiki'] },
   { id: 'nav-clusters', label: 'Go to Clusters', icon: '🧩', action: 'navigate', target: '/clusters', keywords: ['clusters', 'tags'] },
   { id: 'nav-ripples', label: 'Go to Ripples', icon: '💡', action: 'navigate', target: '/ripples', keywords: ['ripples', 'actions'] },

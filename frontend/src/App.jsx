@@ -10,6 +10,7 @@ import './DesignSystem.css'
 import MainPage from './MainPage.jsx';
 import DailyPage from './DailyPage.jsx';
 import Calendar from './Calendar.jsx';
+import GoalPage from './GoalPage.jsx';
 import Login from './Login.jsx';
 import RegisterPage from './RegisterPage.jsx';
 import GameList from './GameList.jsx';
@@ -90,6 +91,7 @@ function AppRoutes() {
         <Route element={<Layout />}>
           <Route path="/" element={<MainPage />} />
           <Route path="/calendar" element={<Calendar />} />
+          <Route path="/goals" element={<GoalPage />} />
           <Route path="/today" element={<TodayRedirect />} />
           <Route path="/day/:date" element={<DailyPage />} />
           <Route path="/_adapters" element={<AdapterHarness />} />
