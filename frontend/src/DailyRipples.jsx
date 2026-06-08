@@ -84,29 +84,12 @@ function clientFilterRipples(list, { hideChatter, minConf }) {
   });
 }
 
-/* ───────────────── robust backend actions ───────────────── */
 async function dismissRipple(id, headers) {
-  // Try common shapes until one works.
-  // 1) POST /dismiss
   try {
     await axios.post(`/api/ripples/${id}/dismiss`, {}, { headers });
     return true;
   } catch (error) {
-    console.warn('[DailyRipples] POST /dismiss failed, trying fallback', error);
-  }
-  // 2) PATCH status
-  try {
-    await axios.patch(`/api/ripples/${id}`, { status: 'dismissed' }, { headers });
-    return true;
-  } catch (error) {
-    console.warn('[DailyRipples] PATCH status fallback failed, trying next', error);
-  }
-  // 3) POST /status
-  try {
-    await axios.post(`/api/ripples/${id}/status`, { status: 'dismissed' }, { headers });
-    return true;
-  } catch (error) {
-    console.warn('[DailyRipples] POST status fallback failed', error);
+    console.warn('[DailyRipples] dismiss failed', error);
   }
   throw new Error('dismiss failed');
 }

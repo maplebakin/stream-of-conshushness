@@ -69,25 +69,12 @@ function getConfidence(r) {
   return 1;
 }
 
-/* ───────────────── robust backend actions ───────────────── */
 async function dismissRipple(id, headers) {
   try {
     await axios.post(`/api/ripples/${id}/dismiss`, {}, { headers });
     return true;
   } catch (error) {
-    console.warn('[RippleReviewUI] POST /dismiss failed, trying fallback', error);
-  }
-  try {
-    await axios.patch(`/api/ripples/${id}`, { status: 'dismissed' }, { headers });
-    return true;
-  } catch (error) {
-    console.warn('[RippleReviewUI] PATCH status fallback failed, trying next', error);
-  }
-  try {
-    await axios.post(`/api/ripples/${id}/status`, { status: 'dismissed' }, { headers });
-    return true;
-  } catch (error) {
-    console.warn('[RippleReviewUI] POST status fallback failed', error);
+    console.warn('[RippleReviewUI] dismiss failed', error);
   }
   throw new Error('dismiss failed');
 }

@@ -104,9 +104,9 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
     try {
       // Repeating: advance schedule
       if (!task.completed && (task.repeat || task.rrule)) {
-        await axios.post(
-          `/api/tasks/${task._id}/complete`,
-          { fromDate: date },
+        await axios.patch(
+          `/api/tasks/${task._id}/toggle`,
+          null,
           { headers: authHeaders }
         );
       } else {
