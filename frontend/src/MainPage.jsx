@@ -252,6 +252,34 @@ export default function MainPage() {
 
       {/* Body */}
       <section className="entry-feed">
+        <section className="stream-onboarding-card" aria-labelledby="stream-onboarding-title">
+          <div className="stream-onboarding-copy">
+            <h2 id="stream-onboarding-title">Write naturally. Structure appears after.</h2>
+            <p>
+              Capture the thought first. StreamofConshushness can turn useful pieces into
+              Gather Lists, Sparks & Interests, Tasks, or things On the Horizon without
+              making you sort everything upfront.
+            </p>
+            <p className="stream-onboarding-helper">
+              You do not have to know what kind of entry it is before you write it.
+            </p>
+          </div>
+
+          <div className="stream-onboarding-examples" aria-label="Example entries">
+            <span>"I need to get milk" <strong>Grocery List</strong></span>
+            <span>"I have a doctor's appointment at 3pm on June 25th" <strong>On the Horizon</strong></span>
+            <span>"I'd like to learn about tap dance" <strong>Sparks & Interests</strong></span>
+            <span>"I'm nervous about my appointment" <strong>Entry only</strong></span>
+          </div>
+
+          <div className="stream-onboarding-links" aria-label="Review pages">
+            <span>After writing, check:</span>
+            <Link to="/gather-lists">Gather Lists</Link>
+            <Link to="/interests">Sparks & Interests</Link>
+            <Link to="/calendar">Calendar</Link>
+          </div>
+        </section>
+
         <form
           className="quick-entry"
           onSubmit={(e) => {

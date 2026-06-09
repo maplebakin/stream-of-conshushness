@@ -79,6 +79,76 @@
   gap: 1.25rem;
 }
 
+.stream-onboarding-card {
+  display: grid;
+  gap: 1rem;
+  background: var(--color-surface);
+  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+  padding: 1rem 1.25rem;
+}
+
+.stream-onboarding-copy {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.stream-onboarding-copy h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--color-accent-dark);
+}
+
+.stream-onboarding-copy p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.stream-onboarding-helper {
+  color: var(--color-muted);
+}
+
+.stream-onboarding-examples,
+.stream-onboarding-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.stream-onboarding-examples span,
+.stream-onboarding-links a,
+.stream-onboarding-links span {
+  border-radius: var(--radius-button);
+  padding: 0.3rem 0.55rem;
+  background: color-mix(in srgb, var(--color-surface) 72%, var(--color-spool) 28%);
+}
+
+.stream-onboarding-examples strong {
+  color: var(--color-accent-dark);
+  font-weight: 700;
+}
+
+.stream-onboarding-links {
+  align-items: center;
+}
+
+.stream-onboarding-links span {
+  color: var(--color-muted);
+  background: transparent;
+  padding-left: 0;
+}
+
+.stream-onboarding-links a {
+  color: var(--color-accent-dark);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.stream-onboarding-links a:hover {
+  text-decoration: underline;
+}
+
 .entry-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
