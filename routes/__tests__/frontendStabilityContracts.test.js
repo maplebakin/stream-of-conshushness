@@ -56,6 +56,23 @@ describe('frontend stability endpoint contracts', () => {
     }
   });
 
+  it('hides the global right navigation on dense working pages', () => {
+    const layout = read('frontend/src/Layout.jsx');
+
+    expect(layout).toContain("pathname.startsWith('/calendar')");
+    expect(layout).toContain("pathname === '/today'");
+    expect(layout).toContain("pathname.startsWith('/day/')");
+    expect(layout).toContain('section-sidebar--right');
+  });
+
+  it('deduplicates daily important event aliases before rendering the agenda', () => {
+    const daily = read('frontend/src/DailyPage.jsx');
+
+    expect(daily).toContain('function eventAliasKey(item)');
+    expect(daily).toContain('const importantKeys = new Set((important || []).map(eventAliasKey));');
+    expect(daily).toContain('.filter(e => !importantKeys.has(eventAliasKey(e)))');
+  });
+
   it('documents currently unreachable legacy frontend surfaces before cleanup', () => {
     const app = read('frontend/src/App.jsx');
     const sectionLanding = read('frontend/src/pages/SectionLanding.jsx');

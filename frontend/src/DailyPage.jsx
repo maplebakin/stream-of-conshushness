@@ -61,6 +61,12 @@ function entryHasMeaningfulText(en) {
   return plain.length > 0;
 }
 
+function eventAliasKey(item) {
+  const id = item?._id || item?.id;
+  if (id) return String(id);
+  return `${item?.date || ''}|${item?.title || ''}`;
+}
+
 /* ===================================================== */
 export default function DailyPage() {
   const { date: routeDate } = useParams();
@@ -195,14 +201,17 @@ export default function DailyPage() {
       location: a.location || '',
       details: a.details || '',
     }));
-    const evs = (events || []).map(e => ({
-      _id: e._id,
-      type: 'event',
-      title: e.title || '(untitled)',
-      date: e.date,
-      time: null,
-      pinned: !!e.pinned,
-    }));
+    const importantKeys = new Set((important || []).map(eventAliasKey));
+    const evs = (events || [])
+      .filter(e => !importantKeys.has(eventAliasKey(e)))
+      .map(e => ({
+        _id: e._id,
+        type: 'event',
+        title: e.title || '(untitled)',
+        date: e.date,
+        time: null,
+        pinned: !!e.pinned,
+      }));
     const imps = (important || []).map(e => ({
       _id: e._id,
       type: 'important',
@@ -211,7 +220,15 @@ export default function DailyPage() {
       time: null,
       note: e.details || e.description || '',
     }));
-    const all = [...appts, ...imps, ...evs];
+    const seen = new Set();
+    const all = [...appts, ...imps, ...evs].filter((item) => {
+      const key = item.type === 'appointment'
+        ? `${item.type}:${item._id || item.id || `${item.date}|${item.time}|${item.title}`}`
+        : eventAliasKey(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
     all.sort((a, b) => {
       const ta = a.time ? a.time : '24:00';
       const tb = b.time ? b.time : '24:00';
@@ -301,14 +318,14 @@ export default function DailyPage() {
 
       <section className="daily-layout">
         <div className="daily-main">
-          <div className="panel">
-            <h3>Due Today</h3>
+          <div className="panel daily-task-panel">
+            <h3 className="daily-section-heading">Due Today</h3>
             {renderSafe(
               TaskList,
               { key: `due-${taskListKey}`, date: dateISO, bucket: 'dueToday', header: null, keepCompleted: false },
               'TaskList'
             )}
-            <h3>On Your Radar</h3>
+            <h3 className="daily-section-heading daily-section-heading--spaced">On Your Radar</h3>
             {renderSafe(
               TaskList,
               { key: `radar-${taskListKey}`, date: dateISO, bucket: 'onYourRadar', header: null, keepCompleted: false },

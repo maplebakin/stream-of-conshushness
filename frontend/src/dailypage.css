@@ -10,8 +10,8 @@
 /* Layout */
 .daily-page .daily-layout {
   display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: var(--space-5);
   align-items: start;
 }
 
@@ -125,6 +125,22 @@
 .daily-page .daily-main .panel + .panel,
 .daily-page .daily-side .panel + .panel { margin-top: var(--space-4); }
 
+.daily-page .daily-task-panel {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.daily-page .daily-section-heading {
+  margin: 0;
+  color: var(--color-vein);
+  font-family: var(--font-thread);
+}
+
+.daily-page .daily-section-heading--spaced {
+  padding-top: var(--space-3);
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
 /* Entry cards (Today’s Entries) */
 .daily-page .entry-card {
   background: linear-gradient(180deg, rgba(255,255,255,.66), rgba(255,255,255,.5));
@@ -167,6 +183,57 @@
 }
 .daily-page .appt-time  { font-weight: 600; font-variant-numeric: tabular-nums; }
 .daily-page .appt-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.daily-page .side-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.daily-page .side-header h3 {
+  margin: 0;
+}
+
+.daily-page .agenda-list {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  padding: 0;
+  margin: var(--space-3) 0 0;
+}
+
+.daily-page .agenda-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: start;
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-surface) 92%, white 8%);
+}
+
+.daily-page .agenda-bullet {
+  line-height: 1.4;
+}
+
+.daily-page .agenda-main {
+  min-width: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.daily-page .agenda-title {
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.daily-page .agenda-meta {
+  font-size: 0.9rem;
+}
 
 /* Ripple box (compat with DailyRipples.css chips) */
 .daily-page .ripple-item {
@@ -225,7 +292,6 @@
 .daily-page .qa-btn:disabled { opacity: .65; cursor: default; transform: none; }
 
 /* ====== Task-list layout fixes inside panels ====== */
-.daily-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; }
 .daily-main, .daily-main .panel { min-width: 0; }
 
 .panel .task-list, .panel .tasks-inbox, .panel .inbox-list {

@@ -296,7 +296,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
         {header ? <h3 className="font-thread text-vein">{header}</h3> : <span />}
 
         {/* Right side: toggles + add task */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div className="task-list-controls">
           {isToday && (
             <div className="task-toggles">
               <button
@@ -336,17 +336,8 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
 
       {/* Bulk operations toolbar */}
       {selectedTasks.size > 0 && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: '12px',
-          background: 'var(--bg-secondary)',
-          borderRadius: '8px',
-          marginBottom: '12px',
-          border: '1px solid var(--border-primary)'
-        }}>
-          <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+        <div className="bulk-task-toolbar">
+          <span className="bulk-task-count">
             {selectedTasks.size} task{selectedTasks.size > 1 ? 's' : ''} selected
           </span>
           <button
@@ -382,16 +373,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
 
       {/* Inline composer */}
       {showComposer && (
-        <div
-          className="add-task-row"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr auto auto',
-            gap: 8,
-            marginBottom: 12,
-            alignItems: 'center'
-          }}
-        >
+        <div className="add-task-row">
           <input
             className="add-task-input input"
             autoFocus
@@ -427,48 +409,30 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
         <>
           {/* Select All checkbox */}
           {tasks.length > 0 && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '8px 0',
-              marginBottom: '8px',
-              borderBottom: '1px solid var(--border-primary)'
-            }}>
+            <div className="select-all-row">
               <input
                 type="checkbox"
                 checked={selectedTasks.size === tasks.length && tasks.length > 0}
                 onChange={toggleSelectAll}
-                style={{ cursor: 'pointer' }}
                 title="Select all tasks"
               />
-              <label style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', cursor: 'pointer' }} onClick={toggleSelectAll}>
+              <label onClick={toggleSelectAll}>
                 Select all
               </label>
             </div>
           )}
 
-          <ul className="tasks" style={{ listStyle: 'none', padding: 0, margin: '8px 0', display: 'grid', gap: 8 }}>
+          <ul className="tasks">
             {tasks.map(t => (
               <li
                 key={t._id}
-                className={`task-item ${t.completed ? 'done' : ''}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  background: selectedTasks.has(t._id) ? 'var(--bg-secondary)' : 'transparent',
-                  padding: '8px',
-                  borderRadius: '6px',
-                  transition: 'background 0.2s'
-                }}
+                className={`task-item ${t.completed ? 'done' : ''} ${selectedTasks.has(t._id) ? 'selected' : ''}`}
               >
                 <input
                   type="checkbox"
                   checked={selectedTasks.has(t._id)}
                   onChange={() => toggleTaskSelection(t._id)}
                   onClick={(e) => e.stopPropagation()}
-                  style={{ cursor: 'pointer', flexShrink: 0 }}
                   title="Select task"
                 />
                 <button
@@ -476,22 +440,22 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
                   onClick={() => toggleComplete(t)}
                   aria-label={t.completed ? 'Mark incomplete' : 'Mark complete'}
                   title={t.completed ? 'Mark incomplete' : 'Mark complete'}
-                  style={{ flexShrink: 0 }}
                 />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, flexWrap: 'wrap' }}>
+                <div className="task-item-main">
                   <div className="task-title">{t.title}</div>
-                  {t.clusters && t.clusters.length > 0 && t.clusters[0]?.slug && (
-                    <Link
-                      to={`/clusters/${t.clusters[0].slug}`}
-                      className="cluster muted"
-                      style={{ textDecoration: 'none', color: 'inherit' }}
-                      title={`View cluster: ${t.clusters[0].name}`}
-                    >
-                      {t.clusters[0].icon && `${t.clusters[0].icon} `}{t.clusters[0].name}
-                    </Link>
-                  )}
-                  {t.repeat && <div className="repeat muted">{describeRepeat(t.repeat)}</div>}
-                  {t.dueDate && <div className="due muted">due {t.dueDate}</div>}
+                  <div className="task-item-meta">
+                    {t.clusters && t.clusters.length > 0 && t.clusters[0]?.slug && (
+                      <Link
+                        to={`/clusters/${t.clusters[0].slug}`}
+                        className="cluster muted"
+                        title={`View cluster: ${t.clusters[0].name}`}
+                      >
+                        {t.clusters[0].icon && `${t.clusters[0].icon} `}{t.clusters[0].name}
+                      </Link>
+                    )}
+                    {t.repeat && <span className="repeat muted">{describeRepeat(t.repeat)}</span>}
+                    {t.dueDate && <span className="due-badge">due {t.dueDate}</span>}
+                  </div>
                 </div>
               </li>
             ))}
@@ -517,7 +481,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
             {inbox.length === 0 ? (
               <div className="muted">No undated tasks.</div>
             ) : (
-              <ul className="tasks" style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
+              <ul className="tasks">
                 {inbox.map(t => (
                   <li key={t._id} className="task-item">
                     <div className="task-title">{t.title}</div>

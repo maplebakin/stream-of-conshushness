@@ -12,7 +12,10 @@ export default function Layout() {
   const { user } = useContext(AuthContext);
 
   // Pages that render their own sidebar should suppress the global right sidebar.
-  const hideRightSidebar = pathname.startsWith('/calendar');
+  const hideRightSidebar =
+    pathname.startsWith('/calendar') ||
+    pathname === '/today' ||
+    pathname.startsWith('/day/');
 
   const linkClass = ({ isActive }) =>
     `nav-link${isActive ? ' active' : ''}`;
