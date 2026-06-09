@@ -22,6 +22,37 @@ function quickTags(s) {
   return Array.from(out);
 }
 
+const TASK_ACTION_VERBS = [
+  'pay',
+  'clean',
+  'tidy',
+  'finish',
+  'extend',
+  'renew',
+  'submit',
+  'call',
+  'email',
+  'book',
+  'schedule',
+  'register',
+  'sign up',
+  'buy',
+  'order',
+  'pick up',
+];
+
+const DEADLINE_WORDS = /\b(?:today|tomorrow|tonight|by\s+the\s+end\s+of\s+the\s+day|by\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|in\s+(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+months?)\b/i;
+
+function isActionDeadlinePhrase(text = '') {
+  const source = String(text || '').toLowerCase();
+  if (!source) return false;
+  if (!DEADLINE_WORDS.test(source)) return false;
+  return TASK_ACTION_VERBS.some((verb) => {
+    const escaped = verb.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+    return new RegExp(`\\b${escaped}\\b`, 'i').test(source);
+  });
+}
+
 /**
  * analyzeEntry({ text, html, baseDate }) ->
  * {
@@ -54,7 +85,7 @@ export function analyzeEntry({ text = "", html = "", baseDate = new Date() } = {
     if (!title || !date) continue;
     if (timeStart) {
       appointments.push({ title, date, timeStart });
-    } else {
+    } else if (!isActionDeadlinePhrase(content)) {
       importantEvents.push({ title, date });
     }
   }

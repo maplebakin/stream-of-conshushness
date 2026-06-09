@@ -89,4 +89,19 @@ describe('gatherExtractor', () => {
       'milk',
     ]);
   });
+
+  it('does not treat reminder and action phrases as gather items', () => {
+    const cases = [
+      'I need to remember to extend the pause on my Audible subscription in two months.',
+      'Remember to clean the fish tank every other day.',
+      'Remind me to pay daycare fees tomorrow.',
+      'I need to renew my license.',
+      'I need to schedule a dentist appointment.',
+      'I need to tidy up the apartment today.',
+    ];
+
+    for (const text of cases) {
+      expect(extractGatherItems(text)).toEqual([]);
+    }
+  });
 });

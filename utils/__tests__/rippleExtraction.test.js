@@ -10,7 +10,7 @@ test('extractTasks handles "remember to" with "this Friday"', () => {
   const tasks = extractTasks(text, ENTRY_DATE);
   expect(tasks.length).toBe(1);
   expect(tasks[0].dueDate).toBe('2024-06-14');
-  expect(tasks[0].text).toBe('send the slides this Friday');
+  expect(tasks[0].text).toBe('Send the slides');
 });
 
 test('extractTasks handles "be sure to" and "this weekend"', () => {
@@ -35,4 +35,47 @@ test('sieveRipples keeps actionable ripples derived from shared verbs', () => {
   });
   const filtered = sieveRipples(ripples);
   expect(filtered.length).toBe(ripples.length);
+});
+
+test('extractTasks cleans task titles while preserving due metadata', () => {
+  const cases = [
+    ['I really gotta finish folding the laundry', 'Finish folding the laundry', null],
+    ['pay the daycare fees by the end of the day today', 'Pay daycare fees', ENTRY_DATE],
+    ['I need to remember to extend the pause on my Audible subscription in two months.', 'Extend the pause on my Audible subscription', '2024-08-10'],
+    ['remember to clean the fish tank every other day', 'Clean the fish tank', null],
+    ['I really need to tidy up the apartment today; grab a couple of garbage bags and just go at', 'Tidy up the apartment', ENTRY_DATE],
+  ];
+
+  for (const [text, title, dueDate] of cases) {
+    const tasks = extractTasks(text, ENTRY_DATE);
+    expect(tasks[0]).toMatchObject({ text: title });
+    if (dueDate) expect(tasks[0].dueDate).toBe(dueDate);
+  }
+});
+
+test('extractTasks keeps short imperatives entry-only without clear due context', () => {
+  expect(extractTasks('pick up iron', ENTRY_DATE)).toEqual([]);
+});
+
+test('extractRipples marks dated non-recurring actions for active task creation only', () => {
+  const due = extractRipplesFromEntry({
+    text: 'pay the daycare fees by the end of the day today',
+    entryDate: ENTRY_DATE,
+  }).ripples[0];
+  const recurring = extractRipplesFromEntry({
+    text: 'remember to clean the fish tank every other day',
+    entryDate: ENTRY_DATE,
+  }).ripples[0];
+
+  expect(due).toMatchObject({
+    type: 'deadline',
+    extractedText: 'Pay daycare fees',
+    meta: { dueDate: ENTRY_DATE, autoCreate: true },
+  });
+  expect(recurring).toMatchObject({
+    type: 'recurringTask',
+    extractedText: 'Clean the fish tank',
+    meta: { recurrence: 'FREQ=DAILY;INTERVAL=2' },
+  });
+  expect(recurring.meta.autoCreate).toBeUndefined();
 });

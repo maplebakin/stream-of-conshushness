@@ -3,6 +3,7 @@ import express from 'express';
 import mongoose from 'mongoose';
 import SuggestedTask from '../models/SuggestedTask.js';
 import Task from '../models/Task.js';
+import Ripple from '../models/Ripple.js';
 import { resolveClusterIdForOwner } from '../utils/clusterIds.js';
 
 const router = express.Router();
@@ -54,6 +55,7 @@ router.put('/:id/accept', async (req, res) => {
     const sections = section ? [String(section)] : [];
     const priority = priorityToNumber(req.body?.priority ?? sug.priority);
     const notes = typeof req.body?.notes === 'string' ? req.body.notes : '';
+    const sourceRipple = await Ripple.findOne({ _id: sug.sourceRippleId, userId }).select('entryId').lean();
 
     const task = await Task.create({
       userId,
@@ -64,6 +66,7 @@ router.put('/:id/accept', async (req, res) => {
       clusters,
       ...(sections.length ? { sections } : {}),
       ...(notes ? { notes } : {}),
+      ...(sourceRipple?.entryId ? { entryId: sourceRipple.entryId } : {}),
     });
 
     sug.status = 'accepted';

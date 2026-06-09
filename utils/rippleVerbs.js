@@ -4,6 +4,7 @@ export const ACTION_VERBS = [
   'clean','wash','wipe','vacuum','mop','water','feed',
   'pay','renew','submit','file','send','print','scan',
   'write','read','finish','fix','update','check','review',
+  'tidy','extend',
   'install','uninstall','replace',
   'pick up','drop off','prepare','plan','organize','record','practice','backup','back up'
 ];

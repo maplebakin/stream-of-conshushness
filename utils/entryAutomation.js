@@ -303,10 +303,14 @@ function toISODateString(value) {
   const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return "";
   return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, "0"),
-    String(d.getDate()).padStart(2, "0"),
+    d.getUTCFullYear(),
+    String(d.getUTCMonth() + 1).padStart(2, "0"),
+    String(d.getUTCDate()).padStart(2, "0"),
   ].join("-");
+}
+
+function shouldAutoCreateTaskFromRipple(ripple = {}) {
+  return Boolean(ripple?.meta?.autoCreate && ripple?.meta?.dueDate && !ripple?.meta?.recurrence);
 }
 
 function cleanCalendarTitle(value = "") {
@@ -495,6 +499,7 @@ async function generateRipplesAndSuggestions({ entry, text, userId }) {
         priority: "low",
         cluster: entry.cluster || "",
         section: entry.section || "",
+        autoCreate: shouldAutoCreateTaskFromRipple(src),
       };
       const dueDate = isoDateToUTCDate(dueISO);
       if (dueDate) payload.dueDate = dueDate;
@@ -507,6 +512,7 @@ async function generateRipplesAndSuggestions({ entry, text, userId }) {
 
   try {
     const taskPayloads = suggestionPayloads
+      .filter((payload) => payload?.autoCreate)
       .map((payload) => ({
         userId,
         title: String(payload?.title || "").trim(),

@@ -10,13 +10,14 @@ const WEEKDAY_ABBR = ['sun','mon','tue','tues','wed','thu','thur','thurs','fri',
 
 const MAX_SUGGESTIONS = 3;
 const BORING_SINGLE_WORDS = new Set(['day','today','tomorrow','sometime','later','soon','now','please']);
+const MONTH_NAMES = ['january','february','march','april','may','june','july','august','september','october','november','december'];
 
 // ——— enthusiasm dials ———
 const REQUIRE_STRONG_INTENT = true;          // keep this true for calm behavior
 const REQUIRE_DUE_OR_RECURRENCE = false;     // set true to be monk-level strict
 
 const INTENT_PATS = [
-  /\b(?:i|we)\s+(?:need|have)\s+to\s+/i,
+  /\b(?:i|we)\s+(?:really\s+)?(?:need|have)\s+to\s+/i,
   /\b(?:i|we)\s+must\s+/i,
   /\bdon['’]t\s+forget\s+to\s+/i,
   /\bremind\s+me\s+to\s+/i,
@@ -31,6 +32,7 @@ const HYPOS = [
 ];
 
 const NEGATIONS = ["don't",'do not',"won't",'will not',"can't",'cannot',"shouldn't",'never',' not '];
+const DEADLINE_ACTION_START = /^(?:pay|clean|tidy|finish|extend|renew|submit|call|email|book|schedule|register|sign\s+up)\b/i;
 
 
 function escapeRegex(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
@@ -73,6 +75,21 @@ function relativeISO(keyword, fromISO){
   return null;
 }
 
+function addMonthsISO(fromISO, count){
+  const [Y,M,D]=fromISO.split('-').map(n=>parseInt(n,10));
+  const b=new Date(Date.UTC(Y,M-1,D,12));
+  b.setUTCMonth(b.getUTCMonth()+count);
+  return toISO(b);
+}
+
+function wordNumberToInt(value){
+  const low=String(value||'').toLowerCase();
+  const words={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12};
+  if(words[low]) return words[low];
+  const parsed=parseInt(low,10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 // ——— recurrence (strict) ———
 function parseRecurrence(s){
   const low=s.toLowerCase();
@@ -99,8 +116,13 @@ function parseDueDate(s, entryDateISO){
   const iso=parseExplicitISO(s); if(iso) return iso;
   const low=s.toLowerCase();
   const rel=low.match(/\b(today|tomorrow)\b/); if(rel) return relativeISO(rel[1],entryDateISO);
+  if(/\bby\s+the\s+end\s+of\s+the\s+day\b/.test(low)) return relativeISO('today',entryDateISO);
+  const inMonths=low.match(/\bin\s+(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+months?\b/);
+  if(inMonths){const n=wordNumberToInt(inMonths[1]); if(n) return addMonthsISO(entryDateISO,n);}
   const mNext=low.match(/\bnext\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)\b/);
   if(mNext){let wd=mNext[1]; let idx=WEEKDAYS.indexOf(wd); if(idx===-1){const core=wd.slice(0,3); idx=WEEKDAYS.findIndex(w=>w.startsWith(core));} if(idx>=0) return nextWeekdayISO(entryDateISO,idx);}
+  const byWeekday=low.match(/\bby\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)\b/);
+  if(byWeekday){let wd=byWeekday[1]; let idx=WEEKDAYS.indexOf(wd); if(idx===-1){const core=wd.slice(0,3); idx=WEEKDAYS.findIndex(w=>w.startsWith(core));} if(idx>=0) return sameOrNextWeekdayISO(entryDateISO,idx);}
   const mThis=low.match(/\bthis\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat|weekend)\b/);
   if(mThis){const wd=mThis[1]; if(wd==='weekend'){return sameOrNextWeekdayISO(entryDateISO,6);} let idx=WEEKDAYS.indexOf(wd); if(idx===-1){const core=wd.slice(0,3); idx=WEEKDAYS.findIndex(w=>w.startsWith(core));} if(idx>=0) return sameOrNextWeekdayISO(entryDateISO,idx);}
   const byNextWeek=/\bby\s+next\s+week\b/.test(low); if(byNextWeek) return nextWeekStartISO(entryDateISO);
@@ -121,13 +143,80 @@ function hasActionVerb(action){
 // ——— action slicing ———
 function sliceAction(fullText,startIdx){
   const tail=fullText.slice(startIdx);
-  const boundary=tail.search(/(?=\.|\?|!|$)|(?=,)|(?=\s+\band\b)|(?=\s+\bthen\b)|(?=\s+\bbecause\b)|(?=\s+\bsince\b)/i);
+  const boundary=tail.search(/(?=\.|\?|!|$)|(?=,)|(?=;)|(?=\s+\band\b)|(?=\s+\bthen\b)|(?=\s+\bbecause\b)|(?=\s+\bsince\b)/i);
   const raw=boundary===-1?tail:tail.slice(0,boundary);
   let action=raw.replace(/^\s*(to\s+)?/i,'').replace(/\s+(?:please|now|soon|later)\s*$/i,'').replace(/\s+/g,' ').trim();
   if(!action||action.length<3) return null;
   if(!/\w/.test(action)) return null;
   if(!/\s/.test(action) && BORING_SINGLE_WORDS.has(action.toLowerCase())) return null;
   return action;
+}
+
+export function cleanTaskTitle(value=''){
+  let title=String(value||'')
+    .replace(/[“”]/g,'"')
+    .replace(/[‘’]/g,"'")
+    .replace(/\s+/g,' ')
+    .trim();
+
+  let prev='';
+  while(title && title!==prev){
+    prev=title;
+    title=title
+      .replace(/^(?:i|we)\s+(?:really\s+)?(?:need|have)\s+to\s+/i,'')
+      .replace(/^(?:i|we)\s+should\s+/i,'')
+      .replace(/^(?:i|we)\s+really\s+gotta\s+/i,'')
+      .replace(/^gotta\s+/i,'')
+      .replace(/^(?:need\s+to\s+)?remember\s+to\s+/i,'')
+      .replace(/^remind\s+me\s+to\s+/i,'')
+      .replace(/^to\s+/i,'')
+      .trim();
+  }
+
+  const weekdayAlternates=[...WEEKDAYS,...WEEKDAY_ABBR].join('|');
+  const monthAlternates=MONTH_NAMES.join('|');
+  const suffixes=[
+    /\s+by\s+the\s+end\s+of\s+the\s+day(?:\s+today)?\b.*$/i,
+    /\s+in\s+(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+months?\b.*$/i,
+    /\s+every\s+other\s+day\b.*$/i,
+    /\s+every\s+\d{1,2}\s+days?\b.*$/i,
+    new RegExp(`\\s+every\\s+(?:${weekdayAlternates})\\b.*$`,'i'),
+    /\s+(?:every\s+day|daily)\b.*$/i,
+    /\s+\b(?:today|tomorrow|tonight)\b.*$/i,
+    new RegExp(`\\s+(?:this|next)\\s+(?:${weekdayAlternates}|weekend)\\b.*$`,'i'),
+    new RegExp(`\\s+by\\s+(?:${weekdayAlternates})\\b.*$`,'i'),
+    new RegExp(`\\s+(?:on|by)\\s+(?:${monthAlternates})\\b.*$`,'i'),
+    /\s+by\s+20\d{2}-\d{2}-\d{2}\b.*$/i,
+  ];
+  for(const suffix of suffixes) title=title.replace(suffix,'').trim();
+
+  title=title.replace(/^[,;:\-\s]+|[,;:\-\s]+$/g,'').trim();
+  title=title.replace(/^pay\s+the\s+/i,'pay ');
+  if(!title) return '';
+  return title.charAt(0).toUpperCase()+title.slice(1);
+}
+
+function firstClause(text=''){
+  return String(text||'').split(/[.!?\n;]/)[0]?.replace(/\s+/g,' ').trim() || '';
+}
+
+function deadlineActionCandidate(text='', entryDateISO){
+  const clause=firstClause(text);
+  if(!clause || !DEADLINE_ACTION_START.test(clause)) return null;
+  const dueDate=parseDueDate(clause, entryDateISO);
+  if(!dueDate) return null;
+  if(!hasActionVerb(clause)) return null;
+  const title=cleanTaskTitle(clause);
+  if(!title || title.length<3) return null;
+  return {
+    text:title,
+    dueDate,
+    recurrence:null,
+    recurrenceLabel:null,
+    confidence:0.78,
+    reason:'deadline',
+    autoCreate:true
+  };
 }
 
 function dedupeByKey(items, keyFn){const seen=new Set();const out=[];for(const it of items){const k=keyFn(it);if(seen.has(k)) continue;seen.add(k);out.push(it);}return out;}
@@ -163,17 +252,22 @@ export function extractTasks(text, entryDateISO) {
       if (/todo\s*:/i.test(m[0])) conf = Math.min(conf, 0.6);
 
       tasks.push({
-        text: action,
+        text: cleanTaskTitle(action),
         dueDate: dueDate || null,
         recurrence: recurrence ? recurrence.rrule : null,
         recurrenceLabel: recurrence ? recurrence.label : null,
         confidence: Math.max(0.1, Math.min(0.95, conf)),
-        reason: recurrence ? 'recurringTask' : (dueDate ? 'deadline' : 'suggestedTask')
+        reason: recurrence ? 'recurringTask' : (dueDate ? 'deadline' : 'suggestedTask'),
+        autoCreate: Boolean(dueDate && !recurrence)
       });
     }
   }
 
-  const deduped = dedupeByKey(tasks, t => t.text.toLowerCase());
+  const deadlineCandidate=deadlineActionCandidate(text,date);
+  if(deadlineCandidate) tasks.push(deadlineCandidate);
+
+  const cleanedTasks = tasks.filter(t => t.text && String(t.text).trim().length >= 3);
+  const deduped = dedupeByKey(cleanedTasks, t => t.text.toLowerCase());
   deduped.sort((a,b)=>b.confidence-a.confidence);
   return deduped.slice(0, MAX_SUGGESTIONS);
 }
@@ -192,6 +286,7 @@ export function extractRipplesFromEntry({ text = '', entryDate = null, originalC
     if (t.recurrence) { base.type='recurringTask'; base.meta.recurrence=t.recurrence; base.meta.recurrenceLabel=t.recurrenceLabel; }
     else if (t.dueDate) { base.type='deadline'; base.meta.dueDate=t.dueDate; }
     else { base.type='suggestedTask'; }
+    if (t.autoCreate) base.meta.autoCreate = true;
     return base;
   });
   return { tasks, ripples };

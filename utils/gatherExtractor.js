@@ -29,6 +29,7 @@ const LEADING_NOISE = /^(?:to\s+buy\s+|to\s+get\s+|get\s+|buy\s+|grab\s+|pick\s+
 const TRAILING_CONTEXT = /\s+(?:tomorrow|today|tonight|this\s+weekend|on\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?|before\s+work|after\s+work|while\s+i(?:'m| am)\s+at\s+work|remind\s+me\b|due\b|by\s+.+)\b.*$/i;
 const SCHEDULE_SIGNAL = /\b(?:tomorrow|today|tonight|this\s+weekend|on\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?|before\s+work|after\s+work|remind\s+me|due|by\s+.+)\b/i;
 const TITLE_NORMALIZE_NOISE = /^(?:get|buy|grab|pick\s+up|purchase|a|an|some|more|another|the)\s+/i;
+const ACTION_REMINDER_GATE = /\b(?:need\s+to\s+remember\s+to|remember\s+to|remind\s+me\s+to|need\s+to\s+(?:renew|extend|submit|call|email|pay|book|schedule|sign\s+up|clean|tidy))\b/i;
 
 const PET_TERMS = [
   'cat litter',
@@ -183,6 +184,7 @@ export function hasScheduledActionSignal(text = '') {
 export function extractGatherItems(text = '') {
   const sourceText = cleanPhrase(text);
   if (!sourceText) return [];
+  if (ACTION_REMINDER_GATE.test(sourceText)) return [];
 
   const suggestions = [];
 
