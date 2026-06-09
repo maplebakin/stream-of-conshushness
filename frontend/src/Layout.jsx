@@ -66,6 +66,11 @@ export default function Layout() {
                   </NavLink>
                 </li>
                 <li>
+                  <NavLink to="/gather-lists" className={linkClass} title="Gather Lists">
+                    🧺 <span>Gather Lists</span>
+                  </NavLink>
+                </li>
+                <li>
                   <NavLink to="/inbox/tasks" className={linkClass} title="Task Inbox">
                     ✅ <span>Task Inbox</span>
                   </NavLink>

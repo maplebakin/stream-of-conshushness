@@ -15,6 +15,7 @@ const commands = [
   { id: 'nav-clusters', label: 'Go to Clusters', icon: '🧩', action: 'navigate', target: '/clusters', keywords: ['clusters', 'tags'] },
   { id: 'nav-ripples', label: 'Go to Ripples', icon: '💡', action: 'navigate', target: '/ripples', keywords: ['ripples', 'actions'] },
   { id: 'nav-interests', label: 'Go to Sparks & Interests', icon: '✨', action: 'navigate', target: '/interests', keywords: ['interests', 'sparks', 'curiosities', 'learning'] },
+  { id: 'nav-gather-lists', label: 'Go to Gather Lists', icon: '🧺', action: 'navigate', target: '/gather-lists', keywords: ['gather', 'lists', 'groceries', 'supplies', 'containers', 'needs'] },
   { id: 'nav-habits', label: 'Go to Habit Analytics', icon: '📊', action: 'navigate', target: '/habits/analytics', keywords: ['habits', 'analytics', 'stats'] },
   { id: 'nav-search', label: 'Go to Search', icon: '🔍', action: 'navigate', target: '/search', keywords: ['search', 'find'] },
   { id: 'nav-export', label: 'Go to Export', icon: '📦', action: 'navigate', target: '/export', keywords: ['export', 'backup', 'download'] },
