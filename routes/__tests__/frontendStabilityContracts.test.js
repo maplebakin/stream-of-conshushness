@@ -251,4 +251,15 @@ describe('frontend stability endpoint contracts', () => {
     expect(server).toContain('app.use("/api/note", auth, noteRoutes)');
     expect(notesSection).not.toContain('/api/notes/${date}');
   });
+
+  it('keeps Task Inbox cleanup controls and source entry badges defined', () => {
+    const inbox = read('frontend/src/pages/InboxTasksPage.jsx');
+
+    expect(inbox).toContain('Move to Trash');
+    expect(inbox).toContain('Move selected to Trash');
+    expect(inbox).not.toContain('Archive');
+    expect(inbox).not.toContain('Move selected to Archive');
+    expect(inbox).toContain('📄 Entry (');
+    expect(inbox).toContain('to={`/day/${t.entryId.date}`}');
+  });
 });

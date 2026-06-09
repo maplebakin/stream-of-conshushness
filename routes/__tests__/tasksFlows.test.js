@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   taskFindOne: vi.fn(),
   taskUpdateMany: vi.fn(),
   taskCreate: vi.fn(),
+  taskFindOneAndUpdate: vi.fn(),
   entryFindOne: vi.fn(),
   entryCreate: vi.fn(),
   resolveClusterIdForOwner: vi.fn(),
@@ -14,6 +15,7 @@ vi.mock('../../models/Task.js', () => ({
     findOne: mocks.taskFindOne,
     updateMany: mocks.taskUpdateMany,
     create: mocks.taskCreate,
+    findOneAndUpdate: mocks.taskFindOneAndUpdate,
   },
 }));
 
@@ -170,5 +172,50 @@ describe('tasks flow routes', () => {
     expect(res.statusCode).toBe(200);
     expect(taskDoc.entryId).toBe('e1');
     expect(res.body.ok).toBe(true);
+  });
+
+  it('delete soft-deletes a task', async () => {
+    const handler = findRoute(taskRouter, '/:id', 'delete');
+    mocks.taskFindOneAndUpdate.mockResolvedValue({ _id: '507f1f77bcf86cd799439011' });
+
+    const req = {
+      params: { id: '507f1f77bcf86cd799439011' },
+      user: { userId: 'u1' }
+    };
+    const res = mockRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(mocks.taskFindOneAndUpdate).toHaveBeenCalledWith(
+      { _id: '507f1f77bcf86cd799439011', userId: 'u1', deletedAt: null },
+      { $set: { deletedAt: expect.any(Date) } },
+      { new: true }
+    );
+    expect(res.body).toEqual({ ok: true, deleted: '507f1f77bcf86cd799439011' });
+  });
+
+  it('bulk delete soft-deletes multiple tasks', async () => {
+    const handler = findRoute(taskRouter, '/bulk/delete', 'post');
+    mocks.taskUpdateMany.mockResolvedValue({ modifiedCount: 3 });
+
+    const req = {
+      user: { userId: 'u1' },
+      body: { ids: ['507f1f77bcf86cd799439011', '507f1f77bcf86cd799439012'] }
+    };
+    const res = mockRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(mocks.taskUpdateMany).toHaveBeenCalledWith(
+      {
+        _id: { $in: expect.any(Array) },
+        userId: 'u1',
+        deletedAt: null
+      },
+      { $set: { deletedAt: expect.any(Date) } }
+    );
+    expect(res.body).toEqual({ ok: true, deleted: 3 });
   });
 });

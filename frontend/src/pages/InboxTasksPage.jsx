@@ -1,4 +1,5 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
 
@@ -26,6 +27,7 @@ function normalizeTasks(payload) {
     completed: !!t.completed,
     section: t.section || t.cluster || '',
     priority: t.priority ?? null,
+    entryId: t.entryId || null,
     createdAt: t.createdAt, updatedAt: t.updatedAt,
   })).filter(t => t._id);
 }
@@ -36,7 +38,7 @@ export default function InboxTasksPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [q, setQ] = useState('');
-  const [scope, setScope] = useState('active'); // active | all | overdue | today | upcoming | nodate
+  const [scope, setScope] = useState('active'); // active | today | overdue | upcoming | nodate | fromEntries | completed | all
   const [selected, setSelected] = useState(() => new Set());
   const [busyIds, setBusyIds] = useState(() => new Set());
   const [newTitle, setNewTitle] = useState('');
@@ -48,7 +50,7 @@ export default function InboxTasksPage() {
   const load = useCallback(async () => {
     setLoading(true); setErr('');
     try {
-      const res = await axios.get('/api/tasks', { headers });
+      const res = await axios.get('/api/tasks?includeCompleted=1', { headers });
       setAllTasks(normalizeTasks(res));
       setSelected(new Set());
     } catch (e) {
@@ -73,6 +75,8 @@ export default function InboxTasksPage() {
       if (scope === 'today') return !t.completed && t.dueDate === today;
       if (scope === 'upcoming') return !t.completed && isISO(t.dueDate) && cmpDate(t.dueDate, today) > 0;
       if (scope === 'nodate') return !t.completed && !t.dueDate;
+      if (scope === 'fromEntries') return !t.completed && t.entryId;
+      if (scope === 'completed') return t.completed;
       return true;
     }).sort((a,b) => {
       // prioritize active + date asc + createdAt
@@ -85,7 +89,7 @@ export default function InboxTasksPage() {
     });
   }, [allTasks, q, scope, today]);
 
-  const allSelected = selected.size > 0 && filtered.every(t => selected.has(t._id));
+  const allSelected = selected.size > 0 && filtered.length > 0 && filtered.every(t => selected.has(t._id));
   const anySelected = selected.size > 0;
 
   function toggleSelect(id) {
@@ -104,7 +108,7 @@ export default function InboxTasksPage() {
     if (!title) return;
     try {
       const { data } = await axios.post('/api/tasks', { title }, { headers });
-      setAllTasks(ts => [{ _id: data._id || data.id, title: data.title || title, completed: !!data.completed, dueDate: data.dueDate || null, section: data.section || '' }, ...ts]);
+      setAllTasks(ts => [{ _id: data._id || data.id, title: data.title || title, completed: !!data.completed, dueDate: data.dueDate || null, section: data.section || '', entryId: data.entryId || null }, ...ts]);
       setNewTitle('');
     } catch (e) {
       console.warn('[InboxTasks] create failed', e?.response?.data || e);
@@ -118,6 +122,18 @@ export default function InboxTasksPage() {
       setAllTasks(ts => ts.map(t => t._id === id ? { ...t, ...normalizeTasks([data])[0] } : t));
     } catch (e) {
       console.warn('[InboxTasks] patch failed', e?.response?.data || e);
+    } finally {
+      setBusyIds(s => { const n = new Set(s); n.delete(id); return n; });
+    }
+  }
+
+  async function deleteTask(id) {
+    setBusyIds(s => new Set(s).add(id));
+    try {
+      await axios.delete(`/api/tasks/${id}`, { headers });
+      setAllTasks(ts => ts.filter(t => t._id !== id));
+    } catch (e) {
+      console.warn('[InboxTasks] delete failed', e?.response?.data || e);
     } finally {
       setBusyIds(s => { const n = new Set(s); n.delete(id); return n; });
     }
@@ -150,6 +166,18 @@ export default function InboxTasksPage() {
     }
     setSelected(new Set());
   }
+
+  async function bulkDelete(ids) {
+    const idArr = [...ids];
+    try {
+      await axios.post('/api/tasks/bulk/delete', { ids: idArr }, { headers });
+      setAllTasks(ts => ts.filter(t => !idArr.includes(t._id)));
+    } catch (e) {
+      console.warn('[InboxTasks] bulk delete failed', e?.response?.data || e);
+    }
+    setSelected(new Set());
+  }
+
   async function bulkSetDate(ids, dateISO) {
     for (const id of ids) await patch(id, { dueDate: dateISO || null });
     setSelected(new Set());
@@ -171,8 +199,10 @@ export default function InboxTasksPage() {
         <div className="filters">
           <input className="search" value={q} onChange={e=>setQ(e.target.value)} placeholder="Search…" />
           <div className="chips">
-            {['active','today','overdue','upcoming','nodate','all'].map(k => (
-              <button key={k} className={`chip ${scope===k?'on':''}`} onClick={()=>setScope(k)}>{k}</button>
+            {['active','today','overdue','upcoming','nodate','fromEntries','completed','all'].map(k => (
+              <button key={k} className={`chip ${scope===k?'on':''}`} onClick={()=>setScope(k)}>
+                {k === 'fromEntries' ? 'From entries' : k === 'nodate' ? 'No date' : k.charAt(0).toUpperCase() + k.slice(1)}
+              </button>
             ))}
           </div>
         </div>
@@ -182,6 +212,7 @@ export default function InboxTasksPage() {
             <span>Select all</span>
           </label>
           <button className="btn" disabled={!anySelected} onClick={()=>bulkComplete(selected)}>Complete</button>
+          <button className="btn" disabled={!anySelected} onClick={()=>bulkDelete(selected)}>Move selected to Trash</button>
           <input className="date" type="date" value={bulkDate} onChange={e=>setBulkDate(e.target.value)} />
           <button className="btn" disabled={!anySelected} onClick={()=>bulkSetDate(selected, bulkDate || null)}>
             {bulkDate ? 'Set date' : 'Clear date'}
@@ -218,9 +249,17 @@ export default function InboxTasksPage() {
                     <input type="checkbox" checked={sel} onChange={()=>toggleSelect(t._id)} />
                     <span>{sel?'Selected':'Select'}</span>
                   </label>
-                  <button className="btn ghost" disabled={busy} onClick={()=>toggleDone(t._id)}>
-                    {t.completed ? '↺ Reopen' : '✓ Complete'}
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.35rem' }}>
+                    <button className="btn ghost" disabled={busy} onClick={()=>startEdit(t)}>
+                      ✏️ Edit
+                    </button>
+                    <button className="btn ghost" disabled={busy} onClick={()=>toggleDone(t._id)}>
+                      {t.completed ? '↺ Reopen' : '✓ Complete'}
+                    </button>
+                    <button className="btn ghost" disabled={busy} onClick={()=>deleteTask(t._id)}>
+                      🗑️ Move to Trash
+                    </button>
+                  </div>
                 </div>
 
                 <div className="title" onDoubleClick={()=>startEdit(t)}>
@@ -252,6 +291,15 @@ export default function InboxTasksPage() {
                   {t.section ? <span className="tag">§ {t.section}</span> : null}
                   {overdue ? <span className="tag red">overdue</span> : null}
                   {t.completed ? <span className="tag green">done</span> : null}
+                  {t.entryId ? (
+                    (typeof t.entryId === 'object' && t.entryId !== null && t.entryId.date) ? (
+                      <Link to={`/day/${t.entryId.date}`} className="tag clickable-badge" title="Go to source entry date">
+                        📄 Entry ({t.entryId.date})
+                      </Link>
+                    ) : (
+                      <span className="tag">📄 Source entry</span>
+                    )
+                  ) : null}
                 </div>
               </li>
             );
@@ -289,6 +337,16 @@ export default function InboxTasksPage() {
         .tag { font-size: .75rem; padding: .05rem .4rem; border: 1px solid var(--color-border,#2a2a32); border-radius: 999px; color: var(--color-muted,#9aa0aa); }
         .tag.red { color: #ff9191; }
         .tag.green { color: #8fe3a2; }
+        .tag.clickable-badge {
+          color: var(--color-primary, #60a5fa);
+          border-color: var(--color-primary, #60a5fa);
+          text-decoration: none;
+          cursor: pointer;
+          transition: background 0.2s, color 0.2s;
+        }
+        .tag.clickable-badge:hover {
+          background: rgba(96, 165, 250, 0.1);
+        }
       `}</style>
     </div>
   );

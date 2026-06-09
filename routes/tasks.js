@@ -99,6 +99,7 @@ async function listTasks(req, res) {
     const sort = { completed: 1, dueDate: 1, createdAt: -1 };
     const items = await Task.find(q).sort(sort).skip(off).limit(lim)
       .populate('clusters', 'name slug icon color')
+      .populate('entryId', 'date title')
       .lean();
     res.json(items);
   } catch (e) {
@@ -321,6 +322,7 @@ async function updateTask(req, res) {
 
     const saved = await doc.save();
     await saved.populate('clusters', 'name slug icon color');
+    await saved.populate('entryId', 'date title');
     res.json(saved);
   } catch (e) {
     console.error('[tasks] update failed:', e);
@@ -354,7 +356,9 @@ router.patch('/:id/toggle', async (req, res) => {
       { _id: id, userId },
       { $set: { completed: nowCompleted, status, completedAt } },
       { new: true, runValidators: true }
-    ).populate('clusters', 'name slug icon color').lean();
+    ).populate('clusters', 'name slug icon color')
+     .populate('entryId', 'date title')
+     .lean();
 
     // If we just completed and it's recurring, spawn the next
     let next = null;
@@ -420,6 +424,7 @@ router.post('/', async (req, res) => {
       status: safeStatus === 'done' ? 'done' : safeStatus,
     });
     await doc.populate('clusters', 'name slug icon color');
+    await doc.populate('entryId', 'date title');
     res.status(201).json(doc);
   } catch (e) {
     // validation stays 400; everything else 500
