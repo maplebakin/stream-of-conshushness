@@ -75,11 +75,6 @@ export default function Header() {
         <NavItem to="/" label="🌊 Stream" pathname={location.pathname} />
         <NavItem to="/today" label="📍 Today" pathname={location.pathname} />
         <NavItem to="/calendar" label="📆 Calendar" pathname={location.pathname} />
-        <NavItem to="/goals" label="🎯 Goals" pathname={location.pathname} />
-        <NavItem to="/sections" label="🎛️ Sections" pathname={location.pathname} />
-        <NavItem to="/ripples" label="💡 Ripples" pathname={location.pathname} />
-        <NavItem to="/interests" label="✨ Sparks" pathname={location.pathname} />
-        {isAuthenticated && <NavItem to="/settings" label="⚙️ User Settings" pathname={location.pathname} />}
 
         {isAuthenticated && user && (
           <Link

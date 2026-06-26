@@ -66,13 +66,13 @@ cd ..
 
 3. **Configure environment variables**
 
-Create a `.env` file in the root directory:
+Create a `.env` file in the root directory if one does not already exist:
 
 ```bash
-cp .env.example .env
+cp -n .env.example .env
 ```
 
-Edit `.env` and set the required values (see [Environment Variables](#environment-variables) section).
+Do not overwrite an existing `.env` without backing it up; it may contain a working MongoDB Atlas URI or other local secrets. Never commit `.env`. Edit `.env` and set the required values (see [Environment Variables](#environment-variables) section).
 
 4. **Start development servers**
 
@@ -97,6 +97,8 @@ JWT_SECRET="your_super_secret_jwt_key_here"
 # Server port (default: 3000)
 PORT=3000
 ```
+
+MongoDB Atlas is the easiest setup if local MongoDB is not installed. A localhost URI only works when MongoDB is installed and running; `npm run dev` starts Express and Vite, not MongoDB.
 
 ### Optional Variables
 

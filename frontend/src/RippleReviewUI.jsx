@@ -217,20 +217,25 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
   }, [ripples, filter, hideChatter, minConf]);
 
   return (
-    <div className="mx-auto max-w-5xl p-6">
-      <div className="mb-4 flex items-baseline justify-between">
-        <h1 className="text-2xl font-bold">{header}</h1>
-        <span className="text-sm text-gray-500">{dayISO}</span>
-      </div>
+    <div className="review-page ripple-review">
+      <header className="review-page__header">
+        <div>
+          <h1 className="review-page__title">{header}</h1>
+          <p className="review-page__subtitle">Review pending ripples and turn useful captured threads into tasks.</p>
+        </div>
+        <div className="review-page__summary">
+          <span>{visible.length} shown</span>
+          <span>{ripples.length} total</span>
+          <span>{dayISO}</span>
+        </div>
+      </header>
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="review-page__summary filter-group">
         {['all','pending','approved','dismissed','high','medium','low'].map(t => (
           <button
             key={t}
             onClick={() => setFilter(t)}
-            className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-              filter === t ? 'bg-blue-200 text-blue-900' : 'bg-gray-100 text-gray-700'
-            }`}
+            className={`review-button ${filter === t ? 'review-button--secondary' : 'review-button--ghost'}`}
           >
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -238,18 +243,16 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
 
         <button
           onClick={() => setHideChatter(v => !v)}
-          className={`rounded-full px-3 py-1 text-sm font-medium ${
-            hideChatter ? 'bg-purple-200 text-purple-900' : 'bg-gray-100 text-gray-700'
-          }`}
+          className={`review-button ${hideChatter ? 'review-button--secondary' : 'review-button--ghost'}`}
           title="Require a real action verb and suppress filler"
         >
           Hide chatter: {hideChatter ? 'On' : 'Off'}
         </button>
 
-        <label className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
+        <label className="review-pill">
           Min conf:
           <select
-            className="ml-2 bg-transparent"
+            className="bg-transparent"
             value={minConf}
             onChange={e => setMinConf(Number(e.target.value))}
             title="Minimum confidence to display"
@@ -263,13 +266,10 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
         </label>
       </div>
 
-      {loading && <div className="text-center text-gray-400">Loading ripples…</div>}
-      {!loading && err && <div className="text-center text-red-400">{err}</div>}
+      {loading && <div className="review-empty">Loading ripples...</div>}
+      {!loading && err && <div className="alert error">{err}</div>}
       {!loading && !err && visible.length === 0 && (
-        <div className="text-center text-gray-400">
-          <div style={{ fontSize: 48, opacity: 0.2 }}>🌊</div>
-          <p>No ripples to review!</p>
-        </div>
+        <div className="review-empty">No ripples match this review view. Pending ripples from new entries will appear here.</div>
       )}
 
       {visible.map(r => {
@@ -280,27 +280,27 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
         const dueDate = drafts?.[id]?.dueDate || dayISO;
 
         return (
-          <div key={id} className={`mb-4 rounded-lg border-2 p-4 ${colorClass[b]}`}>
-            <div className="mb-2 font-medium text-gray-800">{toDisplay(r.extractedText || r.text || '')}</div>
+          <div key={id} className={`review-card ripple-card ${colorClass[b]}`}>
+            <div className="review-card__title">{toDisplay(r.extractedText || r.text || '')}</div>
 
             {r.originalContext && typeof r.originalContext === 'string' && (
-              <div className="mb-2 text-sm italic text-gray-600">“{r.originalContext}”</div>
+              <div className="review-card__source">"{r.originalContext}"</div>
             )}
 
             {r.recurrence && (
-              <div className="mb-2">
-                <span className="inline-block rounded-full bg-gray-200 px-2 py-1 text-xs text-gray-800">
+              <div className="review-card__meta">
+                <span className="review-pill">
                   repeat: {formatRecurrence(r.recurrence)}
                 </span>
               </div>
             )}
 
             {(r.status || 'pending') === 'pending' ? (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="review-card__actions">
                 <select
                   value={cluster}
                   onChange={e => setClusterSel(prev => ({ ...prev, [id]: e.target.value }))}
-                  className="rounded border px-2 py-1"
+                  className="review-pill"
                 >
                   <option value="">Select Cluster</option>
                   {clusters.map(c => (
@@ -310,13 +310,13 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
 
                 <input
                   type="date"
-                  className="rounded border px-2 py-1"
+                  className="review-pill"
                   value={dueDate}
                   onChange={e => setDrafts(d => ({ ...d, [id]: { ...(d[id]||{}), dueDate: e.target.value } }))}
                   title="Due date hint"
                 />
 
-                <span className="ml-2 text-xs text-gray-600">conf {Math.round(conf*100)}%</span>
+                <span className="review-pill">conf {Math.round(conf*100)}%</span>
 
                 <button
                   onClick={() => setTaskDraft({
@@ -326,19 +326,19 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
                     rippleId: id
                   })}
                   disabled={false}
-                  className="rounded bg-green-100 px-3 py-1 text-sm font-medium text-green-900 hover:bg-green-200"
+                  className="review-button review-button--primary"
                 >
                   Make Task
                 </button>
                 <button
                   onClick={() => actDismiss(id)}
-                  className="rounded bg-red-100 px-3 py-1 text-sm font-medium text-red-900 hover:bg-red-200"
+                  className="review-button review-button--danger"
                 >
                   Dismiss
                 </button>
               </div>
             ) : (
-              <div className="mt-2 text-sm text-gray-500">
+              <div className="review-card__meta">
                 Status: <span className="font-semibold">{(r.status||'pending')}</span>
               </div>
             )}

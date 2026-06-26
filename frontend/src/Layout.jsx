@@ -41,13 +41,34 @@ export default function Layout() {
             aria-label="Secondary navigation"
           >
             <div className="sidebar-inner">
-              <h2 className="sidebar-title">Navigate</h2>
+              <h2 className="sidebar-title">Review</h2>
               <ul className="sidebar-nav">
                 <li>
-                  <NavLink to="/" end className={linkClass} title="Stream">
-                    🌊 <span>Stream</span>
+                  <NavLink to="/gather-lists" className={linkClass} title="Gather Lists">
+                    🧺 <span>Gather</span>
                   </NavLink>
                 </li>
+                <li>
+                  <NavLink to="/inbox/tasks" className={linkClass} title="Task Inbox">
+                    ✅ <span>Tasks</span>
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/ripples" className={linkClass} title="Ripples">
+                    💡 <span>Ripples</span>
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/interests" className={linkClass} title="Sparks & Interests">
+                    ✨ <span>Interests</span>
+                  </NavLink>
+                </li>
+              </ul>
+
+              <div className="sidebar-sep" />
+
+              <h2 className="sidebar-title">Organize</h2>
+              <ul className="sidebar-nav">
                 <li>
                   <NavLink to="/sections" className={linkClass} title="Sections">
                     🗂️ <span>Sections</span>
@@ -59,39 +80,15 @@ export default function Layout() {
                   </NavLink>
                 </li>
                 <li>
-                  <NavLink to="/ripples" className={linkClass} title="Ripples">
-                    💡 <span>Ripples</span>
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink to="/interests" className={linkClass} title="Sparks & Interests">
-                    ✨ <span>Sparks & Interests</span>
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink to="/gather-lists" className={linkClass} title="Gather Lists">
-                    🧺 <span>Gather Lists</span>
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink to="/inbox/tasks" className={linkClass} title="Task Inbox">
-                    ✅ <span>Task Inbox</span>
+                  <NavLink to="/goals" className={linkClass} title="Goals">
+                    🎯 <span>Goals</span>
                   </NavLink>
                 </li>
               </ul>
 
               <div className="sidebar-sep" />
 
-              <ul className="sidebar-nav">
-                <li>
-                  <NavLink to="/calendar" className={linkClass} title="Calendar">
-                    📆 <span>Calendar</span>
-                  </NavLink>
-                </li>
-              </ul>
-
-              <div className="sidebar-sep" />
-
+              <h2 className="sidebar-title">Utility</h2>
               <ul className="sidebar-nav">
                 <li>
                   <NavLink to="/habits/analytics" className={linkClass} title="Habit Analytics">
@@ -108,11 +105,6 @@ export default function Layout() {
                     🗑️ <span>Trash</span>
                   </NavLink>
                 </li>
-              </ul>
-
-              <div className="sidebar-sep" />
-
-              <ul className="sidebar-nav">
                 <li>
                   <NavLink to="/export" className={linkClass} title="Export Data">
                     📦 <span>Export</span>

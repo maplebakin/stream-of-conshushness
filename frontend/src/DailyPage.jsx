@@ -1,10 +1,13 @@
 // frontend/src/DailyPage.jsx
 import React, { useEffect, useMemo, useState, useContext, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
+import { listSuggestedGatherItems } from './api/suggestedGatherItems.js';
+import { listSuggestedInterests } from './api/suggestedInterests.js';
 
 import TaskList from './TaskList.jsx';
+import SuggestedTasksInbox from './SuggestedTasksInbox.jsx';
 import EntryQuickAssign from './adapters/EntryQuickAssign.default.jsx';
 import AnalyzeEntryButton from './adapters/AnalyzeEntryButton.default.jsx';
 import EntryModal from './EntryModal.jsx';
@@ -78,6 +81,7 @@ export default function DailyPage() {
 
   const [taskListKey, setTaskListKey] = useState(0);
   const [rippleListKey, setRippleListKey] = useState(0);
+  const [suggestionsKey, setSuggestionsKey] = useState(0);
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [showApptModal, setShowApptModal] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState(null);
@@ -96,6 +100,9 @@ export default function DailyPage() {
   const [events,       setEvents]       = useState([]);
   const [important,    setImportant]    = useState([]);
   const [loadingAgenda, setLoadingAgenda] = useState(false);
+  const [otherSuggestionCounts, setOtherSuggestionCounts] = useState({ gather: 0, interests: 0 });
+  const [loadingOtherSuggestions, setLoadingOtherSuggestions] = useState(false);
+  const [otherSuggestionsError, setOtherSuggestionsError] = useState('');
 
   useEffect(() => {
     if (!routeDate) {
@@ -154,6 +161,30 @@ export default function DailyPage() {
 
   useEffect(() => { loadEntries(); }, [loadEntries]);
 
+  const loadOtherSuggestionCounts = useCallback(async () => {
+    if (!token || !dateISO) return;
+    setLoadingOtherSuggestions(true);
+    setOtherSuggestionsError('');
+    try {
+      const [gatherSuggestions, interestSuggestions] = await Promise.all([
+        listSuggestedGatherItems({ date: dateISO }),
+        listSuggestedInterests({ date: dateISO }),
+      ]);
+      setOtherSuggestionCounts({
+        gather: gatherSuggestions.length,
+        interests: interestSuggestions.length,
+      });
+    } catch (err) {
+      console.error('load suggestion counts error', err?.response?.data || err?.message || err);
+      setOtherSuggestionCounts({ gather: 0, interests: 0 });
+      setOtherSuggestionsError('Could not load suggestion counts.');
+    } finally {
+      setLoadingOtherSuggestions(false);
+    }
+  }, [token, dateISO]);
+
+  useEffect(() => { loadOtherSuggestionCounts(); }, [loadOtherSuggestionCounts]);
+
   function handleEntryUpdated(updated) {
     const stillToday = entryDateISO(updated) === dateISO && entryHasMeaningfulText(updated);
     setEntries(prev => {
@@ -169,6 +200,12 @@ export default function DailyPage() {
   }
   function handleTaskCreated() {
     setTaskListKey(k => k + 1);
+  }
+  function refreshAutomationPanels() {
+    setTaskListKey(k => k + 1);
+    setRippleListKey(k => k + 1);
+    setSuggestionsKey(k => k + 1);
+    loadOtherSuggestionCounts();
   }
 
   const loadAgenda = useCallback(async () => {
@@ -282,7 +319,7 @@ export default function DailyPage() {
           <span className="daily-date font-glow text-vein" title="ISO date">{dateISO}</span>
         </div>
 
-        <div className="daily-actions" style={{ gap: 8, display: 'flex', alignItems: 'center' }}>
+        <div className="daily-actions">
           {dateISO === todayISO && (
             <>
               <button
@@ -331,6 +368,45 @@ export default function DailyPage() {
               { key: `radar-${taskListKey}`, date: dateISO, bucket: 'onYourRadar', header: null, keepCompleted: false },
               'TaskList'
             )}
+            <div className="daily-suggestions">
+              <div className="side-header">
+                <h3 className="daily-section-heading">Suggested Tasks</h3>
+                <Link className="button chip" to={`/inbox/tasks/${dateISO}`}>Task inbox</Link>
+              </div>
+              {renderSafe(
+                SuggestedTasksInbox,
+                {
+                  key: `suggested-tasks-${suggestionsKey}-${dateISO}`,
+                  dateISO,
+                  onAccepted: refreshAutomationPanels,
+                  onRejected: refreshAutomationPanels,
+                },
+                'SuggestedTasksInbox'
+              )}
+              <div className="suggestion-links">
+                <Link to="/gather-lists">Gather suggestions</Link>
+                <Link to="/interests">Interest suggestions</Link>
+              </div>
+              <div className="other-suggestions" aria-live="polite">
+                <div className="other-suggestions__header">
+                  <span>Other Suggestions</span>
+                  {loadingOtherSuggestions && <span className="muted">Loading...</span>}
+                </div>
+                {otherSuggestionsError && <div className="muted">{otherSuggestionsError}</div>}
+                {!otherSuggestionsError && (
+                  <div className="other-suggestions__grid">
+                    <Link to="/gather-lists" className="other-suggestions__item">
+                      <strong>{otherSuggestionCounts.gather}</strong>
+                      <span>Gather items</span>
+                    </Link>
+                    <Link to="/interests" className="other-suggestions__item">
+                      <strong>{otherSuggestionCounts.interests}</strong>
+                      <span>Interests</span>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
             <DailyRipples key={rippleListKey} date={dateISO} />
           </div>
 
@@ -462,9 +538,7 @@ export default function DailyPage() {
             )}
           </div>
 
-          <div className="panel">
-            <NotesSection date={dateISO} />
-          </div>
+          <NotesSection date={dateISO} />
 
           <div className="panel">
             <h3 className="font-thread text-vein">Habits</h3>
@@ -482,6 +556,8 @@ export default function DailyPage() {
             loadEntries();
             loadAgenda();
             setRippleListKey(k => k + 1);
+            setSuggestionsKey(k => k + 1);
+            loadOtherSuggestionCounts();
           },
           onAnalyzed: () => setRippleListKey(k => k + 1),
         }, 'EntryModal')

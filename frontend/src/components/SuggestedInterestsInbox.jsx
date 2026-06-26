@@ -86,7 +86,7 @@ export default function SuggestedInterestsInbox({ onAccepted, onRejected, onChan
   }
 
   return (
-    <section className="card" aria-live="polite">
+    <section className="card review-card" aria-live="polite">
       <div className="stack">
         <div>
           <h2 className="section-title">Spark Suggestions</h2>
@@ -96,7 +96,7 @@ export default function SuggestedInterestsInbox({ onAccepted, onRejected, onChan
         {loading && <p className="muted">Loading Spark suggestions...</p>}
         {!loading && error && <div className="alert error">{error}</div>}
         {!loading && !error && items.length === 0 && (
-          <p className="muted">No Spark suggestions waiting.</p>
+          <p className="review-empty">No Spark suggestions waiting.</p>
         )}
 
         {!loading && !error && items.length > 0 && (
@@ -110,33 +110,33 @@ export default function SuggestedInterestsInbox({ onAccepted, onRejected, onChan
               return (
                 <article
                   key={id}
-                  className="card"
+                  className="card review-card"
                   style={{ boxShadow: 'none', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)' }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
                     <div className="stack" style={{ gap: 'var(--space-1)', minWidth: 0 }}>
-                      <strong>{item.title || 'Untitled Spark'}</strong>
-                      <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                        {item.category && <span className="pill">{item.category}</span>}
-                        {clusters.map((cluster) => <span key={cluster} className="pill pill-muted">{cluster}</span>)}
-                        {item.reason && <span className="pill pill-muted">{item.reason}</span>}
-                        {confidence && <span className="pill pill-muted">{confidence}</span>}
+                      <strong className="review-card__title">{item.title || 'Untitled Spark'}</strong>
+                      <div className="review-card__meta" style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                        {item.category && <span className="review-pill">{item.category}</span>}
+                        {clusters.map((cluster) => <span key={cluster} className="review-pill">{cluster}</span>)}
+                        {item.reason && <span className="review-pill">{item.reason}</span>}
+                        {confidence && <span className="review-pill">{confidence}</span>}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'start' }}>
-                      <button type="button" className="button" onClick={() => accept(item)} disabled={busy}>
+                    <div className="review-card__actions">
+                      <button type="button" className="review-button review-button--primary" onClick={() => accept(item)} disabled={busy}>
                         Accept
                       </button>
-                      <button type="button" className="button" onClick={() => reject(item)} disabled={busy}>
+                      <button type="button" className="review-button review-button--danger" onClick={() => reject(item)} disabled={busy}>
                         Reject
                       </button>
                     </div>
                   </div>
 
-                  {item.sourceText && <p className="muted" style={{ margin: 0 }}>source: "{item.sourceText}"</p>}
+                  {item.sourceText && <p className="review-card__source">source: "{item.sourceText}"</p>}
                   {Array.isArray(item.tags) && item.tags.length > 0 && (
                     <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                      {item.tags.map((tag) => <span key={tag} className="pill pill-muted">#{tag}</span>)}
+                      {item.tags.map((tag) => <span key={tag} className="review-pill">#{tag}</span>)}
                     </div>
                   )}
                 </article>

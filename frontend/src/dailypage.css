@@ -2,7 +2,7 @@
 
 /* Page shell */
 .daily-page {
-  padding: var(--space-5, 20px);
+  padding: var(--space-4, 16px);
   background: var(--color-mist);
   color: var(--color-ink);
 }
@@ -10,8 +10,8 @@
 /* Layout */
 .daily-page .daily-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
-  gap: var(--space-5);
+  grid-template-columns: minmax(0, 1fr) minmax(270px, 340px);
+  gap: var(--space-4);
   align-items: start;
 }
 
@@ -23,25 +23,23 @@
 /* ---------------------------------------
    Header (soft ribbon, centered + roomy)
 ---------------------------------------- */
-.daily-page .daily-header { margin-bottom: var(--space-4); }
+.daily-page .daily-header { margin-bottom: var(--space-3); }
 
 .daily-page .centered-header {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: calc(var(--radius-card) + 6px);
-  background:
-    radial-gradient(1200px 200px at 50% -40%, rgba(199,181,213,.18), transparent 60%),
-    var(--color-surface);
-  box-shadow: var(--shadow-soft);
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-surface) 94%, white 6%);
+  box-shadow: var(--shadow-border);
 }
 
 .daily-page .centered-header h2 {
   font-family: var(--font-echo);
-  font-size: clamp(1.5rem, 2vw + 1rem, 2.25rem);
+  font-size: clamp(1.28rem, 1.2vw + 1rem, 1.72rem);
   color: var(--color-plum);
   text-align: center;
   margin: 0;
@@ -50,18 +48,17 @@
 
 /* Force arrow nav buttons to be equal width & height */
 .daily-page .centered-header .button.nav-arrow {
-  width: 2.5rem; height: 2.5rem; padding: 0;
+  width: 2rem; height: 2rem; padding: 0;
   display: inline-grid; place-items: center; border-radius: 999px;
 }
 
 /* Date pill */
 .daily-page .daily-date {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 3.5rem; padding: 4px 10px; border-radius: 999px;
-  border: 1px solid rgba(0,0,0,.08);
-  background: linear-gradient(180deg, rgba(255,255,255,.65), rgba(255,255,255,.4));
-  backdrop-filter: blur(6px);
-  font-size: 0.9rem; font-family: var(--font-glow);
+  min-width: 3.5rem; padding: 3px 8px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 88%, white 12%);
+  font-size: 0.78rem; font-family: var(--font-glow);
   color: var(--color-vein); white-space: nowrap;
 }
 
@@ -72,13 +69,17 @@
 }
 
 .daily-page .today-btn {
-  padding: 0 .9rem; height: 2.25rem;
+  padding: 0 .7rem; height: 2rem;
   font-family: var(--font-thread); border-radius: 999px;
 }
 
 /* Actions row under header */
 .daily-page .daily-actions {
-  margin-top: var(--space-2); display: flex; gap: var(--space-2); flex-wrap: wrap;
+  margin-top: var(--space-2);
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 /* ---------------------------------------
@@ -88,11 +89,12 @@
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-ink);
-  padding: .4rem .8rem;
+  padding: .32rem .68rem;
   border-radius: var(--radius-input);
   font-family: var(--font-thread);
+  font-size: 0.88rem;
   cursor: pointer;
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--shadow-border);
   transition: background .15s ease, border-color .15s ease, transform .08s ease;
 }
 .daily-page .button:hover {
@@ -100,9 +102,9 @@
   transform: translateY(-1px);
 }
 .daily-page .button.chip {
-  border-radius: 999px; padding: .35rem .8rem; font-size: 0.9rem;
-  background: linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,.5));
-  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 999px; padding: .26rem .64rem; font-size: 0.82rem;
+  background: color-mix(in srgb, var(--color-surface) 92%, white 8%);
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
 }
 .daily-page .button.chip:hover {
   background: linear-gradient(180deg, rgba(199,181,213,.22), rgba(199,181,213,.12));
@@ -112,42 +114,131 @@
   filter: brightness(0.98); transform: translateY(-1px);
 }
 
+.daily-page .daily-actions .bg-lantern,
+.daily-page .daily-actions .bg-spool {
+  padding: .36rem .76rem;
+  box-shadow: var(--shadow-border);
+}
+
+.daily-page .daily-actions .bg-spool {
+  background: color-mix(in srgb, var(--color-surface) 86%, var(--color-spool) 14%);
+}
+
 /* ---------------------------------------
    Panels (scoped)
 ---------------------------------------- */
 .daily-page .panel {
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  padding: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-border) 84%, transparent);
+  padding: var(--space-3);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--shadow-border);
 }
 .daily-page .daily-main .panel + .panel,
-.daily-page .daily-side .panel + .panel { margin-top: var(--space-4); }
+.daily-page .daily-side .panel + .panel { margin-top: var(--space-3); }
 
 .daily-page .daily-task-panel {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .daily-page .daily-section-heading {
   margin: 0;
   color: var(--color-vein);
   font-family: var(--font-thread);
+  font-size: 1rem;
 }
 
 .daily-page .daily-section-heading--spaced {
-  padding-top: var(--space-3);
+  padding-top: var(--space-2);
   border-top: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
+.daily-page .daily-suggestions {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
+.daily-page .daily-suggestions .space-y-3 {
+  display: grid;
+  gap: var(--space-2);
+  padding: 0;
+}
+
+.daily-page .daily-suggestions .rounded {
+  border-radius: var(--radius-input);
+}
+
+.daily-page .daily-suggestions .border {
+  border-color: var(--color-border);
+}
+
+.daily-page .daily-suggestions .suggestion-links {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+}
+
+.daily-page .daily-suggestions .suggestion-links a {
+  color: var(--color-vein);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.daily-page .other-suggestions {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--color-surface) 96%, white 4%);
+}
+
+.daily-page .other-suggestions__header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-family: var(--font-thread);
+  color: var(--color-vein);
+}
+
+.daily-page .other-suggestions__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.daily-page .other-suggestions__item {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-radius: var(--radius-input);
+  color: var(--color-ink);
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.daily-page .other-suggestions__item strong {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.daily-page .other-suggestions__item span {
+  font-size: 0.85rem;
+  color: var(--color-vein);
 }
 
 /* Entry cards (Today’s Entries) */
 .daily-page .entry-card {
-  background: linear-gradient(180deg, rgba(255,255,255,.66), rgba(255,255,255,.5));
-  border: 1px solid rgba(0,0,0,.08);
+  background: color-mix(in srgb, var(--color-surface) 94%, white 6%);
+  border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
   border-radius: var(--radius-card);
-  padding: var(--space-3);
-  box-shadow: var(--shadow-soft);
+  padding: var(--space-2);
+  box-shadow: none;
 }
 .daily-page .entry-card + .entry-card { margin-top: var(--space-2); }
 
@@ -194,14 +285,15 @@
 
 .daily-page .side-header h3 {
   margin: 0;
+  font-size: 1rem;
 }
 
 .daily-page .agenda-list {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-1);
   list-style: none;
   padding: 0;
-  margin: var(--space-3) 0 0;
+  margin: var(--space-2) 0 0;
 }
 
 .daily-page .agenda-item {
@@ -209,10 +301,10 @@
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--space-2);
   align-items: start;
-  padding: var(--space-3);
+  padding: var(--space-2);
   border: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
   border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--color-surface) 92%, white 8%);
+  background: color-mix(in srgb, var(--color-surface) 96%, white 4%);
 }
 
 .daily-page .agenda-bullet {
@@ -228,20 +320,20 @@
 .daily-page .agenda-title {
   line-height: 1.35;
   overflow-wrap: anywhere;
-  font-weight: 700;
+  font-weight: 650;
 }
 
 .daily-page .agenda-meta {
-  font-size: 0.9rem;
+  font-size: 0.82rem;
 }
 
 /* Ripple box (compat with DailyRipples.css chips) */
 .daily-page .ripple-item {
   margin-top: var(--space-2);
-  padding: var(--space-3);
+  padding: var(--space-2);
   border-radius: var(--radius-input);
-  background: linear-gradient(180deg, rgba(0,0,0,.035), rgba(0,0,0,.02));
-  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 94%, white 6%);
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
 }
 
 /* Form fields */
@@ -261,6 +353,56 @@
 }
 .daily-page .entry-card .entry-text { margin-bottom: .5rem; }
 
+.daily-page .ripple-box {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
+.daily-page .ripple-box h3 {
+  margin: 0;
+  color: var(--color-vein);
+  font-family: var(--font-thread);
+  font-size: 1rem;
+}
+
+.daily-page .ripple-box .chip,
+.daily-page .ripple-box .chip-input {
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface) 94%, white 6%);
+  color: var(--color-vein);
+  font-family: var(--font-thread);
+  font-size: 0.78rem;
+  padding: 0.22rem 0.55rem;
+}
+
+.daily-page .ripple-box .chip--active {
+  background: color-mix(in srgb, var(--color-surface) 80%, var(--color-ripple) 20%);
+  color: var(--color-ink);
+}
+
+.daily-page .ripple-empty {
+  padding: var(--space-2);
+  border: 1px dashed color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: var(--radius-input);
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.daily-page .ripple-text {
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.daily-page .ripple-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
 /* Quick-assign row */
 .daily-page .qa-row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 .daily-page .qa-label { font-size: 0.85rem; color: var(--color-vein); font-family: var(--font-glow); }
@@ -268,11 +410,11 @@
 /* Soft select */
 .daily-page .qa-select {
   appearance: none; -webkit-appearance: none;
-  background: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.55));
-  border: 1px solid rgba(0,0,0,.08);
-  border-radius: 999px; padding: .35rem .9rem; font-family: var(--font-thread);
-  font-size: .95rem; color: var(--color-ink);
-  box-shadow: var(--shadow-soft);
+  background: color-mix(in srgb, var(--color-surface) 92%, white 8%);
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-radius: 999px; padding: .28rem .68rem; font-family: var(--font-thread);
+  font-size: .84rem; color: var(--color-ink);
+  box-shadow: var(--shadow-border);
   cursor: pointer; transition: background .15s ease, transform .08s ease, border-color .15s ease;
 }
 .daily-page .qa-select:hover { background: linear-gradient(180deg, rgba(199,181,213,.18), rgba(199,181,213,.1)); }
@@ -281,11 +423,12 @@
 
 /* Soft action button */
 .daily-page .qa-btn {
-  border: 1px solid rgba(0,0,0,.08);
-  background: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.55));
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 92%, white 8%);
   color: var(--color-ink);
-  padding: .35rem .85rem; border-radius: 999px; font-family: var(--font-thread);
-  box-shadow: var(--shadow-soft); cursor: pointer;
+  padding: .28rem .68rem; border-radius: 999px; font-family: var(--font-thread);
+  font-size: .84rem;
+  box-shadow: var(--shadow-border); cursor: pointer;
   transition: background .15s ease, transform .08s ease, border-color .15s ease;
 }
 .daily-page .qa-btn:hover { background: linear-gradient(180deg, rgba(199,181,213,.2), rgba(199,181,213,.12)); transform: translateY(-1px); }
@@ -293,6 +436,111 @@
 
 /* ====== Task-list layout fixes inside panels ====== */
 .daily-main, .daily-main .panel { min-width: 0; }
+
+.daily-page .task-list {
+  gap: var(--space-2);
+}
+
+.daily-page .task-list-header {
+  margin-bottom: 0;
+  gap: var(--space-2);
+}
+
+.daily-page .task-list-controls,
+.daily-page .task-toggles,
+.daily-page .bulk-task-toolbar {
+  gap: var(--space-1);
+}
+
+.daily-page .task-toggles {
+  padding: 0.1rem;
+  background: transparent;
+}
+
+.daily-page .pill-toggle,
+.daily-page .add-task-btn,
+.daily-page .make-task-btn,
+.daily-page .set-cluster-btn,
+.daily-page .inbox-toggle {
+  padding: 0.26rem 0.62rem;
+  font-size: 0.82rem;
+  box-shadow: none;
+}
+
+.daily-page .bulk-task-toolbar {
+  padding: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.daily-page .add-task-row {
+  margin-bottom: var(--space-2);
+}
+
+.daily-page .select-all-row {
+  padding: var(--space-1) 0;
+  margin-bottom: var(--space-1);
+}
+
+.daily-page .tasks {
+  gap: var(--space-1);
+  margin: var(--space-1) 0;
+}
+
+.daily-page .task-item {
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-input);
+}
+
+.daily-page .task-item-main {
+  gap: 0.22rem;
+}
+
+.daily-page .task-item-main .task-title {
+  line-height: 1.3;
+}
+
+.daily-page .task-item-meta {
+  gap: var(--space-1);
+  font-size: 0.82rem;
+}
+
+.daily-page .due-badge {
+  font-size: 0.74rem;
+  padding: 0.08rem 0.45rem;
+}
+
+.daily-page .inbox {
+  margin-top: var(--space-1);
+}
+
+.daily-page .hourly-schedule {
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.daily-page .hour-block {
+  padding: var(--space-2);
+  margin-bottom: var(--space-2);
+  border-radius: var(--radius-input);
+  box-shadow: none;
+}
+
+.daily-page .hour-block h3 {
+  font-size: 0.95rem;
+  margin-bottom: 0.35rem;
+}
+
+.daily-page .schedule-label {
+  margin-bottom: 0.35rem;
+}
+
+.daily-page textarea.input {
+  min-height: 8rem;
+  font-size: 0.92rem;
+}
 
 .panel .task-list, .panel .tasks-inbox, .panel .inbox-list {
   list-style: none; margin: 0; padding: 0; width: 100%;
@@ -332,3 +580,11 @@
   color: var(--muted, #6b7280); background: var(--chip, #f8fafc);
 }
 .task-list .pill-muted { opacity: .85; }
+
+.daily-page .panel .task-list {
+  gap: var(--space-2);
+}
+
+.daily-page .panel .task-item {
+  padding: 0.5rem 0.65rem;
+}

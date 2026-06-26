@@ -12,6 +12,7 @@ const ImportantEventSchema = new Schema(
     description: { type: String, default: "" }, // aka "details" in some callers
     cluster: { type: String },
     entryId: { type: Schema.Types.ObjectId, ref: "Entry" },
+    source: { type: String, default: "" },
     pinned: { type: Boolean, default: false },   // 🔥 new
   },
   { timestamps: true }

@@ -273,6 +273,159 @@ button:focus-visible {
   color: var(--color-muted);
 }
 
+/* Review page primitives ---------------------------------------------- */
+
+.review-page {
+  width: min(1100px, 100%);
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.review-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.review-page__title {
+  margin: 0;
+  font-family: var(--font-thread);
+  font-size: 2rem;
+  color: var(--color-text-strong);
+}
+
+.review-page__subtitle {
+  margin: var(--space-2) 0 0;
+  color: var(--color-muted);
+  font-size: 0.98rem;
+}
+
+.review-page__summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--color-muted);
+  font-size: 0.92rem;
+}
+
+.review-card {
+  background: var(--color-surface);
+  border: 1px solid color-mix(in srgb, var(--color-border) 74%, transparent);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-border);
+}
+
+.review-card__title {
+  color: var(--color-text-strong);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.review-card__meta,
+.review-card__source {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.review-card__source {
+  font-style: italic;
+  margin: 0;
+}
+
+.review-card__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.review-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 90%, var(--color-surface-soft) 10%);
+  color: var(--color-vein);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.22rem 0.55rem;
+}
+
+.review-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  border-radius: var(--radius-button);
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
+  color: var(--color-vein);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 0.4rem 0.75rem;
+  box-shadow: none;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+}
+
+.review-button:hover,
+.review-button:focus-visible {
+  background: color-mix(in srgb, var(--color-surface) 72%, var(--color-spool) 28%);
+  border-color: color-mix(in srgb, var(--color-spool) 50%, transparent);
+  color: var(--color-ink);
+  outline: none;
+}
+
+.review-button:active {
+  transform: translateY(1px);
+}
+
+.review-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.review-button--primary {
+  background: color-mix(in srgb, var(--color-ripple) 22%, var(--color-surface) 78%);
+  border-color: color-mix(in srgb, var(--color-ripple) 46%, transparent);
+  color: color-mix(in srgb, var(--color-success) 82%, var(--color-ink) 18%);
+}
+
+.review-button--secondary {
+  background: color-mix(in srgb, var(--color-spool) 16%, var(--color-surface) 84%);
+  border-color: color-mix(in srgb, var(--color-spool) 38%, transparent);
+  color: color-mix(in srgb, var(--color-plum) 75%, var(--color-ink) 25%);
+}
+
+.review-button--danger {
+  background: color-mix(in srgb, var(--color-danger) 12%, var(--color-surface) 88%);
+  border-color: color-mix(in srgb, var(--color-danger) 34%, transparent);
+  color: var(--color-danger);
+}
+
+.review-button--ghost {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--color-border) 68%, transparent);
+  color: var(--color-vein);
+}
+
+.review-empty {
+  padding: var(--space-5);
+  border-radius: var(--radius-card);
+  border: 1px dashed color-mix(in srgb, var(--color-border) 75%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-surface-soft) 12%);
+  color: var(--color-muted);
+  text-align: center;
+}
+
 .divider {
   height: 1px;
   background: color-mix(in srgb, var(--color-border) 75%, transparent);

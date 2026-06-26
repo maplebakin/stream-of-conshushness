@@ -35,6 +35,10 @@ function groupItems(items = []) {
   }));
 }
 
+function itemId(item) {
+  return item?._id || item?.id || '';
+}
+
 export default function GatherListsPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -72,12 +76,12 @@ export default function GatherListsPage() {
   }
 
   async function updateStatus(item, status) {
-    const id = item?._id || item?.id;
+    const id = itemId(item);
     if (!id || item.status === status) return;
     setBusy(id, true);
     try {
       const updated = await updateGatherItemStatus(id, status);
-      setItems((current) => current.map((candidate) => ((candidate._id || candidate.id) === id ? updated : candidate)));
+      setItems((current) => current.map((candidate) => (itemId(candidate) === id ? updated : candidate)));
     } catch (err) {
       console.error('[GatherListsPage] status update failed:', err?.response?.data || err.message);
       setError(err?.response?.data?.error || 'Could not update Gather item.');
@@ -86,26 +90,45 @@ export default function GatherListsPage() {
     }
   }
 
+  const handleAcceptedSuggestion = useCallback((acceptedItem) => {
+    if (acceptedItem && itemId(acceptedItem)) {
+      setItems((current) => {
+        const acceptedId = itemId(acceptedItem);
+        const withoutAccepted = current.filter((item) => itemId(item) !== acceptedId);
+        return [acceptedItem, ...withoutAccepted];
+      });
+    }
+    load();
+  }, [load]);
+
   return (
-    <div className="page">
-      <header className="page-header">
+    <div className="page review-page">
+      <header className="page-header review-page__header">
         <div>
-          <h1 className="page-title">Gather Lists</h1>
-          <p className="page-subtitle">Needed objects, supplies, replacements, containers, and future purchase ideas.</p>
+          <h1 className="page-title review-page__title">Gather</h1>
+          <p className="page-subtitle review-page__subtitle">Review needed objects, supplies, replacements, containers, and future purchase ideas.</p>
         </div>
-        <button type="button" className="pill pill-muted" onClick={load} disabled={loading}>
-          {loading ? 'Loading...' : 'Refresh'}
-        </button>
+        <div className="review-page__summary">
+          <span>{items.length} accepted</span>
+          <button type="button" className="review-button review-button--ghost" onClick={load} disabled={loading}>
+            {loading ? 'Loading...' : 'Refresh'}
+          </button>
+        </div>
       </header>
 
-      <SuggestedGatherItemsInbox onAccepted={load} onRejected={load} />
-
-      <section className="card" aria-live="polite">
+      <section className="card review-card" aria-live="polite">
         <div className="stack">
-          <h2 className="section-title">Gather Items</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)', alignItems: 'baseline', flexWrap: 'wrap' }}>
+            <div>
+              <h2 className="section-title">Gather Items ({items.length})</h2>
+              <p className="page-subtitle">Accepted gather items live here.</p>
+            </div>
+          </div>
           {loading && <p className="muted">Loading Gather Lists...</p>}
           {!loading && error && <div className="alert error">{error}</div>}
-          {!loading && !error && items.length === 0 && <p className="muted">No Gather Items yet.</p>}
+          {!loading && !error && items.length === 0 && (
+            <p className="review-empty">Accepted gather items will appear here after you accept a suggestion.</p>
+          )}
 
           {!loading && !error && grouped.length > 0 && (
             <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
@@ -117,19 +140,23 @@ export default function GatherListsPage() {
                       <h4 style={{ margin: 0 }}>{listGroup.list}</h4>
                       <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 'var(--space-2)' }}>
                         {listGroup.items.map((item) => {
-                          const id = item._id || item.id;
+                          const id = itemId(item);
                           return (
                             <li
                               key={id}
-                              className="card"
+                              className="card review-card"
                               style={{ boxShadow: 'none', padding: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)' }}
                             >
                               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
                                 <div style={{ minWidth: 0 }}>
-                                  <strong>{item.title || 'Untitled Gather item'}</strong>
-                                  {item.sourceText && <p className="muted" style={{ margin: '0.25rem 0 0' }}>source: "{item.sourceText}"</p>}
+                                  <strong className="review-card__title">{item.title || 'Untitled Gather item'}</strong>
+                                  <div className="review-card__meta" style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: '0.35rem' }}>
+                                    {item.list && <span className="review-pill">{item.list}</span>}
+                                    {item.status && <span className="review-pill">{item.status}</span>}
+                                  </div>
+                                  {item.sourceText && <p className="review-card__source" style={{ margin: '0.25rem 0 0' }}>source: "{item.sourceText}"</p>}
                                   {!item.sourceText && item.sourceEntryId && (
-                                    <p className="muted" style={{ margin: '0.25rem 0 0' }}>source entry: {item.sourceEntryId}</p>
+                                    <p className="review-card__source" style={{ margin: '0.25rem 0 0' }}>source entry: {item.sourceEntryId}</p>
                                   )}
                                 </div>
                                 <label className="pill pill-muted">
@@ -146,7 +173,7 @@ export default function GatherListsPage() {
                               </div>
                               {Array.isArray(item.tags) && item.tags.length > 0 && (
                                 <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                                  {item.tags.map((tag) => <span key={tag} className="pill pill-muted">#{tag}</span>)}
+                                  {item.tags.map((tag) => <span key={tag} className="review-pill">#{tag}</span>)}
                                 </div>
                               )}
                             </li>
@@ -161,6 +188,8 @@ export default function GatherListsPage() {
           )}
         </div>
       </section>
+
+      <SuggestedGatherItemsInbox onAccepted={handleAcceptedSuggestion} onRejected={load} />
     </div>
   );
 }

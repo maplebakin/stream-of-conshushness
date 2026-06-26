@@ -175,24 +175,14 @@ describe('entry automation task extraction', () => {
     return mocks.suggestedTaskInsertMany.mock.calls.flatMap(([docs]) => docs);
   }
 
-  function insertedTasks() {
-    return mocks.taskInsertMany.mock.calls.flatMap(([docs]) => docs);
-  }
-
-  it('auto-creates a clean active task for a dated action deadline without creating other lanes', async () => {
+  it('stages a clean dated task suggestion without creating an active task', async () => {
     await createEntry('pay the daycare fees by the end of the day today');
 
     expect(insertedSuggestedTasks()[0]).toMatchObject({
       title: 'Pay daycare fees',
       dueDate: expect.any(Date),
-      autoCreate: true,
     });
-    expect(insertedTasks()[0]).toMatchObject({
-      title: 'Pay daycare fees',
-      dueDate: '2026-06-08',
-      entryId: 'entry-1',
-      status: 'todo',
-    });
+    expect(mocks.taskInsertMany).not.toHaveBeenCalled();
     expect(mocks.importantEventCreate).not.toHaveBeenCalled();
     expect(mocks.appointmentCreate).not.toHaveBeenCalled();
     expect(mocks.suggestedGatherItemInsertMany).not.toHaveBeenCalled();
@@ -204,7 +194,6 @@ describe('entry automation task extraction', () => {
 
     expect(insertedSuggestedTasks()[0]).toMatchObject({
       title: 'Finish folding the laundry',
-      autoCreate: false,
     });
     expect(mocks.taskInsertMany).not.toHaveBeenCalled();
   });
@@ -215,24 +204,18 @@ describe('entry automation task extraction', () => {
     expect(insertedSuggestedTasks()[0]).toMatchObject({
       title: 'Clean the fish tank',
       repeat: 'every other day',
-      autoCreate: false,
     });
     expect(mocks.taskInsertMany).not.toHaveBeenCalled();
   });
 
-  it('creates a future task for a reminder action without creating Gather or ImportantEvent records', async () => {
+  it('stages a future dated task suggestion without creating Gather or ImportantEvent records', async () => {
     await createEntry('I need to remember to extend the pause on my Audible subscription in two months.');
 
     expect(insertedSuggestedTasks()[0]).toMatchObject({
       title: 'Extend the pause on my Audible subscription',
       dueDate: expect.any(Date),
-      autoCreate: true,
     });
-    expect(insertedTasks()[0]).toMatchObject({
-      title: 'Extend the pause on my Audible subscription',
-      dueDate: '2026-08-08',
-      entryId: 'entry-1',
-    });
+    expect(mocks.taskInsertMany).not.toHaveBeenCalled();
     expect(mocks.suggestedGatherItemInsertMany).not.toHaveBeenCalled();
     expect(mocks.importantEventCreate).not.toHaveBeenCalled();
   });
@@ -251,12 +234,8 @@ describe('entry automation task extraction', () => {
     expect(insertedSuggestedTasks()[0]).toMatchObject({
       title: 'Tidy up the apartment',
       dueDate: expect.any(Date),
-      autoCreate: true,
     });
-    expect(insertedTasks()[0]).toMatchObject({
-      title: 'Tidy up the apartment',
-      dueDate: '2026-06-08',
-    });
+    expect(mocks.taskInsertMany).not.toHaveBeenCalled();
     expect(mocks.importantEventCreate).not.toHaveBeenCalled();
   });
 });

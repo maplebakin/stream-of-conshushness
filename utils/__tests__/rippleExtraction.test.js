@@ -28,6 +28,20 @@ test('extractTasks handles "gotta" and "by next week"', () => {
   expect(tasks[0].reason).toBe('deadline');
 });
 
+test('extractTasks resolves tomorrow from the entry date', () => {
+  const tasks = extractTasks('I need to call the dentist tomorrow.', '2026-06-08');
+  expect(tasks.length).toBe(1);
+  expect(tasks[0]).toMatchObject({
+    text: 'Call the dentist',
+    dueDate: '2026-06-09',
+  });
+});
+
+test('extractTasks resolves tomorrow across Toronto DST boundaries', () => {
+  expect(extractTasks('I need to call the dentist tomorrow.', '2026-03-07')[0].dueDate).toBe('2026-03-08');
+  expect(extractTasks('I need to call the dentist tomorrow.', '2026-10-31')[0].dueDate).toBe('2026-11-01');
+});
+
 test('sieveRipples keeps actionable ripples derived from shared verbs', () => {
   const { ripples } = extractRipplesFromEntry({
     text: 'Remember to organize the garage this weekend.',
@@ -57,7 +71,7 @@ test('extractTasks keeps short imperatives entry-only without clear due context'
   expect(extractTasks('pick up iron', ENTRY_DATE)).toEqual([]);
 });
 
-test('extractRipples marks dated non-recurring actions for active task creation only', () => {
+test('extractRipples marks dated non-recurring actions with due metadata only', () => {
   const due = extractRipplesFromEntry({
     text: 'pay the daycare fees by the end of the day today',
     entryDate: ENTRY_DATE,

@@ -8,7 +8,6 @@ import SuggestedGatherItem from "../models/SuggestedGatherItem.js";
 import GatherItem from "../models/GatherItem.js";
 import SuggestedInterest from "../models/SuggestedInterest.js";
 import Interest from "../models/Interest.js";
-import Task from "../models/Task.js";
 import Cluster from "../models/Cluster.js";
 import { normalizeClusterIds, resolveClusterIdForOwner } from "./clusterIds.js";
 
@@ -178,6 +177,10 @@ function isInterestOnlyEntry(text = "") {
 async function upsertImportantEvent({ userId, title, date, details = "", cluster = null, entryId = null }) {
   const cleanedTitle = cleanCalendarTitle(title) || String(title || "").trim();
   if (!userId || !cleanedTitle || !date) return null;
+  if (entryId) {
+    const linkedDoc = await ImportantEvent.findOne({ userId, date, entryId, source: "entry-automation" });
+    if (linkedDoc) return linkedDoc;
+  }
   const doc = await ImportantEvent.findOne({ userId, title: cleanedTitle, date });
   if (doc) return doc;
   return ImportantEvent.create({
@@ -187,6 +190,7 @@ async function upsertImportantEvent({ userId, title, date, details = "", cluster
     description: details || "",
     cluster: cluster || null,
     ...(entryId ? { entryId } : {}),
+    source: "entry-automation",
     createdAt: new Date(),
   });
 }
@@ -204,6 +208,10 @@ async function upsertAppointment({
 }) {
   const cleanedTitle = cleanCalendarTitle(title) || String(title || "").trim();
   if (!userId || !cleanedTitle || !date || !timeStart) return null;
+  if (entryId) {
+    const linkedDoc = await Appointment.findOne({ userId, date, timeStart, entryId, source: "entry-automation" });
+    if (linkedDoc) return linkedDoc;
+  }
   const existing = await Appointment.findOne({ userId, title: cleanedTitle, date, timeStart });
   if (existing) return existing;
   return Appointment.create({
@@ -216,6 +224,7 @@ async function upsertAppointment({
     details: details || "",
     ...(cluster ? { cluster } : {}),
     ...(entryId ? { entryId } : {}),
+    source: "entry-automation",
     createdAt: new Date(),
   });
 }
@@ -309,10 +318,6 @@ function toISODateString(value) {
   ].join("-");
 }
 
-function shouldAutoCreateTaskFromRipple(ripple = {}) {
-  return Boolean(ripple?.meta?.autoCreate && ripple?.meta?.dueDate && !ripple?.meta?.recurrence);
-}
-
 function cleanCalendarTitle(value = "") {
   let title = String(value || "")
     .replace(/[“”]/g, '"')
@@ -375,12 +380,14 @@ function parseAppointmentsFromText(text = "", entryDateISO = null) {
 
 export async function clearRippleArtifacts({ userId, entryId }) {
   if (!userId || !entryId) return;
-  const rippleIds = await Ripple.find({ userId, entryId }).select("_id");
+  const rippleQuery = Ripple.find({ userId, entryId, status: "pending" });
+  const selectedRipples = rippleQuery?.select ? rippleQuery.select("_id") : rippleQuery;
+  const rippleIds = selectedRipples?.lean ? await selectedRipples.lean() : await selectedRipples;
   const ids = rippleIds.map((r) => r._id);
   if (ids.length) {
-    await SuggestedTask.deleteMany({ userId, sourceRippleId: { $in: ids } });
+    await SuggestedTask.deleteMany({ userId, sourceRippleId: { $in: ids }, status: "pending" });
   }
-  await Ripple.deleteMany({ userId, entryId });
+  await Ripple.deleteMany({ userId, entryId, status: "pending" });
 }
 
 export async function clearPendingGatherSuggestions({ userId, entryId }) {
@@ -391,6 +398,15 @@ export async function clearPendingGatherSuggestions({ userId, entryId }) {
 export async function clearPendingInterestSuggestions({ userId, entryId }) {
   if (!userId || !entryId) return;
   await SuggestedInterest.deleteMany({ userId, sourceEntryId: entryId, status: "pending" });
+}
+
+export async function clearAutomationCalendarArtifacts({ userId, entryId }) {
+  if (!userId || !entryId) return;
+  const query = { userId, entryId, source: "entry-automation" };
+  await Promise.all([
+    Appointment.deleteMany(query),
+    ImportantEvent.deleteMany(query),
+  ]);
 }
 
 async function safeInsertMany(Model, docs) {
@@ -499,7 +515,6 @@ async function generateRipplesAndSuggestions({ entry, text, userId }) {
         priority: "low",
         cluster: entry.cluster || "",
         section: entry.section || "",
-        autoCreate: shouldAutoCreateTaskFromRipple(src),
       };
       const dueDate = isoDateToUTCDate(dueISO);
       if (dueDate) payload.dueDate = dueDate;
@@ -509,25 +524,6 @@ async function generateRipplesAndSuggestions({ entry, text, userId }) {
     .filter((p) => p.title);
 
   await safeInsertMany(SuggestedTask, suggestionPayloads);
-
-  try {
-    const taskPayloads = suggestionPayloads
-      .filter((payload) => payload?.autoCreate)
-      .map((payload) => ({
-        userId,
-        title: String(payload?.title || "").trim(),
-        dueDate: toISODateString(payload?.dueDate) || null,
-        rrule: payload?.repeat ? String(payload.repeat) : "",
-        clusters: Array.isArray(entry?.clusters) ? normalizeClusterIds(entry.clusters) : [],
-        entryId: entry?._id || null,
-        status: "todo",
-      }))
-      .filter((t) => t.title);
-
-    await safeInsertMany(Task, taskPayloads);
-  } catch (err) {
-    console.warn("[entryAutomation] task auto-create failed:", err?.message || err);
-  }
 
   return { ripples: rippleDocs, suggestedTasks: suggestionPayloads };
 }
@@ -904,6 +900,7 @@ export async function updateEntryWithAutomation({ userId, entryId, updates = {} 
   const updated = await entry.save();
 
   if (coreChanged) {
+    await clearAutomationCalendarArtifacts({ userId, entryId: updated._id });
     await runNlpSideEffects({ entry: updated, analysis, userId });
   }
 
@@ -942,4 +939,5 @@ export default {
   clearRippleArtifacts,
   clearPendingGatherSuggestions,
   clearPendingInterestSuggestions,
+  clearAutomationCalendarArtifacts,
 };

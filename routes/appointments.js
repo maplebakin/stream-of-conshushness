@@ -243,6 +243,7 @@ router.patch('/:id', async (req, res) => {
     if ('cluster' in b) doc.cluster = b.cluster || '';
     if ('tz' in b) doc.tz = b.tz || 'America/Toronto';
     if ('entryId' in b) doc.entryId = b.entryId || null;
+    if (doc.source === 'entry-automation') doc.source = 'user-edited';
 
     if ('clusters' in b || 'clusterId' in b || 'cluster' in b) {
       let clusterIds = normalizeClusterIds(b.clusters);

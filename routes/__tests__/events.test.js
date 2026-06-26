@@ -66,7 +66,7 @@ describe('important event routes', () => {
     expect(findOneAndUpdateMock).toHaveBeenCalledWith(
       { _id: 'event-created', userId: 'user123' },
       {
-        $set: { entryId: '507f1f77bcf86cd799439011' },
+        $set: { entryId: '507f1f77bcf86cd799439011', source: 'user-edited' },
         $currentDate: { updatedAt: true },
       },
       { new: true }

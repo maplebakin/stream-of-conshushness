@@ -51,6 +51,7 @@ const AppointmentSchema = new Schema(
     cluster  : { type: String, default: '' },
     clusters : { type: [Schema.Types.ObjectId], ref: 'Cluster', default: [] },
     entryId  : { type: Schema.Types.ObjectId, ref: 'Entry', default: null },
+    source   : { type: String, default: '' },
   },
   { timestamps: true }
 );

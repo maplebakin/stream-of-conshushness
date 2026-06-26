@@ -38,11 +38,11 @@ describe('frontend stability endpoint contracts', () => {
     const layout = read('frontend/src/Layout.jsx');
     const commandPalette = read('frontend/src/components/CommandPalette.jsx');
 
-    expect(header).toContain('to="/goals"');
-    expect(header).toContain('Goals');
-    expect(header).toContain('to="/interests"');
+    for (const target of ['/', '/today', '/calendar']) {
+      expect(header).toContain(`to="${target}"`);
+    }
 
-    for (const target of ['/', '/sections', '/clusters', '/ripples', '/interests', '/gather-lists', '/inbox/tasks', '/calendar', '/search', '/trash', '/export', '/account', '/settings']) {
+    for (const target of ['/sections', '/clusters', '/goals', '/ripples', '/interests', '/gather-lists', '/inbox/tasks', '/search', '/trash', '/export', '/account', '/settings']) {
       expect(layout).toContain(`to="${target}"`);
     }
 
@@ -177,14 +177,14 @@ describe('frontend stability endpoint contracts', () => {
 
   it('routes and links to the existing goals page using real goal endpoints', () => {
     const app = read('frontend/src/App.jsx');
-    const header = read('frontend/src/Header.jsx');
+    const layout = read('frontend/src/Layout.jsx');
     const goals = read('frontend/src/GoalPage.jsx');
     const routes = read('routes/goals.js');
 
     expect(app).toContain("import GoalPage from './GoalPage.jsx'");
     expect(app).toContain('path="/goals" element={<GoalPage />}');
-    expect(header).toContain('to="/goals"');
-    expect(header).toContain('Goals');
+    expect(layout).toContain('to="/goals"');
+    expect(layout).toContain('Goals');
     expect(goals).toContain("axios.get('/api/goals')");
     expect(goals).toContain("axios.post('/api/goals'");
     expect(goals).toContain('axios.patch(`/api/goals/${goalId}/step/${stepIndex}`');

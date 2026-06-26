@@ -138,8 +138,13 @@ export default function DailyRipples(props) {
       setError('');
       try {
         // Support both /api/ripples?date= and /api/ripples/:date
-        let res = await axios.get(`/api/ripples?date=${day}`, { headers: authHeaders })
-          .catch(() => axios.get(`/api/ripples/${day}`, { headers: authHeaders }));
+        let res = await axios.get('/api/ripples', {
+          headers: authHeaders,
+          params: { date: day, status: 'pending' },
+        }).catch(() => axios.get(`/api/ripples/${day}`, {
+          headers: authHeaders,
+          params: { status: 'pending' },
+        }));
         const list = normalizeRipples(res);
         if (!ignore) {
           setRawRipples(list);

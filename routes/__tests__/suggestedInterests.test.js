@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
+import mongoose from 'mongoose';
 
 const suggestedFind = vi.fn();
 const suggestedFindOne = vi.fn();
 const suggestedFindOneAndUpdate = vi.fn();
 const interestCreate = vi.fn();
+const entryFind = vi.fn();
 
 vi.mock('../../models/SuggestedInterest.js', () => ({
   default: {
@@ -21,6 +23,12 @@ vi.mock('../../models/Interest.js', () => ({
   },
 }));
 
+vi.mock('../../models/Entry.js', () => ({
+  default: {
+    find: (...args) => entryFind(...args),
+  },
+}));
+
 vi.mock('../../utils/clusterIds.js', () => ({
   normalizeClusterIds: (ids = []) => (Array.isArray(ids) ? ids : [ids]).filter(Boolean),
   resolveClusterIdForOwner: async (_userId, value) => (value === 'missing' ? null : value),
@@ -29,11 +37,19 @@ vi.mock('../../utils/clusterIds.js', () => ({
 const router = (await import('../suggestedInterests.js')).default;
 
 function makeQuery(rows = []) {
+  const chain = {
+    populate: () => chain,
+    lean: async () => rows,
+  };
   return {
-    sort: () => ({
-      populate: () => ({
-        lean: async () => rows,
-      }),
+    sort: () => chain,
+  };
+}
+
+function makeEntryQuery(rows = []) {
+  return {
+    select: () => ({
+      lean: async () => rows,
     }),
   };
 }
@@ -88,7 +104,39 @@ describe('suggested interest routes', () => {
 
     expect(res.status).toBe(200);
     expect(suggestedFind).toHaveBeenCalledWith({ userId: 'user123', status: 'pending' });
+    expect(entryFind).not.toHaveBeenCalled();
     expect(res.body).toEqual([{ _id: 'suggestion-1', title: 'Tap dance' }]);
+  });
+
+  it('filters pending suggested interests by source entry date', async () => {
+    const entryId = new mongoose.Types.ObjectId();
+    entryFind.mockReturnValue(makeEntryQuery([{ _id: entryId }]));
+    suggestedFind.mockReturnValue(makeQuery([{
+      _id: 'suggestion-1',
+      title: 'Pottery',
+      sourceEntryId: { _id: String(entryId), date: '2026-06-08' },
+    }]));
+
+    const res = await request(app).get('/api/suggested-interests?status=pending&date=2026-06-08');
+
+    expect(res.status).toBe(200);
+    expect(entryFind).toHaveBeenCalledWith({ userId: 'user123', date: '2026-06-08' });
+    expect(suggestedFind).toHaveBeenCalledWith({
+      userId: 'user123',
+      status: 'pending',
+      sourceEntryId: { $in: [entryId] },
+    });
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0]).toMatchObject({ title: 'Pottery' });
+  });
+
+  it('rejects invalid suggested interest date filters', async () => {
+    const res = await request(app).get('/api/suggested-interests?status=pending&date=06-08-2026');
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'date must use YYYY-MM-DD format' });
+    expect(entryFind).not.toHaveBeenCalled();
+    expect(suggestedFind).not.toHaveBeenCalled();
   });
 
   it('accepts a suggestion by creating Interest and marking suggestion accepted', async () => {

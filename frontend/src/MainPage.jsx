@@ -252,6 +252,49 @@ export default function MainPage() {
 
       {/* Body */}
       <section className="entry-feed">
+        <form
+          className="quick-entry quick-entry--primary"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitQuickEntry();
+          }}
+        >
+          <textarea
+            ref={quickEntryRef}
+            rows={1}
+            className="quick-entry-input"
+            placeholder="Capture a thought, task, idea, appointment, or thing to remember..."
+            value={quickEntryText}
+            onChange={(e) => setQuickEntryText(e.target.value)}
+            onInput={autoResizeQuickEntry}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                submitQuickEntry();
+              }
+            }}
+            disabled={!isAuthenticated}
+          />
+          <p className="quick-entry-help">Enter for a new line. Ctrl+Enter to capture.</p>
+          <button
+            type="submit"
+            className="quick-entry-send"
+            disabled={!isAuthenticated || !quickEntryText.trim()}
+            title="Create entry"
+            aria-label="Create entry"
+          >
+            Save to Stream
+          </button>
+        </form>
+
+        <nav className="stream-review-links" aria-label="Review captured items">
+          <span>Review captured threads</span>
+          <Link to="/inbox/tasks">Tasks</Link>
+          <Link to="/ripples">Ripples</Link>
+          <Link to="/gather-lists">Gather</Link>
+          <Link to="/interests">Interests</Link>
+        </nav>
+
         <section className="stream-onboarding-card" aria-labelledby="stream-onboarding-title">
           <div className="stream-onboarding-copy">
             <h2 id="stream-onboarding-title">Write naturally. Structure appears after.</h2>
@@ -271,48 +314,13 @@ export default function MainPage() {
             <span>"I'd like to learn about tap dance" <strong>Sparks & Interests</strong></span>
             <span>"I'm nervous about my appointment" <strong>Entry only</strong></span>
           </div>
-
-          <div className="stream-onboarding-links" aria-label="Review pages">
-            <span>After writing, check:</span>
-            <Link to="/gather-lists">Gather Lists</Link>
-            <Link to="/interests">Sparks & Interests</Link>
-            <Link to="/calendar">Calendar</Link>
-          </div>
         </section>
 
-        <form
-          className="quick-entry"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submitQuickEntry();
-          }}
-        >
-          <textarea
-            ref={quickEntryRef}
-            rows={1}
-            className="quick-entry-input"
-            placeholder="What's on your mind?"
-            value={quickEntryText}
-            onChange={(e) => setQuickEntryText(e.target.value)}
-            onInput={autoResizeQuickEntry}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                submitQuickEntry();
-              }
-            }}
-            disabled={!isAuthenticated}
-          />
-          <button
-            type="submit"
-            className="quick-entry-send"
-            disabled={!isAuthenticated || !quickEntryText.trim()}
-            title="Send"
-            aria-label="Create entry"
-          >
-            ↵
-          </button>
-        </form>
+        <div className="stream-feed-header">
+          <h2>Recent entries</h2>
+          <span>{filtered.length} shown</span>
+        </div>
+
         {loading && (
           <div className="loading font-glow text-vein" role="status" aria-live="polite">
             Loading entries…

@@ -20,6 +20,16 @@
 - Shared helpers belong in `utils/`, and anything that needs request context (like entry automation) should accept a payload rather than pulling from globals.
 - Cluster assignments are now stored as ObjectId arrays named `clusters` on journal entries, tasks, goals, appointments, and notes. Use `utils/clusterIds.js` to normalize query/body input and run `scripts/migrations/backfillClusterLinks.mjs` to backfill legacy slug data when deploying.
 
+### Entry Automation Contract
+- Journal entry automation lives in `utils/entryAutomation.js` and is called by `POST /api/entries` and `PATCH /api/entries/:id`.
+- Task-like text is review-first: automation may create `Ripple` records and pending `SuggestedTask` records, but active `Task` records must be created by explicit task routes or by accepting a suggested task through `routes/suggestedTasks.js`.
+- Gather-item and interest extraction is also review-first: automation may create pending `SuggestedGatherItem` and `SuggestedInterest` records, while active `GatherItem` and `Interest` records are created by their accept routes.
+- Task suggestion relative dates, including text like "tomorrow", use the entry's `date` as the base date. Keep this deterministic in tests; do not fall back to the current server date when an entry date is available.
+- Entry updates should replace pending automation artifacts from the old text without undoing accepted/user-created work. Pending ripple-backed task suggestions are cleared by pending `Ripple` linkage; pending gather and interest suggestions are cleared by `sourceEntryId`.
+- Accepted suggestions and active objects must be preserved on entry update. Do not delete accepted `SuggestedTask`, `SuggestedGatherItem`, `SuggestedInterest`, `Task`, `GatherItem`, or `Interest` records from entry automation cleanup.
+- Calendar automation is the only current active-object side effect from entry automation. Generated `Appointment` and `ImportantEvent` records must be linked with `entryId` and marked `source: "entry-automation"`.
+- Entry updates may replace calendar artifacts only when they are both linked to the entry and marked `source: "entry-automation"`. Calendar artifacts edited through user-facing CRUD routes should be marked `source: "user-edited"` and must not be removed by entry automation cleanup.
+
 
 - Frontend cluster views share slug normalization helpers in `frontend/src/utils/clusterHelpers.js`; when working with cluster data, reuse those utilities so slug/name/color/icon handling stays consistent across pages and modals.
 - Shared layout primitives live in `frontend/src/base.css`—classes like `.page`, `.card`, `.pill`, and `.alert` keep contrast and spacing consistent across the app. Prefer using them (or extending them) instead of recreating ad-hoc UI styles.

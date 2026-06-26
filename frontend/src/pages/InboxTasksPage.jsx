@@ -193,9 +193,16 @@ export default function InboxTasksPage() {
   }
 
   return (
-    <div className="inbox-page">
-      <header className="bar">
-        <h2>Active Task Workbench</h2>
+    <div className="inbox-page review-page">
+      <header className="bar review-page__header">
+        <div>
+          <h1 className="review-page__title">Tasks</h1>
+          <p className="review-page__subtitle">Review active tasks, due dates, and work captured from entries.</p>
+        </div>
+        <div className="review-page__summary">
+          <span>{filtered.length} shown</span>
+          <span>{allTasks.length} total</span>
+        </div>
         <div className="filters">
           <input className="search" value={q} onChange={e=>setQ(e.target.value)} placeholder="Search…" />
           <div className="chips">
@@ -211,13 +218,13 @@ export default function InboxTasksPage() {
             <input type="checkbox" checked={allSelected} onChange={e => setSelectAll(e.target.checked)} />
             <span>Select all</span>
           </label>
-          <button className="btn" disabled={!anySelected} onClick={()=>bulkComplete(selected)}>Complete</button>
-          <button className="btn" disabled={!anySelected} onClick={()=>bulkDelete(selected)}>Move selected to Trash</button>
+          <button className="review-button review-button--primary" disabled={!anySelected} onClick={()=>bulkComplete(selected)}>Complete</button>
+          <button className="review-button review-button--danger" disabled={!anySelected} onClick={()=>bulkDelete(selected)}>Move selected to Trash</button>
           <input className="date" type="date" value={bulkDate} onChange={e=>setBulkDate(e.target.value)} />
-          <button className="btn" disabled={!anySelected} onClick={()=>bulkSetDate(selected, bulkDate || null)}>
+          <button className="review-button review-button--secondary" disabled={!anySelected} onClick={()=>bulkSetDate(selected, bulkDate || null)}>
             {bulkDate ? 'Set date' : 'Clear date'}
           </button>
-          <button className="btn ghost" onClick={()=>{ setSelected(new Set()); load(); }}>Refresh</button>
+          <button className="review-button review-button--ghost" onClick={()=>{ setSelected(new Set()); load(); }}>Refresh</button>
         </div>
       </header>
 
@@ -229,12 +236,12 @@ export default function InboxTasksPage() {
           onChange={e=>setNewTitle(e.target.value)}
           onKeyDown={e=>{ if(e.key==='Enter') createTask(); }}
         />
-        <button className="btn" onClick={createTask}>Add</button>
+        <button className="review-button review-button--primary" onClick={createTask}>Add</button>
       </section>
 
       {loading && <div className="hint">Loading tasks…</div>}
       {!loading && err && <div className="error">{err}</div>}
-      {!loading && !err && filtered.length === 0 && <div className="hint">No tasks match. Serene surface.</div>}
+      {!loading && !err && filtered.length === 0 && <div className="review-empty">No tasks match this view. Captured tasks will appear here after you create or accept them.</div>}
 
       {!loading && !err && filtered.length > 0 && (
         <ul className="grid">
@@ -243,41 +250,30 @@ export default function InboxTasksPage() {
             const sel = selected.has(t._id);
             const overdue = !t.completed && isISO(t.dueDate) && cmpDate(t.dueDate, today) < 0;
             return (
-              <li key={t._id} className={`card ${t.completed?'done':''} ${overdue?'overdue':''}`}>
-                <div className="row">
-                  <label className="pill">
+              <li key={t._id} className={`card review-card task-card ${t.completed?'done':''} ${overdue?'overdue':''}`}>
+                <div className="task-card__top">
+                  <div className="title review-card__title task-card__title" onDoubleClick={()=>startEdit(t)}>
+                    {editId === t._id ? (
+                      <input
+                        className="edit"
+                        value={editTitle}
+                        onChange={e=>setEditTitle(e.target.value)}
+                        onBlur={commitEdit}
+                        onKeyDown={e=>{ if(e.key==='Enter') commitEdit(); if(e.key==='Escape') setEditId(null); }}
+                        autoFocus
+                      />
+                    ) : (
+                      <span className="text" title="Double-click to edit">{t.title || '(untitled)'}</span>
+                    )}
+                  </div>
+
+                  <label className="pill task-card__select">
                     <input type="checkbox" checked={sel} onChange={()=>toggleSelect(t._id)} />
                     <span>{sel?'Selected':'Select'}</span>
                   </label>
-                  <div style={{ display: 'flex', gap: '0.35rem' }}>
-                    <button className="btn ghost" disabled={busy} onClick={()=>startEdit(t)}>
-                      ✏️ Edit
-                    </button>
-                    <button className="btn ghost" disabled={busy} onClick={()=>toggleDone(t._id)}>
-                      {t.completed ? '↺ Reopen' : '✓ Complete'}
-                    </button>
-                    <button className="btn ghost" disabled={busy} onClick={()=>deleteTask(t._id)}>
-                      🗑️ Move to Trash
-                    </button>
-                  </div>
                 </div>
 
-                <div className="title" onDoubleClick={()=>startEdit(t)}>
-                  {editId === t._id ? (
-                    <input
-                      className="edit"
-                      value={editTitle}
-                      onChange={e=>setEditTitle(e.target.value)}
-                      onBlur={commitEdit}
-                      onKeyDown={e=>{ if(e.key==='Enter') commitEdit(); if(e.key==='Escape') setEditId(null); }}
-                      autoFocus
-                    />
-                  ) : (
-                    <span className="text" title="Double-click to edit">{t.title || '(untitled)'}</span>
-                  )}
-                </div>
-
-                <div className="meta">
+                <div className="meta review-card__meta">
                   <label className="pill">
                     <span>Due</span>
                     <input
@@ -288,18 +284,30 @@ export default function InboxTasksPage() {
                       disabled={busy}
                     />
                   </label>
-                  {t.section ? <span className="tag">§ {t.section}</span> : null}
-                  {overdue ? <span className="tag red">overdue</span> : null}
-                  {t.completed ? <span className="tag green">done</span> : null}
+                  {t.section ? <span className="review-pill">§ {t.section}</span> : null}
+                  {overdue ? <span className="review-pill tag red">overdue</span> : null}
+                  {t.completed ? <span className="review-pill tag green">done</span> : null}
                   {t.entryId ? (
                     (typeof t.entryId === 'object' && t.entryId !== null && t.entryId.date) ? (
-                      <Link to={`/day/${t.entryId.date}`} className="tag clickable-badge" title="Go to source entry date">
+                      <Link to={`/day/${t.entryId.date}`} className="review-pill clickable-badge" title="Go to source entry date">
                         📄 Entry ({t.entryId.date})
                       </Link>
                     ) : (
-                      <span className="tag">📄 Source entry</span>
+                      <span className="review-pill">📄 Source entry</span>
                     )
                   ) : null}
+                </div>
+
+                <div className="review-card__actions task-card__actions">
+                  <button className="review-button review-button--primary" disabled={busy} onClick={()=>toggleDone(t._id)}>
+                    {t.completed ? 'Reopen' : 'Complete'}
+                  </button>
+                  <button className="review-button review-button--ghost" disabled={busy} onClick={()=>startEdit(t)}>
+                    Edit
+                  </button>
+                  <button className="review-button review-button--ghost task-card__trash" disabled={busy} onClick={()=>deleteTask(t._id)}>
+                    Move to Trash
+                  </button>
                 </div>
               </li>
             );
@@ -318,33 +326,55 @@ export default function InboxTasksPage() {
         .chip.on { background: rgba(255,255,255,.06); }
         .bulk { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
         .pill { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .45rem; border: 1px solid var(--color-border,#2a2a32); border-radius: 999px; }
-        .btn { border: 1px solid var(--color-border,#2a2a32); background: transparent; color: inherit; padding: .25rem .6rem; border-radius: 8px; cursor: pointer; }
-        .btn.ghost { opacity: .8; }
         .quickadd { display: flex; gap: .5rem; align-items: center; }
         .new { flex: 1; padding: .5rem .6rem; border-radius: 10px; border: 1px solid var(--color-border,#2a2a32); background: rgba(255,255,255,.02); }
         .hint { padding: .6rem .75rem; opacity: .8; }
         .error { padding: .6rem .75rem; color: #ff9191; }
-        .grid { list-style: none; padding: 0; margin: 0; display: grid; gap: .6rem; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+        .grid { list-style: none; padding: 0; margin: 0; display: grid; gap: .75rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
         .card { display: grid; gap: .45rem; padding: .65rem .7rem; border: 1px solid var(--color-border,#2a2a32); border-radius: 12px; background: rgba(255,255,255,.02); }
         .card.done { opacity: .7; }
         .card.overdue { border-color: #ff9191; }
+        .task-card { gap: .65rem; padding: .85rem .9rem; }
+        .task-card__top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: start; }
+        .task-card__select { font-size: .78rem; opacity: .78; padding: .16rem .42rem; }
+        .task-card__title { min-width: 0; font-size: 1.08rem; }
+        .task-card__actions {
+          justify-content: flex-end;
+          padding-top: .55rem;
+          border-top: 1px solid color-mix(in srgb, var(--color-border,#2a2a32) 62%, transparent);
+        }
+        .task-card__actions .review-button {
+          padding: .32rem .58rem;
+          font-size: .82rem;
+        }
+        .task-card__trash {
+          color: color-mix(in srgb, var(--color-danger,#b42318) 72%, var(--color-muted,#9aa0aa) 28%);
+          opacity: .78;
+        }
+        .task-card__trash:hover,
+        .task-card__trash:focus-visible {
+          opacity: 1;
+          border-color: color-mix(in srgb, var(--color-danger,#b42318) 38%, transparent);
+        }
         .row { display: flex; justify-content: space-between; align-items: center; }
         .title { cursor: text; }
-        .text { font-weight: 600; }
+        .text { font-weight: 700; overflow-wrap: anywhere; }
         .edit { width: 100%; padding: .35rem .45rem; border-radius: 8px; border: 1px solid var(--color-border,#2a2a32); background: rgba(255,255,255,.05); }
-        .meta { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+        .meta { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; opacity: .88; }
+        .meta .pill,
+        .meta .review-pill { font-size: .78rem; padding: .16rem .42rem; }
         .date { padding: .2rem .35rem; background: transparent; border: none; color: inherit; outline: none; }
         .tag { font-size: .75rem; padding: .05rem .4rem; border: 1px solid var(--color-border,#2a2a32); border-radius: 999px; color: var(--color-muted,#9aa0aa); }
         .tag.red { color: #ff9191; }
         .tag.green { color: #8fe3a2; }
-        .tag.clickable-badge {
+        .clickable-badge {
           color: var(--color-primary, #60a5fa);
           border-color: var(--color-primary, #60a5fa);
           text-decoration: none;
           cursor: pointer;
           transition: background 0.2s, color 0.2s;
         }
-        .tag.clickable-badge:hover {
+        .clickable-badge:hover {
           background: rgba(96, 165, 250, 0.1);
         }
       `}</style>

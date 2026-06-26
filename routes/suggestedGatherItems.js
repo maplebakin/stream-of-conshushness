@@ -1,5 +1,6 @@
 import express from 'express';
 import mongoose from 'mongoose';
+import Entry from '../models/Entry.js';
 import GatherItem from '../models/GatherItem.js';
 import SuggestedGatherItem from '../models/SuggestedGatherItem.js';
 import { normalizeClusterIds, resolveClusterIdForOwner } from '../utils/clusterIds.js';
@@ -14,6 +15,28 @@ function getUserId(req) {
 
 function cleanString(value, fallback = '') {
   return typeof value === 'string' ? value.trim() : fallback;
+}
+
+function isDateKey(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+async function applyEntryDateFilter(query, userId, rawDate) {
+  if (rawDate == null || rawDate === '') return null;
+  const date = String(rawDate);
+  if (!isDateKey(date)) return 'date must use YYYY-MM-DD format';
+
+  const entries = await Entry.find({ userId, date }).select('_id').lean();
+  const entryIds = entries.map((entry) => entry._id);
+
+  if (query.sourceEntryId) {
+    const requestedEntryId = String(query.sourceEntryId);
+    const matchesDate = entryIds.some((entryId) => String(entryId) === requestedEntryId);
+    query.sourceEntryId = matchesDate ? query.sourceEntryId : { $in: [] };
+  } else {
+    query.sourceEntryId = { $in: entryIds };
+  }
+  return null;
 }
 
 async function resolveClusters(userId, body = {}, fallback = []) {
@@ -39,10 +62,13 @@ router.get('/', async (req, res) => {
     if (req.query.sourceEntryId && ObjectId.isValid(req.query.sourceEntryId)) {
       q.sourceEntryId = new ObjectId(req.query.sourceEntryId);
     }
+    const dateError = await applyEntryDateFilter(q, userId, req.query.date);
+    if (dateError) return res.status(400).json({ error: dateError });
 
     const items = await SuggestedGatherItem.find(q)
       .sort({ createdAt: -1 })
       .populate('clusters', 'name slug icon color')
+      .populate('sourceEntryId', 'date title')
       .lean();
     res.json(items);
   } catch (err) {

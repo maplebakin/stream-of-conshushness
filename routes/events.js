@@ -121,6 +121,7 @@ router.patch("/:id", async (req, res) => {
     if (b.cluster !== undefined) updates.cluster = b.cluster || null;
     if (b.pinned  !== undefined) updates.pinned = !!b.pinned;
     if (b.entryId !== undefined) updates.entryId = normalizeEntryId(b.entryId);
+    if (Object.keys(updates).length) updates.source = "user-edited";
 
     const ev = await ImportantEvent.findOneAndUpdate(
       { _id: req.params.id, userId },
