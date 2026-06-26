@@ -383,7 +383,7 @@ export default function MainPage() {
                 )}
               </div>
 
-              
+
 
 
 <SafeHTML

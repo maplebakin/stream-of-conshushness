@@ -7,7 +7,7 @@
     "dev": "concurrently \"nodemon server.js\" \"npm run frontend-dev\"",
     "frontend-dev": "cd frontend && npm run dev",
     "start": "NODE_ENV=production node server.js",
-    "build": "cd frontend && npm run build",
+    "build": "npm --prefix frontend ci && npm --prefix frontend run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
