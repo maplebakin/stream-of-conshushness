@@ -2,14 +2,7 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from '../api/axiosInstance.js';
 import { AuthContext } from '../AuthContext.jsx';
-
-function todayISO() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
+import { todayISOInToronto } from '../utils/date.js';
 
 function normalizeTask(raw = {}) {
   if (!raw) return null;
@@ -81,7 +74,7 @@ export default function TaskList({
   wrap = true,
 }) {
   const { token } = useContext(AuthContext);
-  const targetDate = useMemo(() => date || todayISO(), [date]);
+  const targetDate = useMemo(() => date || todayISOInToronto(), [date]);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

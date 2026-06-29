@@ -2,15 +2,7 @@
 import React, { useContext, useMemo, useState } from 'react';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
-
-function todayISOInToronto() {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Toronto',
-    year: 'numeric', month: '2-digit', day: '2-digit'
-  });
-  const p = fmt.formatToParts(new Date());
-  return `${p.find(x=>x.type==='year').value}-${p.find(x=>x.type==='month').value}-${p.find(x=>x.type==='day').value}`;
-}
+import { todayISOInToronto } from '../utils/date.js';
 
 export default function AppointmentModal({ defaultDate = '', onClose, onSaved }) {
   const { token } = useContext(AuthContext);

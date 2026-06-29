@@ -5,6 +5,7 @@ import { AuthContext } from './AuthContext.jsx';
 import { toDisplay, formatRecurrence } from './utils/display.js';
 import TaskModal from './TaskModal.jsx';
 import { normalizeClusterList } from './utils/clusterHelpers.js';
+import { todayISOInToronto } from './utils/date.js';
 import './RippleReviewUI.css';
 
 const band = (c) => (Number(c) >= 0.66 ? 'high' : Number(c) >= 0.33 ? 'medium' : 'low');
@@ -14,15 +15,6 @@ const colorClass = {
   medium: 'bg-yellow-50 border-yellow-200',
   low: 'bg-gray-50 border-gray-200'
 };
-
-function todayISOInToronto() {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Toronto',
-    year: 'numeric', month: '2-digit', day: '2-digit'
-  });
-  const p = fmt.formatToParts(new Date());
-  return `${p.find(x=>x.type==='year').value}-${p.find(x=>x.type==='month').value}-${p.find(x=>x.type==='day').value}`;
-}
 
 /* ───────────────── client-side sieve ───────────────── */
 const ACTION_VERBS = [

@@ -11,20 +11,9 @@ import {
 import AppointmentModal from './AppointmentModal.jsx';
 import ImportantEventModal from './adapters/ImportantEventModal.default.jsx';
 import OnTheHorizon from './components/OnTheHorizon.jsx';
+import { todayISOInTZ } from './utils/date.js';
 
 import './Calendar.css';
-
-// Toronto "today" in YYYY-MM-DD (safe, no UTC flip)
-function todayISOInTZ(timeZone = 'America/Toronto') {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  const [{ value: y }, , { value: m }, , { value: d }] = fmt.formatToParts(new Date());
-  return `${y}-${m}-${d}`;
-}
 function toISO(y, mIdx, d) {
   const mm = String(mIdx + 1).padStart(2, '0');
   const dd = String(d).padStart(2, '0');

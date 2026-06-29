@@ -4,18 +4,11 @@ import axios from '../api/axiosInstance.js';
 import { AuthContext } from '../AuthContext.jsx';
 import TaskList from '../adapters/TaskList.default.jsx';
 import SafeHTML from '../components/SafeHTML.jsx';
+import { todayISOInToronto } from '../utils/date.js';
 import '../Main.css';
 import './SectionPage.css';
 
 const ALLOWED_TABS = ['journal', 'manual', 'progress', 'gift-guide'];
-
-function todayISO() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
 
 function normalizePageList(raw = []) {
   const arr = Array.isArray(raw) ? raw : [];
@@ -115,7 +108,7 @@ export default function SectionPageRoom() {
         text: newText,
         section: sectionSlug,
         sectionPageId: page.id,
-        date: todayISO(),
+        date: todayISOInToronto(),
       };
       const resp = await axios.post('/api/entries', payload);
       setEntries((prev) => [resp.data, ...prev]);
