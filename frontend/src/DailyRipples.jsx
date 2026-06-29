@@ -4,19 +4,8 @@ import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import TaskModal from './TaskModal.jsx';
 import { normalizeClusterList } from './utils/clusterHelpers.js';
+import { todayISOInToronto } from './utils/date.js';
 import './DailyRipples.css';
-
-function todayISOInToronto(d = new Date()) {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Toronto',
-    year: 'numeric', month: '2-digit', day: '2-digit'
-  });
-  const parts = fmt.formatToParts(d);
-  const y = parts.find(p => p.type === 'year')?.value;
-  const m = parts.find(p => p.type === 'month')?.value;
-  const dd = parts.find(p => p.type === 'day')?.value;
-  return `${y}-${m}-${dd}`;
-}
 function pickDateProp(props) {
   return props?.date || props?.dateISO || props?.day || todayISOInToronto();
 }

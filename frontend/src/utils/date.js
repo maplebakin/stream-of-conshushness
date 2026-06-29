@@ -13,14 +13,14 @@ export function parseISODate(iso) {
 }
 
 /** Today as YYYY-MM-DD in a specific IANA timezone (default: America/Toronto). */
-export function todayISOInTZ(timeZone = DEFAULT_TZ) {
+export function todayISOInTZ(timeZone = DEFAULT_TZ, baseDate = new Date()) {
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit'
   });
-  const parts = fmt.formatToParts(new Date());
+  const parts = fmt.formatToParts(baseDate);
   const y = parts.find(p => p.type === 'year').value;
   const m = parts.find(p => p.type === 'month').value;
   const d = parts.find(p => p.type === 'day').value;
@@ -28,13 +28,13 @@ export function todayISOInTZ(timeZone = DEFAULT_TZ) {
 }
 
 /** COMPAT: previous code imported getLocalTodayISO — map it to Toronto by default. */
-export function getLocalTodayISO(timeZone = DEFAULT_TZ) {
-  return todayISOInTZ(timeZone);
+export function getLocalTodayISO(timeZone = DEFAULT_TZ, baseDate = new Date()) {
+  return todayISOInTZ(timeZone, baseDate);
 }
 
 /** COMPAT: alias used by TaskList.jsx */
-export function todayISOInToronto() {
-  return todayISOInTZ(DEFAULT_TZ);
+export function todayISOInToronto(baseDate = new Date()) {
+  return todayISOInTZ(DEFAULT_TZ, baseDate);
 }
 
 /** Get YYYY-MM-DD from a Date in *local* environment timezone (no IANA override). */

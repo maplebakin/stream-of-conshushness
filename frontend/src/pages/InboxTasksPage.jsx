@@ -2,13 +2,7 @@ import React, { useCallback, useContext, useEffect, useMemo, useState } from 're
 import { Link } from 'react-router-dom';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
-
-/* ——— Toronto day helpers ——— */
-function todayISOInToronto(d = new Date()) {
-  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year:'numeric', month:'2-digit', day:'2-digit' });
-  const parts = Object.fromEntries(fmt.formatToParts(d).map(p => [p.type, p.value]));
-  return `${parts.year}-${parts.month}-${parts.day}`;
-}
+import { todayISOInToronto } from '../utils/date.js';
 const isISO = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 const cmpDate = (a, b) => new Date(a).setHours(0,0,0,0) - new Date(b).setHours(0,0,0,0);
 
