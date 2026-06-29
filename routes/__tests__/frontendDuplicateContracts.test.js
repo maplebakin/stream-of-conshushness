@@ -89,17 +89,21 @@ describe('frontend duplicate component reference contracts', () => {
   it('documents DailyRipples root, alternate component, and adapter usage', () => {
     const daily = read('frontend/src/DailyPage.jsx');
     const component = read('frontend/src/components/DailyRipples.jsx');
+    const root = read('frontend/src/DailyRipples.jsx');
+    const adapter = read('frontend/src/adapters/DailyRipples.default.jsx');
     const adapterIndex = read('frontend/src/adapters/index.js');
 
     // Canonical daily product component.
     expect(importedBy('frontend/src/DailyRipples.jsx')).toEqual(['frontend/src/DailyPage.jsx']);
     expect(daily).toContain("import DailyRipples from './DailyRipples.jsx'");
 
-    // Unused alternate component: present but not imported by current runtime files.
-    expect(component).toContain('export default function DailyRipples');
+    // Alternate component shim: delegates back to the canonical root implementation.
+    expect(root).toContain('function DailyRipples');
+    expect(component).toContain("export { default } from '../DailyRipples.jsx'");
     expect(importedBy('frontend/src/components/DailyRipples.jsx')).toEqual([]);
 
-    // Harness-only adapter.
+    // Harness adapter: delegates back to the same canonical root implementation.
+    expect(adapter).toContain("export { default } from '../DailyRipples.jsx'");
     expect(importedBy('frontend/src/adapters/DailyRipples.default.jsx')).toEqual([
       'frontend/src/adapters/index.js',
     ]);
