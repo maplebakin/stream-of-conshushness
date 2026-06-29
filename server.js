@@ -58,6 +58,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const NODE_ENV = process.env.NODE_ENV || "development";
 
 app.set("trust proxy", true);
 app.disable("x-powered-by");
@@ -115,11 +116,26 @@ app.get('/api/note', auth, async (req, res) => {
 
 
 /* ───────────── Health Check ───────────── */
+function getMongoHealth() {
+  const mongoState = mongoose.connection.readyState;
+  return {
+    mongo: mongoState === 1,
+    mongoReady: mongoState === 1,
+    mongoState,
+    mongoStateLabel:
+      mongoState === 0 ? 'disconnected' :
+      mongoState === 1 ? 'connected' :
+      mongoState === 2 ? 'connecting' :
+      mongoState === 3 ? 'disconnecting' :
+      'unknown',
+  };
+}
+
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    env: process.env.NODE_ENV || "development",
-    mongo: !!mongoose.connection.readyState,
+    env: NODE_ENV,
+    ...getMongoHealth(),
   });
 });
 
@@ -282,18 +298,34 @@ app.use(globalErrorHandler);
 export default app;
 
 /* ───────────── MongoDB Connection ───────────── */
-if (process.env.NODE_ENV !== "test") {
+if (NODE_ENV !== "test") {
   (async () => {
     try {
-      await mongoose.connect(process.env.MONGODB_URI);
-      console.log("✅ Connected to MongoDB");
+      if (NODE_ENV === "production") {
+        await mongoose.connect(process.env.MONGODB_URI);
+        console.log("✅ Connected to MongoDB");
+        app.listen(PORT, () => {
+          console.log(`🌿 Listening on http://localhost:${PORT}`);
+        });
+        return;
+      }
+
+      app.listen(PORT, () => {
+        console.log(`🌿 Listening on http://localhost:${PORT}`);
+      });
+      mongoose.connect(process.env.MONGODB_URI)
+        .then(() => console.log("✅ Connected to MongoDB"))
+        .catch((err) => {
+          console.error("❌ MongoDB connection error:", err);
+        });
     } catch (err) {
       console.error("❌ MongoDB connection error:", err);
+      if (NODE_ENV === "production") {
+        process.exit(1);
+      }
+      app.listen(PORT, () => {
+        console.log(`🌿 Listening on http://localhost:${PORT}`);
+      });
     }
   })();
-
-  /* ───────────── Start Server ───────────── */
-  app.listen(PORT, () => {
-    console.log(`🌿 Listening on http://localhost:${PORT}`);
-  });
 }
