@@ -10,6 +10,7 @@ import { AuthContext } from './AuthContext.jsx';
 import { getLocalTodayISO, toDisplayDate } from './utils/date.js';
 import SafeHTML from './components/SafeHTML.jsx'; // (top of file)
 import RecentActivityWidget from './components/RecentActivityWidget.jsx';
+import { confirmAndDeleteEntry } from './utils/entryDeletion.js';
 
 /* ---------- Robust sort helpers so newest stay on top across reloads ---------- */
 const parseDayMs = (v) => {
@@ -111,11 +112,20 @@ export default function MainPage() {
 
   const todayISO = getLocalTodayISO?.() || new Date().toISOString().slice(0, 10);
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (entry) => {
     try {
-      await axios.delete(`/api/entries/${id}`);
-      setEntries((prev) => prev.filter((e) => e._id !== id));
-      toast.success('Entry deleted');
+      const result = await confirmAndDeleteEntry({
+        entry,
+        confirmDelete: window.confirm.bind(window),
+        deleteRequest: (id) => axios.delete(`/api/entries/${id}`),
+        onDeleted: (id) => {
+          setEntries((prev) => prev.filter((e) => e._id !== id));
+        },
+      });
+
+      if (result.deleted) {
+        toast.success('Entry deleted');
+      }
     } catch (err) {
       console.error('delete error:', err);
       toast.error('Could not delete entry');
@@ -401,8 +411,8 @@ export default function MainPage() {
                 <button
                   type="button"
                   className="icon-btn"
-                  onClick={() => handleDelete(entry._id)}
-                  title="Delete"
+                  onClick={() => handleDelete(entry)}
+                  title="Delete permanently"
                 >
                   🗑️
                 </button>
