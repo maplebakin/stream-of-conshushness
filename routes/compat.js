@@ -4,6 +4,7 @@ import auth from '../middleware/auth.js';
 import Task from '../models/Task.js';
 import Entry from '../models/Entry.js';
 import Note from '../models/Note.js';
+import { torontoYmd, addDaysISO } from '../utils/date.js';
 
 const r = Router();
 
@@ -14,25 +15,6 @@ r.use(auth);
 
 /* ───────────────── helpers ───────────────── */
 const str = (v) => (v == null ? '' : String(v)).trim();
-
-function ymdToronto(date = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Toronto',
-    year: 'numeric', month: '2-digit', day: '2-digit'
-  }).formatToParts(date);
-  const y = parts.find(p => p.type === 'year').value;
-  const m = parts.find(p => p.type === 'month').value;
-  const d = parts.find(p => p.type === 'day').value;
-  return `${y}-${m}-${d}`;
-}
-
-// Add days anchored at NOON UTC to dodge TZ drift (so Toronto never rolls back)
-function addDaysISO(iso, days) {
-  const [y, m, d] = String(iso).split('-').map(Number);
-  const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1, 12)); // noon UTC
-  dt.setUTCDate(dt.getUTCDate() + Number(days || 0));
-  return ymdToronto(dt);
-}
 
 function expressJsonReplay(mapper) {
   return async (req, res, next) => {
@@ -103,9 +85,9 @@ r.post('/tasks/carry-forward', async (req, res) => {
     let to   = str(req.body?.to)   || str(req.query?.to);
     const cluster = str(req.body?.cluster) || str(req.query?.cluster);
 
-    if (!from && !to) { from = ymdToronto(); to = addDaysISO(from, 1); }
+    if (!from && !to) { from = torontoYmd(); to = addDaysISO(from, 1); }
     else if (from && !to) { to = addDaysISO(from, 1); }
-    else if (!from && to) { from = ymdToronto(); }
+    else if (!from && to) { from = torontoYmd(); }
 
     if (!from || !to) {
       return res.status(400).json({ error: 'from and to required', got: { from, to } });

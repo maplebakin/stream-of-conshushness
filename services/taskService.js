@@ -1,6 +1,7 @@
 // services/taskService.js
 import Task from '../models/Task.js';
 import { resolveClusterIdForOwner } from '../utils/clusterIds.js';
+import { torontoYmd } from '../utils/date.js';
 
 /* ---------------------- helpers ---------------------- */
 function parseBool(v, def = false) {
@@ -13,19 +14,6 @@ function clamp(n, lo, hi) {
   const x = parseInt(n, 10);
   if (Number.isNaN(x)) return lo;
   return Math.max(lo, Math.min(hi, x));
-}
-
-function torontoYmd(date = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Toronto',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(date);
-  const y = parts.find((p) => p.type === 'year')?.value;
-  const m = parts.find((p) => p.type === 'month')?.value;
-  const d = parts.find((p) => p.type === 'day')?.value;
-  return `${y}-${m}-${d}`;
 }
 
 export async function getTasks(userId, query) {

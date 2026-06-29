@@ -17,36 +17,9 @@ import { extractEntrySuggestions, extractRipplesFromEntry } from "./rippleExtrac
 import { sieveRipples } from "./rippleSieve.js";
 import { extractGatherItems, hasScheduledActionSignal, normalizeGatherTitleKey } from "./gatherExtractor.js";
 import { extractInterests, normalizeInterestTitleKey } from "./interestExtractor.js";
+import { todayISOInTZ, normalizeDate } from "./date.js";
 
 const { ObjectId } = mongoose.Types;
-const DEFAULT_TIME_ZONE = "America/Toronto";
-
-/* ------------------------------------------------------------------ */
-/* Time helpers                                                        */
-/* ------------------------------------------------------------------ */
-
-export function todayISOInTZ(timeZone = DEFAULT_TIME_ZONE, base = new Date()) {
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const parts = fmt.formatToParts(base);
-  const y = parts.find((p) => p.type === "year")?.value || "0000";
-  const m = parts.find((p) => p.type === "month")?.value || "01";
-  const d = parts.find((p) => p.type === "day")?.value || "01";
-  return `${y}-${m}-${d}`;
-}
-
-export function normalizeDate(value, timeZone = DEFAULT_TIME_ZONE) {
-  if (!value) return todayISOInTZ(timeZone);
-  const str = String(value).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
-  const dt = new Date(str);
-  if (Number.isNaN(dt.getTime())) return todayISOInTZ(timeZone);
-  return todayISOInTZ(timeZone, dt);
-}
 
 export function normalizeHHMM(v) {
   if (!v && v !== 0) return null;

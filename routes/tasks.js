@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import Task from '../models/Task.js';
 import Entry from '../models/Entry.js';
 import { normalizeClusterIds, resolveClusterIdForOwner } from '../utils/clusterIds.js';
+import { torontoYmd, addDaysISO as addDaysToISO } from '../utils/date.js';
 
 const router = express.Router();
 const { ObjectId } = mongoose.Types;
@@ -129,24 +130,6 @@ router.get('/day/:date', async (req, res) => {
   }
 });
 
-function torontoYmd(date = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Toronto',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(date);
-  const y = parts.find((p) => p.type === 'year')?.value;
-  const m = parts.find((p) => p.type === 'month')?.value;
-  const d = parts.find((p) => p.type === 'day')?.value;
-  return `${y}-${m}-${d}`;
-}
-
-function addDaysYmd(iso, days) {
-  const [y, m, d] = String(iso).split('-').map(Number);
-  const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1, 12));
-  dt.setUTCDate(dt.getUTCDate() + Number(days || 0));
-  return torontoYmd(dt);
-}
-
 // POST /api/tasks/carry-forward  { from?, to?, cluster? }
 router.post('/carry-forward', async (req, res) => {
   try {
@@ -159,9 +142,9 @@ router.post('/carry-forward', async (req, res) => {
 
     if (!from && !to) {
       from = torontoYmd();
-      to = addDaysYmd(from, 1);
+      to = addDaysToISO(from, 1);
     } else if (from && !to) {
-      to = addDaysYmd(from, 1);
+      to = addDaysToISO(from, 1);
     } else if (!from && to) {
       from = torontoYmd();
     }

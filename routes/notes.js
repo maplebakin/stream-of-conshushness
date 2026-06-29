@@ -3,15 +3,12 @@ import express from 'express';
 import mongoose from 'mongoose';
 import Note from '../models/Note.js';
 import { normalizeClusterIds, resolveClusterIdForOwner } from '../utils/clusterIds.js';
+import { torontoYmd } from '../utils/date.js';
 
 const router = express.Router();
 const IS_PROD = process.env.NODE_ENV === 'production';
 const DEV_FALLBACKS = !IS_PROD && process.env.ALLOW_DEV_FALLBACKS === '1';
 
-// YYYY-MM-DD in America/Toronto (DST-safe)
-function ymdInToronto(d = new Date()) {
-  return d.toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
-}
 const isYMD = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 function own(userId) { return { userId }; }
@@ -19,7 +16,7 @@ function own(userId) { return { userId }; }
 // Build a doc that satisfies the Note schema
 function normalizeNoteInput(body = {}, userId, resolvedClusterIds = []) {
   const dateRaw = body.date || body.day || body.ymd || body.dateISO;
-  let date = isYMD(dateRaw) ? dateRaw : ymdInToronto();
+  let date = isYMD(dateRaw) ? dateRaw : torontoYmd();
   const content =
     body.content ?? body.text ?? body.body ?? body.html ?? body.markdown ?? '';
   const cluster = body.cluster ?? body.section ?? body.category;

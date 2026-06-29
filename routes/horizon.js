@@ -10,6 +10,7 @@ import {
   displayLabelFor,
   isISODateString,
 } from '../utils/calendarInstances.js';
+import { todayISOInTZ } from '../utils/date.js';
 
 const router = Router();
 router.use(auth);
@@ -22,20 +23,6 @@ function clamp(value, fallback, min, max) {
   const parsed = parseInt(value, 10);
   if (Number.isNaN(parsed)) return fallback;
   return Math.max(min, Math.min(max, parsed));
-}
-
-function todayISOInTZ(timeZone = 'America/Toronto', base = new Date()) {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  const parts = fmt.formatToParts(base);
-  const y = parts.find((part) => part.type === 'year')?.value || '0000';
-  const m = parts.find((part) => part.type === 'month')?.value || '01';
-  const d = parts.find((part) => part.type === 'day')?.value || '01';
-  return `${y}-${m}-${d}`;
 }
 
 async function resolveQuery(query) {
