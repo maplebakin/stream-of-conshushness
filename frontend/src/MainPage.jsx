@@ -52,6 +52,24 @@ const stableSortEntriesDesc = (arr) =>
     return 0;
   });
 
+const STREAM_TUTORIAL_DISMISSED_KEY = 'streamTutorialDismissed';
+
+const getStreamTutorialDismissed = () => {
+  try {
+    return window.localStorage?.getItem(STREAM_TUTORIAL_DISMISSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const saveStreamTutorialDismissed = () => {
+  try {
+    window.localStorage?.setItem(STREAM_TUTORIAL_DISMISSED_KEY, '1');
+  } catch {
+    // If storage is unavailable, the current session still hides it.
+  }
+};
+
 /* ---------- Normalize for legacy fields (content/html/text) ---------- */
 const normalizeEntry = (e) => {
   const html =
@@ -79,6 +97,7 @@ export default function MainPage() {
   const [clusterFilter, setClusterFilter] = useState('all');
   const [quickEntryText, setQuickEntryText] = useState('');
   const [recentActivityOpen, setRecentActivityOpen] = useState(false);
+  const [streamTutorialDismissed, setStreamTutorialDismissed] = useState(getStreamTutorialDismissed);
   const quickEntryRef = useRef(null);
 
   const fetchEntries = useCallback(async () => {
@@ -166,6 +185,11 @@ export default function MainPage() {
       toast.error('Could not create entry');
     }
   }, [quickEntryText, isAuthenticated, todayISO, resetQuickEntry]);
+
+  const dismissStreamTutorial = useCallback(() => {
+    setStreamTutorialDismissed(true);
+    saveStreamTutorialDismissed();
+  }, []);
 
   const clusters = useMemo(() => {
     const seen = new Map();
@@ -305,26 +329,38 @@ export default function MainPage() {
           <Link to="/interests">Interests</Link>
         </nav>
 
-        <section className="stream-onboarding-card" aria-labelledby="stream-onboarding-title">
-          <div className="stream-onboarding-copy">
-            <h2 id="stream-onboarding-title">Write naturally. Structure appears after.</h2>
-            <p>
-              Capture the thought first. StreamofConshushness can turn useful pieces into
-              Gather Lists, Sparks & Interests, Tasks, or things On the Horizon without
-              making you sort everything upfront.
-            </p>
-            <p className="stream-onboarding-helper">
-              You do not have to know what kind of entry it is before you write it.
-            </p>
-          </div>
+        {!streamTutorialDismissed && (
+          <section className="stream-onboarding-card" aria-labelledby="stream-onboarding-title">
+            <div className="stream-onboarding-header">
+              <div className="stream-onboarding-copy">
+                <h2 id="stream-onboarding-title">Write naturally. Structure appears after.</h2>
+                <p>
+                  Capture the thought first. StreamofConshushness can turn useful pieces into
+                  Gather Lists, Sparks & Interests, Tasks, or things On the Horizon without
+                  making you sort everything upfront.
+                </p>
+                <p className="stream-onboarding-helper">
+                  You do not have to know what kind of entry it is before you write it.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="stream-onboarding-dismiss"
+                onClick={dismissStreamTutorial}
+                aria-label="Hide Stream helper card"
+              >
+                Got it
+              </button>
+            </div>
 
-          <div className="stream-onboarding-examples" aria-label="Example entries">
-            <span>"I need to get milk" <strong>Grocery List</strong></span>
-            <span>"I have a doctor's appointment at 3pm on June 25th" <strong>On the Horizon</strong></span>
-            <span>"I'd like to learn about tap dance" <strong>Sparks & Interests</strong></span>
-            <span>"I'm nervous about my appointment" <strong>Entry only</strong></span>
-          </div>
-        </section>
+            <div className="stream-onboarding-examples" aria-label="Example entries">
+              <span>"I need to get milk" <strong>Grocery List</strong></span>
+              <span>"I have a doctor's appointment at 3pm on June 25th" <strong>On the Horizon</strong></span>
+              <span>"I'd like to learn about tap dance" <strong>Sparks & Interests</strong></span>
+              <span>"I'm nervous about my appointment" <strong>Entry only</strong></span>
+            </div>
+          </section>
+        )}
 
         <div className="stream-feed-header">
           <h2>Recent entries</h2>

@@ -194,6 +194,13 @@
   gap: 0.35rem;
 }
 
+.stream-onboarding-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: start;
+}
+
 .stream-onboarding-copy h2 {
   margin: 0;
   font-size: 1rem;
@@ -209,6 +216,30 @@
 
 .stream-onboarding-helper {
   color: var(--color-muted);
+}
+
+.stream-onboarding-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: var(--radius-button);
+  background: color-mix(in srgb, var(--color-surface) 82%, white 18%);
+  color: var(--color-vein);
+  font-family: var(--font-sans);
+  font-size: 0.86rem;
+  font-weight: 700;
+  padding: 0.35rem 0.7rem;
+  white-space: nowrap;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.stream-onboarding-dismiss:hover,
+.stream-onboarding-dismiss:focus-visible {
+  background: color-mix(in srgb, var(--color-surface) 70%, var(--color-spool) 30%);
+  border-color: color-mix(in srgb, var(--color-spool) 48%, transparent);
+  color: var(--color-ink);
 }
 
 .stream-onboarding-examples,
@@ -453,6 +484,16 @@
 
   .stream-onboarding-card {
     padding: var(--space-3);
+  }
+
+  .stream-onboarding-header {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
+  .stream-onboarding-dismiss {
+    min-height: 44px;
+    justify-self: start;
   }
 
   .stream-onboarding-examples span {
