@@ -342,7 +342,7 @@ export default function MainPage() {
             <p className="font-glow text-vein">
               {query || clusterFilter !== 'all'
                 ? 'No entries match your filters.'
-                : 'No entries yet. Wanna start a ripple?'}
+                : 'No entries yet. Start with whatever is on your mind.'}
             </p>
             <button
               type="button"

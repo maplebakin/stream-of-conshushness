@@ -31,7 +31,7 @@
   padding: 0.15rem;
   border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-surface) 82%, white 18%);
+  background: color-mix(in srgb, var(--color-surface) 82%, var(--color-surface-soft) 18%);
 }
 
 .pill-toggle,
@@ -51,7 +51,7 @@
 }
 
 .pill-toggle.active {
-  background: color-mix(in srgb, var(--color-surface) 65%, var(--color-spool) 35%);
+  background: color-mix(in srgb, var(--color-surface) 68%, var(--color-spool) 32%);
   border-color: color-mix(in srgb, var(--color-spool) 60%, transparent);
 }
 
@@ -118,6 +118,7 @@
   border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
   border-radius: var(--radius-card);
   background: color-mix(in srgb, var(--color-surface) 92%, white 8%);
+  box-shadow: 0 6px 16px rgba(66, 45, 34, 0.05);
   transition: background var(--transition-fast), border-color var(--transition-fast);
 }
 
@@ -221,18 +222,18 @@
 }
 
 .task-card {
-  background: color-mix(in srgb, var(--color-surface) 88%, white 12%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 95%, white 5%), var(--color-surface));
   border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
   border-radius: var(--radius-card);
   padding: var(--space-3);
-  box-shadow: var(--shadow-soft);
+  box-shadow: 0 10px 24px rgba(66, 45, 34, 0.08), var(--shadow-border);
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
 }
 
 .task-card:hover {
   transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--color-spool) 55%, transparent);
-  box-shadow: 0 16px 28px rgba(31, 21, 18, 0.16);
+  box-shadow: 0 16px 28px rgba(66, 45, 34, 0.12);
 }
 
 .task-title {

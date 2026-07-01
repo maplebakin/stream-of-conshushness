@@ -314,20 +314,20 @@ export default function InboxTasksPage() {
         .bar { display: grid; gap: .5rem; }
         .bar h2 { margin: 0; font-size: 1.15rem; }
         .filters { display: grid; gap: .5rem; grid-template-columns: 1fr auto; align-items: center; }
-        .search { padding: .45rem .6rem; border-radius: 10px; border: 1px solid var(--color-border,#2a2a32); background: rgba(255,255,255,.02); }
+        .search { padding: .45rem .6rem; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--color-border,#d9c9bc) 78%, transparent); background: color-mix(in srgb, var(--color-surface,#fffaf3) 92%, white 8%); }
         .chips { display: flex; gap: .35rem; flex-wrap: wrap; }
-        .chip { border: 1px solid var(--color-border,#2a2a32); background: transparent; color: inherit; padding: .25rem .5rem; border-radius: 999px; cursor: pointer; font-size: .85rem; }
-        .chip.on { background: rgba(255,255,255,.06); }
+        .chip { border: 1px solid color-mix(in srgb, var(--color-border,#d9c9bc) 78%, transparent); background: color-mix(in srgb, var(--color-surface,#fffaf3) 86%, white 14%); color: var(--color-vein,#5f4b43); padding: .25rem .5rem; border-radius: 999px; cursor: pointer; font-size: .85rem; }
+        .chip.on { background: color-mix(in srgb, var(--color-surface,#fffaf3) 66%, var(--color-spool,#6d63c0) 34%); color: var(--color-ink,#1f1512); border-color: color-mix(in srgb, var(--color-spool,#6d63c0) 54%, transparent); }
         .bulk { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
         .pill { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .45rem; border: 1px solid var(--color-border,#2a2a32); border-radius: 999px; }
         .quickadd { display: flex; gap: .5rem; align-items: center; }
-        .new { flex: 1; padding: .5rem .6rem; border-radius: 10px; border: 1px solid var(--color-border,#2a2a32); background: rgba(255,255,255,.02); }
+        .new { flex: 1; padding: .5rem .6rem; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--color-border,#d9c9bc) 78%, transparent); background: color-mix(in srgb, var(--color-surface,#fffaf3) 92%, white 8%); }
         .hint { padding: .6rem .75rem; opacity: .8; }
         .error { padding: .6rem .75rem; color: #ff9191; }
         .grid { list-style: none; padding: 0; margin: 0; display: grid; gap: .75rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
-        .card { display: grid; gap: .45rem; padding: .65rem .7rem; border: 1px solid var(--color-border,#2a2a32); border-radius: 12px; background: rgba(255,255,255,.02); }
+        .card { display: grid; gap: .45rem; padding: .65rem .7rem; border: 1px solid color-mix(in srgb, var(--color-border,#d9c9bc) 76%, transparent); border-radius: 12px; background: linear-gradient(180deg, color-mix(in srgb, var(--color-surface,#fffaf3) 95%, white 5%), var(--color-surface,#fffaf3)); }
         .card.done { opacity: .7; }
-        .card.overdue { border-color: #ff9191; }
+        .card.overdue { border-color: color-mix(in srgb, var(--color-danger,#b3261e) 48%, var(--color-border,#d9c9bc) 52%); }
         .task-card { gap: .65rem; padding: .85rem .9rem; }
         .task-card__top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: start; }
         .task-card__select { font-size: .78rem; opacity: .78; padding: .16rem .42rem; }
@@ -353,14 +353,14 @@ export default function InboxTasksPage() {
         .row { display: flex; justify-content: space-between; align-items: center; }
         .title { cursor: text; }
         .text { font-weight: 700; overflow-wrap: anywhere; }
-        .edit { width: 100%; padding: .35rem .45rem; border-radius: 8px; border: 1px solid var(--color-border,#2a2a32); background: rgba(255,255,255,.05); }
+        .edit { width: 100%; padding: .35rem .45rem; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--color-border,#d9c9bc) 78%, transparent); background: color-mix(in srgb, var(--color-surface,#fffaf3) 92%, white 8%); }
         .meta { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; opacity: .88; }
         .meta .pill,
         .meta .review-pill { font-size: .78rem; padding: .16rem .42rem; }
         .date { padding: .2rem .35rem; background: transparent; border: none; color: inherit; outline: none; }
         .tag { font-size: .75rem; padding: .05rem .4rem; border: 1px solid var(--color-border,#2a2a32); border-radius: 999px; color: var(--color-muted,#9aa0aa); }
-        .tag.red { color: #ff9191; }
-        .tag.green { color: #8fe3a2; }
+        .tag.red { color: var(--color-danger,#b3261e); border-color: color-mix(in srgb, var(--color-danger,#b3261e) 34%, transparent); }
+        .tag.green { color: var(--color-success,#2f6f4e); border-color: color-mix(in srgb, var(--color-success,#2f6f4e) 34%, transparent); }
         .clickable-badge {
           color: var(--color-primary, #60a5fa);
           border-color: var(--color-primary, #60a5fa);

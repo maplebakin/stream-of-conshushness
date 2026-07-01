@@ -145,7 +145,7 @@ export default function TrashPage() {
         }}>
           <div>
             <h2 className="font-glow" style={{ marginBottom: 8 }}>Trash</h2>
-            <div className="muted">Tasks can be restored or permanently deleted. Entries can be restored for now.</div>
+            <div className="muted">A holding place for things you moved out of the way. Entries can be restored for now.</div>
           </div>
           {tasks.length > 0 && (
             <button
@@ -164,12 +164,10 @@ export default function TrashPage() {
             Loading trash...
           </div>
         ) : !hasAnyTrash ? (
-          <div style={{
+          <div className="review-empty" style={{
             padding: 48,
             textAlign: 'center',
-            background: 'var(--bg-secondary)',
-            borderRadius: 12,
-            border: '1px solid var(--border-primary)'
+            borderRadius: 'var(--radius-card)'
           }}>
             <div style={{ fontSize: '3rem', marginBottom: 16 }}>🗑️</div>
             <div style={{ fontSize: '1.1rem', color: 'var(--text-primary)', marginBottom: 8 }}>
@@ -194,9 +192,10 @@ export default function TrashPage() {
                       key={entry._id}
                       style={{
                         padding: 16,
-                        background: 'var(--bg-secondary)',
-                        borderRadius: 8,
-                        border: '1px solid var(--border-primary)',
+                        background: 'linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 95%, white 5%), var(--color-surface))',
+                        borderRadius: 'var(--radius-card)',
+                        border: '1px solid color-mix(in srgb, var(--color-border) 76%, transparent)',
+                        boxShadow: '0 8px 20px rgba(66, 45, 34, 0.06)',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'flex-start',
@@ -255,9 +254,10 @@ export default function TrashPage() {
                       key={task._id}
                       style={{
                         padding: 16,
-                        background: 'var(--bg-secondary)',
-                        borderRadius: 8,
-                        border: '1px solid var(--border-primary)',
+                        background: 'linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 95%, white 5%), var(--color-surface))',
+                        borderRadius: 'var(--radius-card)',
+                        border: '1px solid color-mix(in srgb, var(--color-border) 76%, transparent)',
+                        boxShadow: '0 8px 20px rgba(66, 45, 34, 0.06)',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',

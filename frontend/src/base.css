@@ -21,7 +21,9 @@ html {
 body {
   margin: 0;
   padding: 0;
-  background: var(--color-background);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-background) 82%, white 18%) 0%, var(--color-background) 42%),
+    var(--color-background);
   color: var(--color-text);
   font-family: var(--font-sans);
   line-height: var(--line-height);
@@ -66,7 +68,7 @@ select,
 textarea {
   border-radius: var(--radius-input);
   border: 1px solid var(--color-border);
-  background-color: var(--color-surface);
+  background-color: color-mix(in srgb, var(--color-surface) 94%, white 6%);
   padding: 0.5rem 0.75rem;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
 }
@@ -99,12 +101,12 @@ button:focus-visible {
   padding: 0.55rem 1.15rem;
   border-radius: var(--radius-button);
   border: 1px solid color-mix(in srgb, var(--color-plum) 40%, transparent);
-  background: var(--color-plum);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-plum) 92%, var(--color-spool) 8%), var(--color-plum));
   color: var(--color-on-accent);
   font-weight: 600;
   text-decoration: none;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast), border-color var(--transition-fast);
-  box-shadow: 0 8px 18px rgba(31, 21, 18, 0.12);
+  box-shadow: 0 8px 18px rgba(66, 45, 34, 0.12);
 }
 
 .button:hover,
@@ -113,7 +115,7 @@ button:focus-visible {
 .btn:focus-visible {
   background: color-mix(in srgb, var(--color-plum) 78%, var(--color-spool) 22%);
   border-color: color-mix(in srgb, var(--color-plum) 50%, var(--color-spool) 50%);
-  box-shadow: 0 14px 28px rgba(31, 21, 18, 0.18);
+  box-shadow: 0 14px 28px rgba(66, 45, 34, 0.16);
   outline: none;
 }
 
@@ -236,7 +238,7 @@ button:focus-visible {
 
 .surface,
 .card {
-  background: var(--color-surface);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 96%, white 4%), var(--color-surface));
   border-radius: var(--radius-card);
   border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
   box-shadow: var(--shadow-soft);
@@ -253,8 +255,8 @@ button:focus-visible {
 
 .card:hover {
   transform: translateY(-1px);
-  box-shadow: 0 16px 30px rgba(31, 21, 18, 0.16);
-  border-color: color-mix(in srgb, var(--color-plum) 55%, var(--color-border) 45%);
+  box-shadow: 0 16px 30px rgba(66, 45, 34, 0.13);
+  border-color: color-mix(in srgb, var(--color-plum) 38%, var(--color-border) 62%);
 }
 
 .card:focus-visible {
@@ -316,10 +318,10 @@ button:focus-visible {
 }
 
 .review-card {
-  background: var(--color-surface);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 95%, white 5%), var(--color-surface));
   border: 1px solid color-mix(in srgb, var(--color-border) 74%, transparent);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-border);
+  box-shadow: 0 8px 20px rgba(66, 45, 34, 0.06), var(--shadow-border);
 }
 
 .review-card__title {
@@ -366,7 +368,7 @@ button:focus-visible {
   gap: var(--space-1);
   border-radius: var(--radius-button);
   border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
-  background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
+  background: color-mix(in srgb, var(--color-surface) 88%, white 12%);
   color: var(--color-vein);
   font-family: var(--font-sans);
   font-size: 0.9rem;
@@ -422,7 +424,7 @@ button:focus-visible {
   padding: var(--space-5);
   border-radius: var(--radius-card);
   border: 1px dashed color-mix(in srgb, var(--color-border) 75%, transparent);
-  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-surface-soft) 12%);
+  background: color-mix(in srgb, var(--color-surface) 82%, var(--color-surface-soft) 18%);
   color: var(--color-muted);
   text-align: center;
 }

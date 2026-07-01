@@ -2,7 +2,7 @@
   color-scheme: light;
 
   /* Core palette */
-  --color-mist: #f6f0ea;        /* ambient background */
+  --color-mist: #f7f0e7;        /* ambient background */
   --color-ink: #1f1512;         /* primary text */
   --color-ink-strong: #140d0a;  /* headings */
   --color-vein: #5f4b43;        /* muted neutral */
@@ -11,14 +11,14 @@
   --color-spool: #6d63c0;       /* lavender accent */
   --color-plum: #4b3f72;        /* deep plum */
   --color-thread: #7267d8;      /* radiant indigo */
-  --color-border: #d4c6bd;      /* soft outline */
+  --color-border: #d9c9bc;      /* soft outline */
 
   /* Surfaces */
   --color-background: var(--color-mist);
-  --color-surface: #ffffff;
-  --color-surface-muted: #efe4d9;
-  --color-surface-soft: #f8f2eb;
-  --color-surface-elevated: #fffdf9;
+  --color-surface: #fffaf3;
+  --color-surface-muted: #efe2d4;
+  --color-surface-soft: #fbf3e8;
+  --color-surface-elevated: #fffdf8;
   --color-overlay: rgba(255, 254, 250, 0.8);
   --color-surface-2: var(--color-surface-muted);
   --color-surface-quiet: color-mix(in srgb, var(--color-surface) 86%, white 14%);
@@ -47,13 +47,13 @@
   --focus-ring-muted: color-mix(in srgb, var(--color-ripple) 65%, white 35%);
 
   /* Shadow + depth */
-  --shadow-soft: 0 14px 34px rgba(31, 21, 18, 0.12);
-  --shadow-elevated: 0 18px 45px rgba(31, 21, 18, 0.16);
+  --shadow-soft: 0 12px 30px rgba(66, 45, 34, 0.1);
+  --shadow-elevated: 0 18px 44px rgba(66, 45, 34, 0.14);
   --shadow-border: inset 0 0 0 1px rgba(31, 21, 18, 0.05);
 
   /* Radii */
   --radius: 14px;
-  --radius-card: 18px;
+  --radius-card: 20px;
   --radius-input: 10px;
   --radius-button: 999px;
 
