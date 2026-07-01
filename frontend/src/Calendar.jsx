@@ -107,9 +107,9 @@ export default function Calendar() {
   const monthName = new Date(y, mIdx, 1).toLocaleString(undefined, { month: 'long' });
 
   return (
-    <main className="calendar-page" style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16 }}>
+    <main className="calendar-page">
       {/* Left sidebar — upcoming feed */}
-      <aside className="panel" style={{ position: 'sticky', top: 12, alignSelf: 'start', padding: 12 }}>
+      <aside className="panel calendar-horizon-panel">
         <OnTheHorizon
           refreshKey={horizonRefreshKey}
           onAddAppointment={openNewAppointment}
@@ -121,12 +121,12 @@ export default function Calendar() {
 
       {/* Main month grid */}
       <section className="panel calendar-panel">
-        <header className="calendar-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 8 }}>
+        <header className="calendar-header">
           <div className="title">
             <h2>{monthName} {y}</h2>
             <span className="subtitle">{tzToday}</span>
           </div>
-          <div style={{ display:'flex', gap: 8 }}>
+          <div className="calendar-nav">
             <button className="button" onClick={prevMonth}>◀</button>
             <button className="button" onClick={() => navigate(`/day/${tzToday}`)}>Today</button>
             <button className="button" onClick={nextMonth}>▶</button>
@@ -154,9 +154,9 @@ export default function Calendar() {
               >
                 {d ? (
                   <>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                    <div className="calendar-cell-top">
                       <span className="calendar-daynum">{d}</span>
-                      <div className="badges" style={{ display:'flex', gap:6 }}>
+                      <div className="badges">
                         {counts.events > 0 && <span className="pill" title={`${counts.events} important event(s)`}>⭐ {counts.events}</span>}
                         {counts.appointments > 0 && <span className="pill" title={`${counts.appointments} appointment(s)`}>🗓️ {counts.appointments}</span>}
                         {counts.tasks > 0 && <span className="pill" title={`${counts.tasks} task(s)`}>● {counts.tasks}</span>}
