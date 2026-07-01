@@ -34,6 +34,9 @@ const EntrySchema = new Schema({
 
   linkedGoal: { type: Schema.Types.ObjectId, ref: "Goal", default: null },
 
+  // Soft delete support
+  deletedAt: { type: Date, default: null, index: true },
+
   // Ripple/task suggestions extracted from content
   suggestedTasks: { type: [SuggestedTaskSchema], default: [] },
 }, { timestamps: true });
