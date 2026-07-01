@@ -15,6 +15,7 @@ import Appointment from '../models/Appointment.js';
 import ImportantEvent from '../models/ImportantEvent.js';
 import Ripple from '../models/Ripple.js';
 import auth from '../middleware/auth.js';
+import { activeEntryQuery } from '../utils/entryQueries.js';
 
 const router = express.Router();
 router.use(auth);
@@ -82,7 +83,7 @@ router.get('/json', async (req, res) => {
         User.findById(userId)
           .select('_id username email isAdmin profilePicture createdAt updatedAt emailVerifiedAt')
           .lean(),
-        Entry.countDocuments({ userId }),
+        Entry.countDocuments(activeEntryQuery(userId)),
         Task.countDocuments({ userId }),
         Goal.countDocuments({ userId }),
         Note.countDocuments({ userId }),
@@ -120,7 +121,7 @@ router.get('/json', async (req, res) => {
       res.write('"data":{');
 
       res.write('"entries":[');
-      await streamArray(res, Entry.find({ userId }).lean().cursor());
+      await streamArray(res, Entry.find(activeEntryQuery(userId)).lean().cursor());
       res.write('],');
 
       res.write('"tasks":[');
@@ -187,7 +188,7 @@ router.get('/json', async (req, res) => {
       User.findById(userId)
         .select('_id username email isAdmin profilePicture createdAt updatedAt emailVerifiedAt')
         .lean(),
-      Entry.find({ userId }).lean(),
+      Entry.find(activeEntryQuery(userId)).lean(),
       Task.find({ userId }).lean(),
       Goal.find({ userId }).lean(),
       Note.find({ userId }).lean(),
@@ -255,7 +256,7 @@ router.get('/csv/entries', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const entries = await Entry.find({ userId }).sort({ date: -1 }).lean();
+    const entries = await Entry.find(activeEntryQuery(userId)).sort({ date: -1 }).lean();
 
     // CSV header
     const headers = ['Date', 'Text', 'Mood', 'Tags', 'Pinned', 'Created At'];
@@ -390,7 +391,7 @@ router.get('/statistics', async (req, res) => {
       sectionsCount,
       appointmentsCount
     ] = await Promise.all([
-      Entry.countDocuments({ userId }),
+      Entry.countDocuments(activeEntryQuery(userId)),
       Task.countDocuments({ userId }),
       Goal.countDocuments({ userId }),
       Note.countDocuments({ userId }),

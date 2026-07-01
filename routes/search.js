@@ -9,6 +9,7 @@ import Note from '../models/Note.js';
 import Section from '../models/Section.js';
 import SectionPage from '../models/SectionPage.js';
 import Cluster from '../models/Cluster.js';
+import { activeEntryQuery } from '../utils/entryQueries.js';
 
 const router = express.Router();
 
@@ -56,7 +57,7 @@ router.get('/', async (req, res) => {
     // Search entries
     if (type === 'all' || type === 'entries') {
       const entries = await Entry.find({
-        userId,
+        ...activeEntryQuery(userId),
         $or: [
           { text: searchPattern },
           { html: searchPattern },

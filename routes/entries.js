@@ -14,14 +14,11 @@ import {
   normalizeDate,
   getUserIdFromRequest,
 } from "../utils/entryAutomation.js";
+import { activeEntryQuery } from "../utils/entryQueries.js";
 
 const router = express.Router();
 
 const { ObjectId } = mongoose.Types;
-
-function activeEntryQuery(userId) {
-  return { userId, deletedAt: null };
-}
 
 /* --------------------------- Routes --------------------------- */
 
