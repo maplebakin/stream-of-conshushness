@@ -16,11 +16,29 @@ function entryLabel(entry) {
 }
 
 export function getEntryDeleteConfirmationMessage(entry) {
+  return getEntryTrashConfirmationMessage(entry);
+}
+
+export function getEntryTrashConfirmationMessage(entry) {
   const label = entryLabel(entry);
-  return `Delete "${label}" permanently? This cannot be undone.`;
+  return `Move "${label}" to trash? You can restore it later.`;
 }
 
 export async function confirmAndDeleteEntry({
+  entry,
+  confirmDelete = () => true,
+  deleteRequest,
+  onDeleted,
+}) {
+  return confirmAndTrashEntry({
+    entry,
+    confirmDelete,
+    deleteRequest,
+    onDeleted,
+  });
+}
+
+export async function confirmAndTrashEntry({
   entry,
   confirmDelete = () => true,
   deleteRequest,
@@ -31,7 +49,7 @@ export async function confirmAndDeleteEntry({
     return { confirmed: false, deleted: false };
   }
 
-  const confirmed = confirmDelete(getEntryDeleteConfirmationMessage(entry));
+  const confirmed = confirmDelete(getEntryTrashConfirmationMessage(entry));
   if (!confirmed) {
     return { confirmed: false, deleted: false };
   }

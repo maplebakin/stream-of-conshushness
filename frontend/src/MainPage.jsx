@@ -10,7 +10,7 @@ import { AuthContext } from './AuthContext.jsx';
 import { getLocalTodayISO, toDisplayDate } from './utils/date.js';
 import SafeHTML from './components/SafeHTML.jsx'; // (top of file)
 import RecentActivityWidget from './components/RecentActivityWidget.jsx';
-import { confirmAndDeleteEntry } from './utils/entryDeletion.js';
+import { confirmAndTrashEntry } from './utils/entryDeletion.js';
 
 /* ---------- Robust sort helpers so newest stay on top across reloads ---------- */
 const parseDayMs = (v) => {
@@ -114,7 +114,7 @@ export default function MainPage() {
 
   const handleDelete = async (entry) => {
     try {
-      const result = await confirmAndDeleteEntry({
+      const result = await confirmAndTrashEntry({
         entry,
         confirmDelete: window.confirm.bind(window),
         deleteRequest: (id) => axios.delete(`/api/entries/${id}`),
@@ -124,11 +124,11 @@ export default function MainPage() {
       });
 
       if (result.deleted) {
-        toast.success('Entry deleted');
+        toast.success('Entry moved to trash');
       }
     } catch (err) {
       console.error('delete error:', err);
-      toast.error('Could not delete entry');
+      toast.error('Could not move entry to trash');
     }
   };
 
@@ -412,7 +412,7 @@ export default function MainPage() {
                   type="button"
                   className="icon-btn"
                   onClick={() => handleDelete(entry)}
-                  title="Delete permanently"
+                  title="Move to trash"
                 >
                   🗑️
                 </button>
