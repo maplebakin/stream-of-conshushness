@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import Entry from '../models/Entry.js';
 import Section from '../models/Section.js';
 import Task from '../models/Task.js';
+import { activeEntryQuery } from '../utils/entryQueries.js';
 
 const router = express.Router();
 
@@ -224,7 +225,7 @@ router.get('/activity', async (req, res) => {
     const entriesActivity = await Entry.aggregate([
       {
         $match: {
-          userId: ownerObjectId,
+          ...activeEntryQuery(ownerObjectId),
           updatedAt: { $gte: since },
           section: { $type: 'string', $ne: '' },
         },
