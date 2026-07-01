@@ -19,6 +19,16 @@ export async function getEntriesByDate(dateISO) {
   return data;
 }
 
+export async function listTrashedEntries() {
+  const { data } = await api.get('/api/entries/trash');
+  return Array.isArray(data) ? data : [];
+}
+
+export async function restoreEntry(id) {
+  const { data } = await api.post(`/api/entries/${id}/restore`);
+  return data;
+}
+
 export async function createEntry(payload) {
   const { data } = await api.post("/api/entries", payload);
   return data;
