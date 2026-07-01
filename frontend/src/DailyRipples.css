@@ -61,3 +61,20 @@
   color: var(--color-muted);
   text-align: center;
 }
+
+@media (max-width: 720px) {
+  .daily-ripples {
+    padding: var(--space-3);
+  }
+
+  .daily-ripples .ripple-actions {
+    align-items: stretch;
+  }
+
+  .daily-ripples .chip {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}

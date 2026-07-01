@@ -165,11 +165,19 @@ body {
 
 @media (max-width: 768px) {
   .app-body {
-    padding: var(--space-3);
-    gap: var(--space-4);
+    padding: var(--space-2);
+    gap: var(--space-3);
   }
 
   .app-content {
-    padding: var(--space-2);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .entry-card {
+    padding: var(--space-3);
   }
 }

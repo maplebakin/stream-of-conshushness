@@ -588,3 +588,123 @@
 .daily-page .panel .task-item {
   padding: 0.5rem 0.65rem;
 }
+
+@media (max-width: 720px) {
+  .daily-page {
+    padding: var(--space-3);
+  }
+
+  .daily-page .daily-header {
+    margin-bottom: var(--space-2);
+  }
+
+  .daily-page .centered-header {
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    gap: var(--space-1);
+    padding: var(--space-2);
+  }
+
+  .daily-page .centered-header h2 {
+    font-size: 1.18rem;
+    overflow-wrap: anywhere;
+  }
+
+  .daily-page .centered-header .button.nav-arrow {
+    width: 44px;
+    height: 44px;
+  }
+
+  .daily-page .today-btn,
+  .daily-page .daily-date {
+    grid-column: 1 / -1;
+    justify-self: center;
+    min-height: 36px;
+  }
+
+  .daily-page .daily-actions {
+    justify-content: stretch;
+  }
+
+  .daily-page .daily-actions .button {
+    flex: 1 1 9rem;
+    min-height: 44px;
+  }
+
+  .daily-page .daily-layout,
+  .daily-page .daily-main,
+  .daily-page .daily-side,
+  .daily-page .panel {
+    min-width: 0;
+  }
+
+  .daily-page .panel {
+    padding: var(--space-3);
+  }
+
+  .daily-page .daily-main .panel + .panel,
+  .daily-page .daily-side .panel + .panel {
+    margin-top: var(--space-2);
+  }
+
+  .daily-page .other-suggestions__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .daily-page .entries-header,
+  .daily-page .other-suggestions__header,
+  .daily-page .side-header {
+    align-items: flex-start;
+  }
+
+  .daily-page .entries-header {
+    flex-direction: column;
+  }
+
+  .daily-page .appt-item,
+  .daily-page .list-item {
+    grid-template-columns: 1fr;
+  }
+
+  .daily-page .appt-title {
+    white-space: normal;
+  }
+
+  .daily-page .agenda-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .daily-page .agenda-bullet {
+    display: none;
+  }
+
+  .daily-page .ripple-box > div:first-child {
+    display: grid !important;
+    gap: var(--space-2);
+  }
+
+  .daily-page .ripple-box > div:first-child > div {
+    flex-wrap: wrap;
+  }
+
+  .daily-page .ripple-actions .chip,
+  .daily-page .ripple-actions .chip-input {
+    min-height: 40px;
+  }
+
+  .daily-page .ripple-actions .chip-input {
+    flex: 1 1 12rem;
+  }
+
+  .panel .task,
+  .panel .task-row,
+  .panel .inbox-item,
+  .panel .task-item {
+    flex-wrap: wrap;
+  }
+
+  .panel .task .task-meta,
+  .panel .task .task-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+}

@@ -139,7 +139,9 @@ export default function TrashPage() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: 20
+          marginBottom: 20,
+          gap: 12,
+          flexWrap: 'wrap'
         }}>
           <div>
             <h2 className="font-glow" style={{ marginBottom: 8 }}>Trash</h2>
@@ -198,10 +200,11 @@ export default function TrashPage() {
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'flex-start',
-                        gap: 16
+                        gap: 16,
+                        flexWrap: 'wrap'
                       }}
                     >
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ flex: '1 1 220px', minWidth: 0 }}>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 6 }}>
                           Deleted {formatDate(entry.deletedAt)}
                           {entry.date && ` • Entry date ${entry.date}`}
@@ -219,7 +222,7 @@ export default function TrashPage() {
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                      <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
                         <button
                           className="btn"
                           onClick={() => handleEntryRestore(entry._id)}
@@ -258,10 +261,11 @@ export default function TrashPage() {
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        gap: 16
+                        gap: 16,
+                        flexWrap: 'wrap'
                       }}
                     >
-                      <div style={{ flex: 1 }}>
+                      <div style={{ flex: '1 1 220px', minWidth: 0 }}>
                         <div style={{
                           fontSize: '1rem',
                           color: 'var(--text-primary)',
@@ -277,7 +281,7 @@ export default function TrashPage() {
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         <button
                           className="btn"
                           onClick={() => handleTaskRestore(task._id)}

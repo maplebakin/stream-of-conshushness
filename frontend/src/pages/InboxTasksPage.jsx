@@ -371,6 +371,52 @@ export default function InboxTasksPage() {
         .clickable-badge:hover {
           background: rgba(96, 165, 250, 0.1);
         }
+        @media (max-width: 720px) {
+          .filters {
+            grid-template-columns: 1fr;
+          }
+          .search,
+          .new,
+          .quickadd .review-button,
+          .bulk .review-button,
+          .bulk .date {
+            width: 100%;
+            min-height: 44px;
+          }
+          .quickadd {
+            align-items: stretch;
+            flex-direction: column;
+          }
+          .chips,
+          .bulk,
+          .meta,
+          .task-card__actions {
+            align-items: stretch;
+          }
+          .chip,
+          .task-card__actions .review-button {
+            min-height: 44px;
+          }
+          .grid {
+            grid-template-columns: 1fr;
+          }
+          .task-card__top {
+            grid-template-columns: 1fr;
+          }
+          .task-card__select {
+            justify-self: start;
+            min-height: 40px;
+          }
+          .task-card__actions {
+            justify-content: stretch;
+          }
+          .task-card__actions .review-button {
+            flex: 1 1 9rem;
+          }
+          .meta .pill {
+            max-width: 100%;
+          }
+        }
       `}</style>
     </div>
   );

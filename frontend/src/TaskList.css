@@ -172,6 +172,30 @@
 }
 
 @media (max-width: 640px) {
+  .task-list-header,
+  .task-list-controls,
+  .bulk-task-toolbar {
+    align-items: stretch;
+  }
+
+  .task-list-controls,
+  .task-toggles {
+    width: 100%;
+  }
+
+  .task-toggles {
+    border-radius: var(--radius-card);
+  }
+
+  .pill-toggle,
+  .add-task-btn,
+  .make-task-btn,
+  .set-cluster-btn,
+  .inbox-toggle {
+    min-height: 44px;
+    flex: 1 1 8rem;
+  }
+
   .add-task-row {
     grid-template-columns: 1fr;
   }
@@ -187,6 +211,12 @@
   .task-item-main {
     grid-column: 2;
     grid-row: 1 / span 2;
+  }
+
+  .task-actions .button,
+  .task-actions .btn {
+    flex: 1 1 9rem;
+    min-height: 44px;
   }
 }
 

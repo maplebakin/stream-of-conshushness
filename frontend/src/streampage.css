@@ -382,3 +382,97 @@
   font-size: 0.95rem;
   color: var(--color-muted);
 }
+
+@media (max-width: 720px) {
+  .stream-page {
+    padding: var(--space-3);
+  }
+
+  .stream-header {
+    align-items: stretch;
+    margin-bottom: var(--space-3);
+  }
+
+  .stream-title h1 {
+    font-size: 1.7rem;
+  }
+
+  .stream-controls {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
+  .today-chip,
+  .search-input,
+  .cluster-select {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .quick-entry {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    padding: var(--space-3);
+  }
+
+  .quick-entry-input {
+    min-height: 7rem;
+    font-size: 1rem;
+  }
+
+  .quick-entry-help,
+  .quick-entry-send {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .quick-entry-send {
+    min-height: 48px;
+    width: 100%;
+  }
+
+  .stream-review-links {
+    align-items: stretch;
+  }
+
+  .stream-review-links span {
+    flex-basis: 100%;
+  }
+
+  .stream-review-links a {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .stream-onboarding-card {
+    padding: var(--space-3);
+  }
+
+  .stream-onboarding-examples span {
+    width: 100%;
+  }
+
+  .stream-feed-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .entry-card {
+    padding: var(--space-3);
+  }
+
+  .entry-actions {
+    justify-content: flex-start;
+  }
+
+  .icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+    border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+    border-radius: var(--radius-button);
+  }
+}
