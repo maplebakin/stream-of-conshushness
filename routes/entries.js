@@ -11,9 +11,9 @@ import Entry from "../models/Entry.js";
 import {
   createEntryWithAutomation,
   updateEntryWithAutomation,
-  normalizeDate,
   getUserIdFromRequest,
 } from "../utils/entryAutomation.js";
+import { normalizeDate } from "../utils/date.js";
 import { activeEntryQuery } from "../utils/entryQueries.js";
 
 const router = express.Router();
