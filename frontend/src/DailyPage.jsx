@@ -353,6 +353,8 @@ export default function DailyPage() {
         </div>
       </header>
 
+      <NotesSection date={dateISO} />
+
       <section className="daily-layout">
         <div className="daily-main">
           <div className="panel daily-task-panel">
@@ -537,8 +539,6 @@ export default function DailyPage() {
               <p className="muted" style={{ marginTop: 4 }}>Hidden</p>
             )}
           </div>
-
-          <NotesSection date={dateISO} />
 
           <div className="panel">
             <h3 className="font-thread text-vein">Habits</h3>

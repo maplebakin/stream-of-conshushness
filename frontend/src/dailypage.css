@@ -353,6 +353,65 @@
 }
 .daily-page .entry-card .entry-text { margin-bottom: .5rem; }
 
+.daily-page .today-notes-panel {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.daily-page .today-notes-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.daily-page .today-notes-header h3,
+.daily-page .today-notes-header p {
+  margin: 0;
+}
+
+.daily-page .today-notes-header p {
+  margin-top: 0.2rem;
+  font-size: 0.92rem;
+}
+
+.daily-page .today-notes-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.daily-page .today-notes-textarea {
+  width: 100%;
+  min-height: 10rem;
+  margin-top: 0;
+  resize: vertical;
+  line-height: 1.55;
+  background: color-mix(in srgb, var(--color-surface) 92%, white 8%);
+}
+
+.daily-page .today-notes-preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: var(--space-3);
+  border: 1px dashed color-mix(in srgb, var(--color-border) 78%, transparent);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--color-surface) 84%, var(--color-surface-soft) 16%);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.daily-page .today-notes-loading {
+  opacity: 0.8;
+  font-style: italic;
+  padding-top: var(--space-1);
+}
+
 .daily-page .ripple-box {
   display: grid;
   gap: var(--space-2);
@@ -659,6 +718,22 @@
 
   .daily-page .entries-header {
     flex-direction: column;
+  }
+
+  .daily-page .today-notes-header,
+  .daily-page .today-notes-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .daily-page .today-notes-textarea {
+    min-height: 12rem;
+    font-size: 1rem;
+  }
+
+  .daily-page .today-notes-actions .button {
+    width: 100%;
+    min-height: 48px;
   }
 
   .daily-page .appt-item,

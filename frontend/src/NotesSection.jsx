@@ -66,6 +66,7 @@ export default function NotesSection({ date }) {
 
     // nothing changed?
     if (content === lastSavedContentRef.current) return;
+    if (!content.trim() && !lastSavedContentRef.current.trim()) return;
 
     try {
       setStatus('saving');
@@ -116,11 +117,18 @@ export default function NotesSection({ date }) {
     return 'Idle';
     }
 
+  const canSave =
+    note !== lastSavedContentRef.current &&
+    Boolean(note.trim() || lastSavedContentRef.current.trim());
+
   return (
-    <section className="panel">
-      <div className="side-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-        <h3 className="font-thread text-vein" style={{ margin: 0 }}>Notes</h3>
-        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+    <section className="panel today-notes-panel">
+      <div className="side-header today-notes-header">
+        <div>
+          <h3 className="font-thread text-vein">Remember This</h3>
+          <p className="muted">Drop the thing your brain briefly remembered.</p>
+        </div>
+        <div className="today-notes-actions">
           <span className={`pill ${status==='error' ? 'danger' : status==='saving' ? '' : 'pill-muted'}`}>
             {statusLabel()}
           </span>
@@ -130,7 +138,7 @@ export default function NotesSection({ date }) {
               if (debounceRef.current) clearTimeout(debounceRef.current);
               saveNow();
             }}
-            disabled={loading || status === 'saving' || note === lastSavedContentRef.current}
+            disabled={loading || status === 'saving' || !canSave}
             title="Save now (Ctrl/Cmd+S)"
           >
             Save now
@@ -139,18 +147,24 @@ export default function NotesSection({ date }) {
       </div>
 
       {loading ? (
-        <div className="muted" style={{ opacity:.8, fontStyle:'italic', paddingTop:6 }}>Loading note…</div>
+        <div className="muted today-notes-loading">Loading note…</div>
       ) : (
-        <textarea
-          className="input"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Write your reflections, affirmations, or thoughts for the day…"
-          rows={8}
-          style={{ width:'100%', marginTop:8 }}
-          disabled={status === 'saving' && !note && !lastSavedContentRef.current}
-          aria-label={`Notes for ${date}`}
-        />
+        <>
+          <textarea
+            className="input today-notes-textarea"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder={`Cottage packing:\n- blanket\n- pillows\n- 4 shirts\n- shorts\n- underwear\n- socks\n- bathing suit`}
+            rows={8}
+            disabled={status === 'saving' && !note && !lastSavedContentRef.current}
+            aria-label={`Remember this note for ${date}`}
+          />
+          {note.trim() && (
+            <div className="today-notes-preview" aria-label="Today notes preview">
+              {note}
+            </div>
+          )}
+        </>
       )}
     </section>
   );
