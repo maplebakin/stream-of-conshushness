@@ -5,14 +5,7 @@ import RepeatFields from './components/RepeatFields.jsx';
 import ClusterPicker from './components/ClusterPicker.jsx';
 import axios from './api/axiosInstance';
 import { getStoredAppointmentId, isRecurringAppointment } from './utils/appointmentIds.js';
-
-function todayISO() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,'0');
-  const da = String(d.getDate()).padStart(2,'0');
-  return `${y}-${m}-${da}`;
-}
+import { todayISOInToronto } from './utils/date.js';
 
 function parseRRule(rrule = '') {
   const out = {};
@@ -41,7 +34,7 @@ export default function AppointmentModal({ onClose, onSaved, defaultCluster = ''
 
   // base fields
   const [title, setTitle] = useState(initialAppointment?.title || 'New Appointment');
-  const [date, setDate] = useState(initialAppointment?.date || defaultDate || todayISO());
+  const [date, setDate] = useState(initialAppointment?.date || defaultDate || todayISOInToronto());
   const [timeStart, setTimeStart] = useState(initialAppointment?.timeStart || initialAppointment?.time || '');
   const [timeEnd, setTimeEnd] = useState(initialAppointment?.timeEnd || '');
   const [location, setLocation] = useState(initialAppointment?.location || '');
@@ -53,7 +46,7 @@ export default function AppointmentModal({ onClose, onSaved, defaultCluster = ''
   const [freq, setFreq] = useState(repeatInitial.freq);
   const [interval, setInterval] = useState(repeatInitial.interval);
   const [byday, setByday] = useState(repeatInitial.byday);
-  const [startDate, setStartDate] = useState(initialAppointment?.startDate || initialAppointment?.date || defaultDate || todayISO());
+  const [startDate, setStartDate] = useState(initialAppointment?.startDate || initialAppointment?.date || defaultDate || todayISOInToronto());
   const [until, setUntil] = useState(repeatInitial.until);
 
   async function saveAppointment() {

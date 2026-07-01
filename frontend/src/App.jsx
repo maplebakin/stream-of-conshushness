@@ -47,17 +47,11 @@ import { ToastProvider } from './ToastContext.jsx';
 // Password reset pages
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
+import { todayISOInToronto } from './utils/date.js';
 
 /* Helper: redirect to "today" using local time (Toronto normalization happens server-side) */
-function todayISO() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
 function TodayRedirect() {
-  return <Navigate to={`/day/${todayISO()}`} replace />;
+  return <Navigate to={`/day/${todayISOInToronto()}`} replace />;
 }
 
 function AppRoutes() {
