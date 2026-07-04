@@ -1,0 +1,176 @@
+.review-inbox {
+  max-width: 1180px;
+}
+
+.review-inbox__header {
+  align-items: center;
+}
+
+.review-inbox__toolbar {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.review-inbox__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--color-surface) 92%, white 8%);
+  color: var(--color-muted);
+}
+
+.review-inbox__search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding-inline: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.review-inbox__search input:focus-visible {
+  box-shadow: none;
+}
+
+.review-inbox__tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: var(--space-2);
+}
+
+.review-inbox__tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-radius: var(--radius-button);
+  background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
+  color: var(--color-vein);
+  font-weight: 700;
+}
+
+.review-inbox__tab span {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.review-inbox__tab strong {
+  min-width: 1.75rem;
+  padding: 0.15rem 0.42rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface-soft) 74%, var(--color-spool) 26%);
+  color: var(--color-ink);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.review-inbox__tab:hover,
+.review-inbox__tab:focus-visible,
+.review-inbox__tab.is-active {
+  border-color: color-mix(in srgb, var(--color-spool) 52%, transparent);
+  background: color-mix(in srgb, var(--color-spool) 18%, var(--color-surface) 82%);
+  color: var(--color-ink);
+}
+
+.review-inbox__list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.review-inbox-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-border) 74%, transparent);
+  border-left-width: 4px;
+  border-radius: var(--radius-card);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 96%, white 4%), var(--color-surface));
+  box-shadow: 0 8px 20px rgba(66, 45, 34, 0.06), var(--shadow-border);
+}
+
+.review-inbox-item--tasks {
+  border-left-color: color-mix(in srgb, var(--color-success) 68%, var(--color-spool) 32%);
+}
+
+.review-inbox-item--gather {
+  border-left-color: color-mix(in srgb, var(--color-ripple) 72%, var(--color-spool) 28%);
+}
+
+.review-inbox-item--interests {
+  border-left-color: color-mix(in srgb, var(--color-plum) 72%, var(--color-ripple) 28%);
+}
+
+.review-inbox-item--ripples {
+  border-left-color: color-mix(in srgb, var(--color-spool) 74%, var(--color-plum) 26%);
+}
+
+.review-inbox-item--calendar {
+  border-left-color: color-mix(in srgb, var(--color-warning) 70%, var(--color-ripple) 30%);
+}
+
+.review-inbox-item__body {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.review-inbox-item__kicker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--color-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.review-inbox-item h2 {
+  margin: 0;
+  color: var(--color-text-strong);
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+
+.review-inbox-item__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.review-inbox-item__source-link {
+  text-decoration: none;
+}
+
+.review-inbox-item__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-width: 760px) {
+  .review-inbox-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-inbox-item__actions {
+    justify-content: stretch;
+  }
+
+  .review-inbox-item__actions .review-button {
+    flex: 1 1 130px;
+  }
+}

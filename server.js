@@ -45,6 +45,7 @@ import adminRoutes from "./routes/admin.js";
 import exportRoutes from "./routes/export.js";
 import searchRoutes from "./routes/search.js";
 import researchRoutes from "./routes/research.js";
+import reviewRoutes from "./routes/review.js";
 import Ripple from "./models/Ripple.js";
 
 /* ───────────── Compat (ESM) ───────────── */
@@ -62,9 +63,6 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 
 app.set("trust proxy", true);
 app.disable("x-powered-by");
-
-// Mount compat router under /routes to avoid conflicts with main API
-app.use('/routes', compatRouter);
 
 /* ───────────── Global Middleware ───────────── */
 app.use(
@@ -86,14 +84,28 @@ app.use(express.json({ limit: "5mb" }));
 app.use(generalLimiter); // Apply general rate limiting to all routes
 app.use(writeLimiter);   // Additional limit on write operations
 
+// Mount compat router under /routes after shared security middleware.
+app.use('/routes', compatRouter);
+
 // ── Legacy note-by-date shim (quiet 200 on "no note yet") ───────────
 import Note from './models/Note.js'; // put at top with other imports if not already
+
+function unclusteredDateNoteQuery(userId, date) {
+  return {
+    userId,
+    date,
+    $and: [
+      { $or: [{ cluster: '' }, { cluster: null }, { cluster: { $exists: false } }] },
+      { $or: [{ clusters: { $size: 0 } }, { clusters: { $exists: false } }] },
+    ],
+  };
+}
 
 app.get('/api/note/:date(\\d{4}-\\d{2}-\\d{2})', auth, async (req, res) => {
   try {
     const userId = req.user.userId;
     const date = req.params.date;
-    const item = await Note.findOne({ userId, date }).lean();
+    const item = await Note.findOne(unclusteredDateNoteQuery(userId, date)).lean();
     return res.json({ ok: true, item: item || null, content: item?.content || '' });
   } catch (e) {
     console.error('[note-by-date shim] failed:', e);
@@ -106,7 +118,7 @@ app.get('/api/note', auth, async (req, res) => {
     const userId = req.user.userId;
     const date = (req.query?.date || '').toString().trim();
     if (!date) return res.json({ ok: true, item: null, content: '' });
-    const item = await Note.findOne({ userId, date }).lean();
+    const item = await Note.findOne(unclusteredDateNoteQuery(userId, date)).lean();
     return res.json({ ok: true, item: item || null, content: item?.content || '' });
   } catch (e) {
     console.error('[note-by-query shim] failed:', e);
@@ -202,6 +214,7 @@ app.use("/api/admin", auth, adminRoutes);
 app.use("/api/export", auth, exportRoutes);
 app.use("/api/search", auth, searchRoutes);
 app.use("/api/research", auth, researchRoutes);
+app.use("/api/review", auth, reviewRoutes);
 
 
 // ── Dev route inspector (shows full mount paths, supports arrays) ─────────────

@@ -139,7 +139,7 @@ describe('date-based notes routes', () => {
     const res = await request(app).get('/api/note/2026-06-07');
 
     expect(res.status).toBe(200);
-    expect(mocks.findOne).toHaveBeenCalledWith({ userId: 'user123', date: '2026-06-07' });
+    expect(mocks.findOne).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user123', date: '2026-06-07' }));
     expect(res.body).toMatchObject({
       ok: true,
       item: { _id: '507f1f77bcf86cd799439011', userId: 'user123', date: '2026-06-07' },
@@ -160,7 +160,7 @@ describe('date-based notes routes', () => {
     const res = await request(app).get('/api/note/2026-06-07');
 
     expect(res.status).toBe(200);
-    expect(mocks.findOne).toHaveBeenCalledWith({ userId: 'new-user', date: '2026-06-07' });
+    expect(mocks.findOne).toHaveBeenCalledWith(expect.objectContaining({ userId: 'new-user', date: '2026-06-07' }));
     expect(res.body).toEqual({ ok: true, item: null, content: '' });
   });
 
@@ -171,7 +171,7 @@ describe('date-based notes routes', () => {
 
     expect(res.status).toBe(201);
     expect(mocks.findOneAndUpdate).toHaveBeenCalledWith(
-      { userId: 'user123', date: '2026-06-08' },
+      expect.objectContaining({ userId: 'user123', date: '2026-06-08' }),
       {
         $set: expect.objectContaining({
           userId: 'user123',

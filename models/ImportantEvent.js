@@ -21,6 +21,7 @@ const ImportantEventSchema = new Schema(
 // Fast lookups for a user's events by day and pinned flags
 ImportantEventSchema.index({ userId: 1, date: 1 });
 ImportantEventSchema.index({ userId: 1, pinned: 1, date: 1 });
+ImportantEventSchema.index({ userId: 1, source: 1, date: 1 });
 
 export default mongoose.models?.ImportantEvent ||
   mongoose.model("ImportantEvent", ImportantEventSchema);

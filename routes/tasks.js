@@ -3,6 +3,7 @@ import express from 'express';
 import mongoose from 'mongoose';
 import Task from '../models/Task.js';
 import Entry from '../models/Entry.js';
+import { getTasks } from '../services/taskService.js';
 import { normalizeClusterIds, resolveClusterIdForOwner } from '../utils/clusterIds.js';
 import { torontoYmd, addDaysISO as addDaysToISO } from '../utils/date.js';
 
@@ -22,87 +23,14 @@ function normalizeIdArray(raw) {
   return ids;
 }
 
-function parseBool(v, def = false) {
-  if (v === undefined || v === null) return def;
-  if (typeof v === 'boolean') return v;
-  const s = String(v).toLowerCase();
-  if (s === '1' || s === 'true' || s === 'yes') return true;
-  if (s === '0' || s === 'false' || s === 'no') return false;
-  return def;
-}
-function clamp(n, min, max) {
-  const num = Number(n);
-  if (!Number.isFinite(num)) return min;
-  return Math.min(Math.max(num, min), max);
-}
-
 /* Core lister wrapped so it never explodes */
 async function listTasks(req, res) {
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const {
-      date,            // alias of dueDate
-      dueDate,
-      cluster,         // single cluster key (string)
-      includeCompleted,
-      includeOverdue,
-      includeRecurring,
-      completed,       // explicit completed=true/false overrides includeCompleted
-      limit,
-      offset,
-      section,
-    } = req.query;
-
-    const q = { userId, deletedAt: null };
-
-    const dayISO = dueDate || date;
-    const includeOverdueFlag = parseBool(includeOverdue, false);
-    const includeRecurringFlag = parseBool(includeRecurring, true);
-
-    if (dayISO) {
-      if (includeOverdueFlag && date) {
-        q.$or = [
-          { dueDate: dayISO },
-          { dueDate: { $lt: dayISO }, completed: false },
-        ];
-      } else {
-        q.dueDate = dayISO;
-      }
-    }
-
-    let clusterIdFilter = null;
-    if (req.query.clusterId) {
-      clusterIdFilter = await resolveClusterIdForOwner(userId, req.query.clusterId);
-    } else if (cluster) {
-      clusterIdFilter = await resolveClusterIdForOwner(userId, cluster);
-    }
-    if (req.query.clusterId || cluster) {
-      if (!clusterIdFilter) return res.json([]);
-      q.clusters = clusterIdFilter;
-    }
-    if (section) q.sections = String(section);
-
-    if (completed !== undefined) {
-      q.completed = parseBool(completed);
-    } else if (!parseBool(includeCompleted, false)) {
-      q.completed = false;
-    }
-
-    if (!includeRecurringFlag) {
-      q.rrule = { $in: [null, ''] };
-    }
-
-    const lim = clamp(limit ?? 200, 1, 1000);
-    const off = clamp(offset ?? 0, 0, 1_000_000);
-
-    const sort = { completed: 1, dueDate: 1, createdAt: -1 };
-    const items = await Task.find(q).sort(sort).skip(off).limit(lim)
-      .populate('clusters', 'name slug icon color')
-      .populate('entryId', 'date title')
-      .lean();
-    res.json(items);
+    const result = await getTasks(userId, req.query || {});
+    res.json(result);
   } catch (e) {
     console.error('[tasks] list failed:', e);
     res.status(500).json({ error: 'list failed' });
@@ -378,12 +306,14 @@ router.post('/', async (req, res) => {
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-    let { title, notes, dueDate, priority = 0, clusters = [], sections = [], rrule = '', status = 'todo' } = req.body || {};
+    let { title, notes, note, dueDate, priority = 0, clusters = [], sections = [], rrule = '', status = 'todo', completed = false } = req.body || {};
     title = typeof title === 'string' ? title.trim() : '';
     if (!title) return res.status(400).json({ error: 'title required' });
+    if (notes === undefined && typeof note === 'string') notes = note;
 
     const allowedStatuses = ['todo', 'doing', 'done'];
     const safeStatus = allowedStatuses.includes(status) ? status : 'todo';
+    const safeCompleted = Boolean(completed) || safeStatus === 'done';
 
     let clusterIds = normalizeClusterIds(clusters);
     if (!clusterIds.length && req.body?.clusterId) {
@@ -403,8 +333,8 @@ router.post('/', async (req, res) => {
       clusters: clusterIds,
       sections: sections || [],
       rrule,
-      completed: false,
-      status: safeStatus === 'done' ? 'done' : safeStatus,
+      completed: safeCompleted,
+      status: safeCompleted ? 'done' : safeStatus,
     });
     await doc.populate('clusters', 'name slug icon color');
     await doc.populate('entryId', 'date title');

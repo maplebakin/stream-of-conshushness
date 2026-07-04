@@ -70,7 +70,7 @@ export default function UserSettings() {
     return (
       <div className="settings-wrap">
         <div className="settings-header">
-          <h2 className="font-echo text-vein text-2xl">Settings</h2>
+          <h2 className="font-echo text-2xl text-vein">Settings</h2>
           <p className="text-muted">Loading your profile…</p>
         </div>
       </div>
@@ -80,7 +80,7 @@ export default function UserSettings() {
   return (
     <div className="settings-wrap">
       <div className="settings-header">
-        <h2 className="font-echo text-vein text-2xl sm:text-3xl">User Settings</h2>
+        <h2 className="font-echo text-2xl text-vein sm:text-3xl">User Settings</h2>
         <p className="text-muted">Keep your account info tidy and your password spicy.</p>
       </div>
 

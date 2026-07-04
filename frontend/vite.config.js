@@ -1,6 +1,7 @@
 // frontend/vite.config.js
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { env } from 'node:process';
 
@@ -9,6 +10,7 @@ const ANALYZE = env.ANALYZE === '1';
 export default defineConfig({
   plugins: [
     react(),
+    tailwindcss(),
     ANALYZE &&
       visualizer({
         filename: 'dist/stats.html',

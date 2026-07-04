@@ -65,7 +65,7 @@ export default function TaskModal({
         title: title.trim(),
         dueDate: dueDate || todayISOInToronto(),
         cluster: cluster || undefined,
-        note: note.trim() || undefined,
+        notes: note.trim() || undefined,
         status: 'todo'
       };
 

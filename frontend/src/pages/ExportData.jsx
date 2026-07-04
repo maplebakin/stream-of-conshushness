@@ -6,6 +6,29 @@ import axiosInstance from '../api/axiosInstance';
 import toast from 'react-hot-toast';
 import '../base.css';
 
+const STAT_ITEMS = [
+  ['Entries', 'entries'],
+  ['Tasks', 'tasks'],
+  ['Goals', 'goals'],
+  ['Notes', 'notes'],
+  ['Habits', 'habits'],
+  ['Clusters', 'clusters'],
+  ['Sections', 'sections'],
+  ['Pages', 'sectionPages'],
+  ['Appointments', 'appointments'],
+  ['Events', 'importantEvents'],
+  ['Ripples', 'ripples'],
+  ['Suggested Tasks', 'suggestedTasks'],
+  ['Gather Items', 'gatherItems'],
+  ['Suggested Gather', 'suggestedGatherItems'],
+  ['Interests', 'interests'],
+  ['Suggested Interests', 'suggestedInterests'],
+  ['Research Subjects', 'researchSubjects'],
+  ['Games', 'games'],
+  ['Game Notes', 'gameNotes'],
+  ['Schedule Items', 'scheduleItems'],
+];
+
 export default function ExportData() {
   const [statistics, setStatistics] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -109,14 +132,9 @@ export default function ExportData() {
           <div className="card" style={{ marginBottom: '2rem' }}>
             <h2 style={{ marginBottom: '1rem', fontSize: '1.25rem' }}>Your Data</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-              <StatItem label="Entries" count={statistics.entries} />
-              <StatItem label="Tasks" count={statistics.tasks} />
-              <StatItem label="Goals" count={statistics.goals} />
-              <StatItem label="Notes" count={statistics.notes} />
-              <StatItem label="Habits" count={statistics.habits} />
-              <StatItem label="Clusters" count={statistics.clusters} />
-              <StatItem label="Sections" count={statistics.sections} />
-              <StatItem label="Appointments" count={statistics.appointments} />
+              {STAT_ITEMS.map(([label, key]) => (
+                <StatItem key={key} label={label} count={statistics[key] || 0} />
+              ))}
             </div>
             <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: '8px' }}>
               <strong>Total Items: {statistics.total}</strong>
@@ -128,8 +146,9 @@ export default function ExportData() {
         <div className="card" style={{ marginBottom: '2rem' }}>
           <h2 style={{ marginBottom: '0.5rem', fontSize: '1.25rem' }}>Full Export (JSON)</h2>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '0.95rem' }}>
-            Download all your data in a single JSON file. This includes all entries, tasks, goals, notes,
-            habits, clusters, sections, and appointments. Perfect for backup or importing into another system.
+            Download all your data in a single JSON file, including entries, tasks, goals, notes,
+            habits, clusters, sections, appointments, review queues, gather lists, interests,
+            research, games, schedules, and ripples.
           </p>
           <button
             onClick={handleExportJSON}

@@ -93,6 +93,7 @@ export async function getTasks(userId, query) {
     .skip(off)
     .limit(lim)
     .populate('clusters', 'name slug icon color')
+    .populate('entryId', 'date title')
     .lean();
 
   return items;

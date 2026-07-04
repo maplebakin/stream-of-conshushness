@@ -36,6 +36,7 @@ vi.mock('../../services/taskService.js', () => ({
 }));
 
 import taskRouter from '../tasks.js';
+import { getTasks } from '../../services/taskService.js';
 
 function mockRes() {
   const res = { statusCode: 200, body: null };
@@ -53,6 +54,21 @@ function findRoute(router, path, method) {
 describe('tasks flow routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('lists tasks through the shared task service', async () => {
+    const handler = findRoute(taskRouter, '/', 'get');
+    getTasks.mockResolvedValueOnce({ count: 5 });
+    const req = {
+      user: { userId: 'u1' },
+      query: { view: 'inbox', countOnly: '1' },
+    };
+    const res = mockRes();
+
+    await handler(req, res);
+
+    expect(getTasks).toHaveBeenCalledWith('u1', { view: 'inbox', countOnly: '1' });
+    expect(res.body).toEqual({ count: 5 });
   });
 
   it('carry-forward returns 401 without auth user', async () => {
@@ -132,6 +148,32 @@ describe('tasks flow routes', () => {
     expect(res.statusCode).toBe(201);
     expect(mocks.taskCreate).toHaveBeenCalled();
     expect(res.body.ok).toBe(true);
+  });
+
+  it('creates tasks with notes alias and explicit completed state', async () => {
+    const handler = findRoute(taskRouter, '/', 'post');
+    const populate = vi.fn().mockResolvedValue(undefined);
+    mocks.taskCreate.mockResolvedValue({ _id: 't-completed', populate });
+    const req = {
+      user: { userId: 'u1' },
+      body: {
+        title: 'Restore this task',
+        note: 'Restored note',
+        completed: true,
+        status: 'todo',
+      },
+    };
+    const res = mockRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(201);
+    expect(mocks.taskCreate).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Restore this task',
+      notes: 'Restored note',
+      completed: true,
+      status: 'done',
+    }));
   });
 
   it('link-entry validates task id and date', async () => {

@@ -44,6 +44,11 @@ export default function Layout() {
               <h2 className="sidebar-title">Review</h2>
               <ul className="sidebar-nav">
                 <li>
+                  <NavLink to="/review" className={linkClass} title="Review Inbox">
+                    <span>Review Inbox</span>
+                  </NavLink>
+                </li>
+                <li>
                   <NavLink to="/gather-lists" className={linkClass} title="Gather Lists">
                     🧺 <span>Gather</span>
                   </NavLink>

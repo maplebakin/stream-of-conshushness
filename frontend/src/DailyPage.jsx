@@ -303,7 +303,7 @@ export default function DailyPage() {
       <header className="daily-header">
         <div className="centered-header">
           <button className="button nav-arrow" onClick={() => go(-1)} aria-label="Previous day">◀</button>
-          <h2 className="font-echo text-plum text-2xl">{toDisplayDate(dateISO)}</h2>
+          <h2 className="font-echo text-2xl text-plum">{toDisplayDate(dateISO)}</h2>
           <button className="button nav-arrow" onClick={() => go(1)} aria-label="Next day">▶</button>
 
           {dateISO !== todayISO && (
@@ -339,13 +339,13 @@ export default function DailyPage() {
             </>
           )}
           <button
-            className="button bg-lantern text-ink rounded-button font-thread shadow-soft hover:bg-plum hover:text-mist px-4 py-2 transition-all"
+            className="button rounded-button bg-lantern px-4 py-2 font-thread text-ink shadow-soft transition-all hover:bg-plum hover:text-mist"
             onClick={() => setShowEntryModal(true)}
           >
             + New Entry
           </button>
           <button
-            className="button bg-spool text-ink rounded-button font-thread shadow-soft hover:bg-plum hover:text-mist px-4 py-2 transition-all"
+            className="button rounded-button bg-spool px-4 py-2 font-thread text-ink shadow-soft transition-all hover:bg-plum hover:text-mist"
             onClick={openNewAppointment}
           >
             + Add appointment

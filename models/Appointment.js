@@ -88,5 +88,6 @@ AppointmentSchema.index(
 );
 
 AppointmentSchema.index({ userId: 1, clusters: 1, date: 1 });
+AppointmentSchema.index({ userId: 1, source: 1, date: 1 });
 
 export default mongoose.model('Appointment', AppointmentSchema);

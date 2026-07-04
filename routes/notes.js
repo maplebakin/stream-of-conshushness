@@ -13,6 +13,23 @@ const isYMD = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 function own(userId) { return { userId }; }
 
+function unclusteredDateNoteQuery(userId, date) {
+  return {
+    ...own(userId),
+    date,
+    $and: [
+      { $or: [{ cluster: '' }, { cluster: null }, { cluster: { $exists: false } }] },
+      { $or: [{ clusters: { $size: 0 } }, { clusters: { $exists: false } }] },
+    ],
+  };
+}
+
+function dateNoteUpsertQuery(userId, date, body = {}, clusterIds = []) {
+  if (clusterIds.length) return { ...own(userId), date, clusters: clusterIds[0] };
+  if (body?.cluster) return { ...own(userId), date, cluster: String(body.cluster) };
+  return unclusteredDateNoteQuery(userId, date);
+}
+
 // Build a doc that satisfies the Note schema
 function normalizeNoteInput(body = {}, userId, resolvedClusterIds = []) {
   const dateRaw = body.date || body.day || body.ymd || body.dateISO;
@@ -115,7 +132,7 @@ router.get('/:date(\\d{4}-\\d{2}-\\d{2})', async (req, res) => {
   try {
     const userId = req.user?.userId;
     const date = req.params.date;
-    const item = await Note.findOne({ userId, date });
+    const item = await Note.findOne(unclusteredDateNoteQuery(userId, date));
     if (!item) return res.json({ ok: true, item: null, content: '' });
     res.json({ ok: true, item, content: item.content });
   } catch (e) {
@@ -138,7 +155,7 @@ router.post('/:date(\\d{4}-\\d{2}-\\d{2})', async (req, res) => {
     }
     const updates = normalizeNoteInput({ ...req.body, date }, userId, clusterIds);
     const item = await Note.findOneAndUpdate(
-      { ...own(userId), date },
+      dateNoteUpsertQuery(userId, date, req.body, clusterIds),
       { $set: updates, $currentDate: { updatedAt: true } },
       { new: true, upsert: true }
     );

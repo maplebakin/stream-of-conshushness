@@ -8,6 +8,7 @@ import { resolveClusterIdForOwner } from '../../utils/clusterIds.js';
 vi.mock('../../models/Task.js', () => ({
   default: {
     find: vi.fn(),
+    countDocuments: vi.fn(),
   },
 }));
 
@@ -32,6 +33,7 @@ describe('taskService', () => {
         lean: vi.fn().mockResolvedValue([]), // Default to resolving with an empty array
       };
       Task.find.mockReturnValue(mockQuery);
+      Task.countDocuments.mockResolvedValue(0);
     });
 
     it('should build a basic query for a user', async () => {
@@ -107,6 +109,22 @@ describe('taskService', () => {
       const result = await getTasks(userId, query);
 
       expect(result).toEqual([]);
+      expect(Task.find).not.toHaveBeenCalled();
+    });
+
+    it('should return a count for countOnly queries', async () => {
+      const userId = 'user123';
+      const query = { view: 'inbox', countOnly: '1' };
+      Task.countDocuments.mockResolvedValue(4);
+
+      const result = await getTasks(userId, query);
+
+      expect(result).toEqual({ count: 4 });
+      expect(Task.countDocuments).toHaveBeenCalledWith(expect.objectContaining({
+        userId,
+        deletedAt: null,
+        completed: false,
+      }));
       expect(Task.find).not.toHaveBeenCalled();
     });
 

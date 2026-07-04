@@ -24,6 +24,16 @@ function withSelectLean(rows) {
   };
 }
 
+function withPopulateSortLean(rows) {
+  return {
+    populate: () => ({
+      sort: () => ({
+        lean: async () => rows,
+      }),
+    }),
+  };
+}
+
 function makeEntry(doc) {
   return {
     _id: new ObjectId(),
@@ -40,6 +50,17 @@ function makeSuggestedTask(doc) {
     status: 'pending',
     ...doc,
     save: vi.fn(async function save() { return this; }),
+  };
+}
+
+function makeTask(doc) {
+  return {
+    _id: new ObjectId(),
+    completed: false,
+    status: 'todo',
+    deletedAt: null,
+    ...doc,
+    populate: vi.fn(async function populate() { return this; }),
   };
 }
 
@@ -125,6 +146,18 @@ vi.mock('../../models/Ripple.js', () => ({
 
 vi.mock('../../models/SuggestedTask.js', () => ({
   default: {
+    find: vi.fn((query) => {
+      const rows = store.suggestedTasks
+        .filter((suggestion) => (
+          sameId(suggestion.userId, query.userId) &&
+          (!query.status || suggestion.status === query.status)
+        ))
+        .map((suggestion) => ({
+          ...suggestion,
+          sourceRippleId: store.ripples.find((ripple) => sameId(ripple._id, suggestion.sourceRippleId)) || suggestion.sourceRippleId,
+        }));
+      return withPopulateSortLean(rows);
+    }),
     deleteMany: vi.fn(async (query) => {
       const sourceIds = query.sourceRippleId?.$in || [];
       const before = store.suggestedTasks.length;
@@ -168,14 +201,31 @@ vi.mock('../../models/SuggestedTask.js', () => ({
 vi.mock('../../models/Task.js', () => ({
   default: {
     insertMany: vi.fn(async (docs) => {
-      const inserted = docs.map((doc) => ({ _id: new ObjectId(), ...doc }));
+      const inserted = docs.map((doc) => makeTask(doc));
       store.tasks.push(...inserted);
       return inserted;
     }),
     create: vi.fn(async (doc) => {
-      const task = { _id: new ObjectId(), ...doc };
+      const task = makeTask(doc);
       store.tasks.push(task);
       return task;
+    }),
+    updateMany: vi.fn(async (query, update) => {
+      let modifiedCount = 0;
+      const set = update?.$set || update || {};
+
+      for (const task of store.tasks) {
+        if (query.userId && !sameId(task.userId, query.userId)) continue;
+        if (Object.prototype.hasOwnProperty.call(query, 'completed') && task.completed !== query.completed) continue;
+        if (Object.prototype.hasOwnProperty.call(query, 'dueDate') && task.dueDate !== query.dueDate) continue;
+        if (Object.prototype.hasOwnProperty.call(query, 'deletedAt') && query.deletedAt === null && task.deletedAt != null) continue;
+        if (query.clusters && !task.clusters?.some((clusterId) => sameId(clusterId, query.clusters))) continue;
+
+        Object.assign(task, set);
+        modifiedCount += 1;
+      }
+
+      return { modifiedCount };
     }),
     modelName: 'Task',
   },
@@ -246,6 +296,7 @@ vi.mock('../../models/Cluster.js', () => ({
 
 const entriesRouter = (await import('../entries.js')).default;
 const suggestedTasksRouter = (await import('../suggestedTasks.js')).default;
+const tasksRouter = (await import('../tasks.js')).default;
 
 describe('entry to suggested task acceptance flow', () => {
   const userId = new ObjectId();
@@ -266,6 +317,7 @@ describe('entry to suggested task acceptance flow', () => {
     });
     app.use('/api/entries', entriesRouter);
     app.use('/api/suggested-tasks', suggestedTasksRouter);
+    app.use('/api/tasks', tasksRouter);
   });
 
   it('creates a suggested task from an entry and accepting it creates a linked task', async () => {
@@ -332,6 +384,58 @@ describe('entry to suggested task acceptance flow', () => {
     expect(acceptRes.body.task).toMatchObject({
       title: 'Call the dentist',
       dueDate: '2026-06-09',
+    });
+  });
+
+  it('daily loop smoke reviews, accepts, and carries forward an extracted task', async () => {
+    const entryRes = await request(app)
+      .post('/api/entries')
+      .send({
+        date: '2026-06-08',
+        text: 'I need to call the dentist tomorrow.',
+      });
+
+    expect(entryRes.status).toBe(201);
+
+    const pendingRes = await request(app)
+      .get('/api/suggested-tasks')
+      .query({ status: 'pending', date: '2026-06-08' });
+
+    expect(pendingRes.status).toBe(200);
+    expect(pendingRes.body).toHaveLength(1);
+    expect(pendingRes.body[0]).toMatchObject({
+      title: 'Call the dentist',
+      status: 'pending',
+    });
+
+    const suggestion = store.suggestedTasks[0];
+    const acceptRes = await request(app)
+      .put(`/api/suggested-tasks/${suggestion._id}/accept`);
+
+    expect(acceptRes.status).toBe(200);
+    expect(store.tasks).toHaveLength(1);
+
+    const task = store.tasks[0];
+    expect(task).toMatchObject({
+      title: 'Call the dentist',
+      dueDate: '2026-06-09',
+      completed: false,
+      deletedAt: null,
+    });
+
+    const carryRes = await request(app)
+      .post('/api/tasks/carry-forward')
+      .send({ from: '2026-06-09', to: '2026-06-10' });
+
+    expect(carryRes.status).toBe(200);
+    expect(carryRes.body).toMatchObject({
+      moved: 1,
+      from: '2026-06-09',
+      to: '2026-06-10',
+    });
+    expect(task).toMatchObject({
+      entryId: store.entries[0]._id,
+      dueDate: '2026-06-10',
     });
   });
 

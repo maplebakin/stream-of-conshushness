@@ -13,6 +13,7 @@ A comprehensive personal productivity and life management application that combi
 - **Calendar & Scheduling** - Day/week/month views with time-blocked scheduling
 - **Goals & Habits** - Track long-term objectives and daily habits
 - **Smart Automation** - Auto-extract events, tasks, and metadata from entries
+- **Unified Review Inbox** - Review extracted tasks, ripples, gather items, interests, and calendar artifacts from one workflow
 
 ### Advanced Features
 - **Recurrence Rules** - Standard iCalendar format for repeating tasks and appointments
@@ -42,7 +43,7 @@ A comprehensive personal productivity and life management application that combi
 ## Installation
 
 ### Prerequisites
-- Node.js 18+ and npm
+- Node.js 20.19+ and npm
 - MongoDB Atlas account (or local MongoDB instance)
 
 ### Setup
@@ -134,6 +135,12 @@ npm run dev
 # Production build
 npm run build
 
+# Full local verification gate
+npm run verify
+
+# Focused daily-loop smoke test
+npm run test:daily-loop
+
 # Start production server (requires build first)
 npm start
 ```
@@ -207,6 +214,7 @@ streamofconshushness/
 
 ### Utilities
 - `GET /health` - Health check endpoint
+- `/api/review` - Unified review inbox for pending automation artifacts
 - GraphQL endpoint is currently not enabled in this build
 - `GET /uploads/*` - Static file serving
 - `GET /__routes_full` - Route inspector (development only)
@@ -218,6 +226,12 @@ streamofconshushness/
 ```bash
 # Run backend tests (when configured)
 npm test
+
+# Run focused daily-loop smoke coverage
+npm run test:daily-loop
+
+# Run the full local verification gate
+npm run verify
 
 # Run frontend lint
 cd frontend && npm run lint

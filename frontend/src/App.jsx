@@ -35,6 +35,7 @@ import AdapterHarness from './adapters/AdapterHarness.jsx';
 import ExportData from './pages/ExportData.jsx';
 import GlobalSearch from './pages/GlobalSearch.jsx';
 import HabitAnalytics from './pages/HabitAnalytics.jsx';
+import ReviewInbox from './pages/ReviewInbox.jsx';
 import TrashPage from './pages/TrashPage.jsx';
 import ResearchSectionPage from './pages/ResearchSectionPage.jsx';
 
@@ -112,6 +113,7 @@ function AppRoutes() {
           <Route path="/section/games/:slug" element={<GamePage />} />
 
           {/* Utilities */}
+          <Route path="/review" element={<ReviewInbox />} />
           <Route path="/ripples" element={<RippleReviewUI />} />
           <Route path="/inbox/tasks" element={<InboxTasksPage />} />
           <Route path="/inbox/tasks/:date" element={<InboxTasksPage />} />

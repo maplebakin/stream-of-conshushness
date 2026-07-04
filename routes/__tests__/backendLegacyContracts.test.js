@@ -31,7 +31,11 @@ describe('backend legacy model import contracts', () => {
   });
 
   it('uses ScheduleItem as the current daily schedule model, not legacy DailySchedule', () => {
-    expect(importReferences('ScheduleItem')).toEqual(['routes/schedule.js']);
+    expect(importReferences('ScheduleItem')).toEqual([
+      'routes/export.js',
+      'routes/schedule.js',
+      'routes/search.js',
+    ]);
     expect(importReferences('DailySchedule')).toEqual([]);
   });
 

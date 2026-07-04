@@ -63,6 +63,15 @@ vi.mock('../../models/SectionPage.js', () => ({ default: { find: vi.fn(() => fix
 vi.mock('../../models/Appointment.js', () => ({ default: { find: vi.fn(() => fixtures.defaultFind), countDocuments: vi.fn(() => Promise.resolve(9)) } }));
 vi.mock('../../models/ImportantEvent.js', () => ({ default: { find: vi.fn(() => fixtures.defaultFind), countDocuments: vi.fn(() => Promise.resolve(10)) } }));
 vi.mock('../../models/Ripple.js', () => ({ default: { find: vi.fn(() => fixtures.defaultFind), countDocuments: vi.fn(() => Promise.resolve(11)) } }));
+vi.mock('../../models/SuggestedTask.js', () => ({ default: { find: vi.fn(() => fixtures.defaultFind), countDocuments: vi.fn(() => Promise.resolve(12)) } }));
+vi.mock('../../models/GatherItem.js', () => ({ default: { find: vi.fn(() => fixtures.defaultFind), countDocuments: vi.fn(() => Promise.resolve(13)) } }));
+vi.mock('../../models/SuggestedGatherItem.js', () => ({ default: { find: vi.fn(() => fixtures.defaultFind), countDocuments: vi.fn(() => Promise.resolve(14)) } }));
+vi.mock('../../models/Interest.js', () => ({ default: { find: vi.fn(() => fixtures.defaultFind), countDocuments: vi.fn(() => Promise.resolve(15)) } }));
+vi.mock('../../models/SuggestedInterest.js', () => ({ default: { find: vi.fn(() => fixtures.defaultFind), countDocuments: vi.fn(() => Promise.resolve(16)) } }));
+vi.mock('../../models/ResearchSubject.js', () => ({ default: { find: vi.fn(() => fixtures.defaultFind), countDocuments: vi.fn(() => Promise.resolve(17)) } }));
+vi.mock('../../models/Game.js', () => ({ default: { find: vi.fn(() => fixtures.defaultFind), countDocuments: vi.fn(() => Promise.resolve(18)) } }));
+vi.mock('../../models/GameNote.js', () => ({ default: { find: vi.fn(() => fixtures.defaultFind), countDocuments: vi.fn(() => Promise.resolve(19)) } }));
+vi.mock('../../models/ScheduleItem.js', () => ({ default: { find: vi.fn(() => fixtures.defaultFind), countDocuments: vi.fn(() => Promise.resolve(20)) } }));
 
 import exportRouter from '../export.js';
 
@@ -124,17 +133,29 @@ describe('export router security', () => {
     const res = mockRes();
     await handler(req, res);
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatchObject({
-      entries: 1,
-      tasks: 2,
-      goals: 3,
+      expect(res.body).toMatchObject({
+        entries: 1,
+        tasks: 2,
+        goals: 3,
       notes: 4,
       habits: 5,
-      clusters: 6,
-      sections: 7,
-      appointments: 9,
-      total: 1 + 2 + 3 + 4 + 5 + 6 + 7 + 9,
-    });
+        clusters: 6,
+        sections: 7,
+        sectionPages: 8,
+        appointments: 9,
+        importantEvents: 10,
+        ripples: 11,
+        suggestedTasks: 12,
+        gatherItems: 13,
+        suggestedGatherItems: 14,
+        interests: 15,
+        suggestedInterests: 16,
+        researchSubjects: 17,
+        games: 18,
+        gameNotes: 19,
+        scheduleItems: 20,
+        total: 210,
+      });
   });
 
   it('guards against CSV formula injection', async () => {

@@ -480,7 +480,7 @@ async function generateRipplesAndSuggestions({ entry, text, userId }) {
     .map((doc, idx) => {
       const src = deduped[idx] || {};
       const dueISO = src?.meta?.dueDate;
-      const repeat = src?.meta?.recurrenceLabel || src?.meta?.recurrence || "";
+      const repeat = src?.meta?.recurrence || "";
       const payload = {
         userId,
         sourceRippleId: doc._id,

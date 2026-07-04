@@ -86,7 +86,7 @@ export default function SuggestedTasksInbox({ dateISO, onAccepted, onRejected })
               <div className="mt-1 text-xs text-gray-500">Due {dueDateLabel(t.dueDate)}</div>
             )}
             {t.originalContext && (
-              <div className="mt-1 text-xs italic text-gray-500">from: {t.originalContext}</div>
+              <div className="mt-1 text-xs text-gray-500 italic">from: {t.originalContext}</div>
             )}
           </div>
           <div className="space-x-2">

@@ -7,6 +7,48 @@ import axiosInstance from '../api/axiosInstance';
 import toast from 'react-hot-toast';
 import '../base.css';
 
+const SEARCH_TYPES = [
+  'all',
+  'entries',
+  'tasks',
+  'goals',
+  'notes',
+  'sections',
+  'sectionPages',
+  'clusters',
+  'appointments',
+  'importantEvents',
+  'gatherItems',
+  'suggestedGatherItems',
+  'interests',
+  'suggestedInterests',
+  'suggestedTasks',
+  'habits',
+  'researchSubjects',
+  'games',
+  'gameNotes',
+  'scheduleItems',
+];
+
+const RESULT_GROUPS = SEARCH_TYPES.filter((type) => type !== 'all');
+
+const FILTER_LABELS = {
+  all: 'All',
+  sectionPages: 'Pages',
+  importantEvents: 'Events',
+  gatherItems: 'Gather',
+  suggestedGatherItems: 'Suggested Gather',
+  suggestedInterests: 'Suggested Interests',
+  suggestedTasks: 'Suggested Tasks',
+  researchSubjects: 'Research',
+  gameNotes: 'Game Notes',
+  scheduleItems: 'Schedule',
+};
+
+function filterLabel(type) {
+  return FILTER_LABELS[type] || type.charAt(0).toUpperCase() + type.slice(1);
+}
+
 export default function GlobalSearch() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -80,10 +122,38 @@ export default function GlobalSearch() {
         navigate(item.dueDate ? `/day/${item.dueDate}` : '/');
         break;
       case 'goal':
-        navigate('/');
+        navigate('/goals');
         break;
       case 'note':
         navigate(`/day/${item.date}`);
+        break;
+      case 'appointment':
+      case 'importantEvent':
+      case 'scheduleItem':
+        navigate(item.date ? `/day/${item.date}` : '/calendar');
+        break;
+      case 'gatherItem':
+      case 'suggestedGatherItem':
+        navigate('/gather-lists');
+        break;
+      case 'interest':
+      case 'suggestedInterest':
+        navigate('/interests');
+        break;
+      case 'suggestedTask':
+        navigate('/inbox/tasks');
+        break;
+      case 'habit':
+        navigate('/habits/analytics');
+        break;
+      case 'researchSubject':
+        navigate('/sections');
+        break;
+      case 'game':
+        navigate(item.slug ? `/section/games/${item.slug}` : '/section/games');
+        break;
+      case 'gameNote':
+        navigate('/section/games');
         break;
       case 'section':
         navigate(`/sections/${item.slug}`);
@@ -107,7 +177,19 @@ export default function GlobalSearch() {
       note: 'Note',
       section: 'Section',
       sectionPage: 'Page',
-      cluster: 'Cluster'
+      cluster: 'Cluster',
+      appointment: 'Appointment',
+      importantEvent: 'Event',
+      gatherItem: 'Gather Item',
+      suggestedGatherItem: 'Suggested Gather',
+      interest: 'Interest',
+      suggestedInterest: 'Suggested Interest',
+      suggestedTask: 'Suggested Task',
+      habit: 'Habit',
+      researchSubject: 'Research',
+      game: 'Game',
+      gameNote: 'Game Note',
+      scheduleItem: 'Schedule'
     };
     return labels[itemType] || itemType;
   };
@@ -120,7 +202,19 @@ export default function GlobalSearch() {
       note: '#F59E0B',
       section: '#8B5CF6',
       sectionPage: '#EC4899',
-      cluster: '#6366F1'
+      cluster: '#6366F1',
+      appointment: '#14B8A6',
+      importantEvent: '#EF4444',
+      gatherItem: '#F97316',
+      suggestedGatherItem: '#FB923C',
+      interest: '#22C55E',
+      suggestedInterest: '#84CC16',
+      suggestedTask: '#38BDF8',
+      habit: '#A855F7',
+      researchSubject: '#64748B',
+      game: '#EAB308',
+      gameNote: '#CA8A04',
+      scheduleItem: '#06B6D4'
     };
     return colors[itemType] || '#6B7280';
   };
@@ -186,7 +280,7 @@ export default function GlobalSearch() {
 
           {/* Type Filter */}
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            {['all', 'entries', 'tasks', 'goals', 'notes', 'sections', 'sectionPages', 'clusters'].map((t) => (
+            {SEARCH_TYPES.map((t) => (
               <button
                 key={t}
                 type="button"
@@ -202,7 +296,7 @@ export default function GlobalSearch() {
                   cursor: 'pointer'
                 }}
               >
-                {t === 'all' ? 'All' : t.charAt(0).toUpperCase() + t.slice(1)}
+                {filterLabel(t)}
               </button>
             ))}
           </div>
@@ -238,95 +332,18 @@ export default function GlobalSearch() {
             {/* Results List */}
             {results.total > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {/* Entries */}
-                {results.entries.map((item) => (
-                  <SearchResultItem
-                    key={`entry-${item._id}`}
-                    item={item}
-                    query={results.query}
-                    onNavigate={handleNavigate}
-                    getTypeLabel={getTypeLabel}
-                    getTypeColor={getTypeColor}
-                    highlightMatch={highlightMatch}
-                  />
-                ))}
-
-                {/* Tasks */}
-                {results.tasks.map((item) => (
-                  <SearchResultItem
-                    key={`task-${item._id}`}
-                    item={item}
-                    query={results.query}
-                    onNavigate={handleNavigate}
-                    getTypeLabel={getTypeLabel}
-                    getTypeColor={getTypeColor}
-                    highlightMatch={highlightMatch}
-                  />
-                ))}
-
-                {/* Goals */}
-                {results.goals.map((item) => (
-                  <SearchResultItem
-                    key={`goal-${item._id}`}
-                    item={item}
-                    query={results.query}
-                    onNavigate={handleNavigate}
-                    getTypeLabel={getTypeLabel}
-                    getTypeColor={getTypeColor}
-                    highlightMatch={highlightMatch}
-                  />
-                ))}
-
-                {/* Notes */}
-                {results.notes.map((item) => (
-                  <SearchResultItem
-                    key={`note-${item._id}`}
-                    item={item}
-                    query={results.query}
-                    onNavigate={handleNavigate}
-                    getTypeLabel={getTypeLabel}
-                    getTypeColor={getTypeColor}
-                    highlightMatch={highlightMatch}
-                  />
-                ))}
-
-                {/* Sections */}
-                {results.sections.map((item) => (
-                  <SearchResultItem
-                    key={`section-${item._id}`}
-                    item={item}
-                    query={results.query}
-                    onNavigate={handleNavigate}
-                    getTypeLabel={getTypeLabel}
-                    getTypeColor={getTypeColor}
-                    highlightMatch={highlightMatch}
-                  />
-                ))}
-
-                {/* Section Pages */}
-                {results.sectionPages.map((item) => (
-                  <SearchResultItem
-                    key={`page-${item._id}`}
-                    item={item}
-                    query={results.query}
-                    onNavigate={handleNavigate}
-                    getTypeLabel={getTypeLabel}
-                    getTypeColor={getTypeColor}
-                    highlightMatch={highlightMatch}
-                  />
-                ))}
-
-                {/* Clusters */}
-                {results.clusters.map((item) => (
-                  <SearchResultItem
-                    key={`cluster-${item._id}`}
-                    item={item}
-                    query={results.query}
-                    onNavigate={handleNavigate}
-                    getTypeLabel={getTypeLabel}
-                    getTypeColor={getTypeColor}
-                    highlightMatch={highlightMatch}
-                  />
+                {RESULT_GROUPS.flatMap((group) => (
+                  (results[group] || []).map((item) => (
+                    <SearchResultItem
+                      key={`${item.type || group}-${item._id}`}
+                      item={item}
+                      query={results.query}
+                      onNavigate={handleNavigate}
+                      getTypeLabel={getTypeLabel}
+                      getTypeColor={getTypeColor}
+                      highlightMatch={highlightMatch}
+                    />
+                  ))
                 ))}
               </div>
             )}

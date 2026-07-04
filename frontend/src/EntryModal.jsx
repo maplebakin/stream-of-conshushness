@@ -74,16 +74,7 @@ export default function EntryModal({
       const res = await axios.post('/api/entries', body, { headers });
       toast.success('Entry saved');
       onSaved?.(res.data);
-
-      try {
-        const ar = await axios.post('/api/ripples/analyze', { text, date: dateISO }, { headers });
-        if (Array.isArray(ar?.data?.ripples) && ar.data.ripples.length > 0) {
-          toast('Ripples queued', { icon: '💧' });
-        }
-        onAnalyzed?.(ar?.data);
-      } catch (anErr) {
-        console.warn('[EntryModal] analyze failed:', anErr?.response?.data || anErr?.message);
-      }
+      onAnalyzed?.({ entry: res.data });
 
       onClose?.();
     } catch (err) {

@@ -233,7 +233,7 @@ export default function MainPage() {
       {/* Header */}
       <section className="stream-header">
         <div className="stream-title">
-          <h1 className="font-echo text-plum text-3xl">Stream</h1>
+          <h1 className="font-echo text-3xl text-plum">Stream</h1>
         </div>
 
         <div className="stream-controls">
@@ -382,7 +382,7 @@ export default function MainPage() {
             </p>
             <button
               type="button"
-              className="add-entry-btn bg-plum text-mist rounded-button font-thread shadow-soft hover:bg-lantern hover:text-ink px-4 py-2 transition-all"
+              className="add-entry-btn rounded-button bg-plum px-4 py-2 font-thread text-mist shadow-soft transition-all hover:bg-lantern hover:text-ink"
               onClick={() => {
                 if (query || clusterFilter !== 'all') {
                   setQuery('');

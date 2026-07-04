@@ -18,6 +18,7 @@ describe('frontend stability endpoint contracts', () => {
       'path="/clusters" element={<ClustersIndex />}',
       'path="/gather-lists" element={<GatherListsPage />}',
       'path="/interests" element={<InterestsPage />}',
+      'path="/review" element={<ReviewInbox />}',
       'path="/ripples" element={<RippleReviewUI />}',
       'path="/inbox/tasks" element={<InboxTasksPage />}',
       'path="/search" element={<GlobalSearch />}',
@@ -42,11 +43,11 @@ describe('frontend stability endpoint contracts', () => {
       expect(header).toContain(`to="${target}"`);
     }
 
-    for (const target of ['/sections', '/clusters', '/goals', '/ripples', '/interests', '/gather-lists', '/inbox/tasks', '/search', '/trash', '/export', '/account', '/settings']) {
+    for (const target of ['/sections', '/clusters', '/goals', '/review', '/ripples', '/interests', '/gather-lists', '/inbox/tasks', '/search', '/trash', '/export', '/account', '/settings']) {
       expect(layout).toContain(`to="${target}"`);
     }
 
-    for (const target of ['/', '/today', '/calendar', '/goals', '/sections', '/clusters', '/ripples', '/interests', '/gather-lists', '/habits/analytics', '/search', '/export', '/trash', '/account', '/settings']) {
+    for (const target of ['/', '/today', '/calendar', '/goals', '/review', '/sections', '/clusters', '/ripples', '/interests', '/gather-lists', '/habits/analytics', '/search', '/export', '/trash', '/account', '/settings']) {
       expect(commandPalette).toContain(`target: '${target}'`);
       if (target === '/today') {
         expect(app).toContain('path="/today" element={<TodayRedirect />}');
@@ -245,8 +246,10 @@ describe('frontend stability endpoint contracts', () => {
     expect(notesRoute).toContain("router.get('/:date(\\\\d{4}-\\\\d{2}-\\\\d{2})'");
     expect(notesRoute).toContain("router.post('/:date(\\\\d{4}-\\\\d{2}-\\\\d{2})'");
     expect(notesRoute).toContain('Note.findOneAndUpdate');
-    expect(notesRoute).toContain('{ ...own(userId), date }');
+    expect(notesRoute).toContain('unclusteredDateNoteQuery(userId, date)');
+    expect(notesRoute).toContain('dateNoteUpsertQuery(userId, date, req.body, clusterIds)');
     expect(server).toContain("app.get('/api/note/:date(\\\\d{4}-\\\\d{2}-\\\\d{2})'");
+    expect(server).toContain('unclusteredDateNoteQuery(userId, date)');
     expect(server).toContain('app.use("/api/notes", auth, noteRoutes)');
     expect(server).toContain('app.use("/api/note", auth, noteRoutes)');
     expect(notesSection).not.toContain('/api/notes/${date}');

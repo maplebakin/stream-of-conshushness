@@ -1,10 +1,67 @@
 import express from 'express';
 import Cluster, { slugifyClusterSlug } from '../models/Cluster.js';
+import Appointment from '../models/Appointment.js';
+import Entry from '../models/Entry.js';
+import GatherItem from '../models/GatherItem.js';
+import Goal from '../models/Goal.js';
+import Habit from '../models/Habit.js';
+import ImportantEvent from '../models/ImportantEvent.js';
+import Interest from '../models/Interest.js';
+import Note from '../models/Note.js';
+import SuggestedGatherItem from '../models/SuggestedGatherItem.js';
+import SuggestedInterest from '../models/SuggestedInterest.js';
+import SuggestedTask from '../models/SuggestedTask.js';
+import Task from '../models/Task.js';
 
 const router = express.Router();
 
 function getOwnerId(req) {
   return req.user?.userId;
+}
+
+async function unlinkDeletedCluster({ ownerId, cluster }) {
+  const clusterId = cluster?._id;
+  if (!ownerId || !clusterId) return;
+
+  const legacyValues = [cluster.slug, cluster.name].filter(Boolean);
+  const pullCluster = { $pull: { clusters: clusterId } };
+  const clearLegacyCluster = legacyValues.length
+    ? { $set: { cluster: '' } }
+    : null;
+
+  const clusteredModels = [
+    Appointment,
+    Entry,
+    GatherItem,
+    Goal,
+    Interest,
+    Note,
+    SuggestedGatherItem,
+    SuggestedInterest,
+    Task,
+  ];
+  const legacyClusterModels = [
+    Appointment,
+    Entry,
+    Goal,
+    Habit,
+    ImportantEvent,
+    Interest,
+    Note,
+    SuggestedInterest,
+    SuggestedTask,
+  ];
+
+  await Promise.all([
+    ...clusteredModels.map((model) => (
+      model.updateMany({ userId: ownerId, clusters: clusterId }, pullCluster)
+    )),
+    ...(clearLegacyCluster
+      ? legacyClusterModels.map((model) => (
+        model.updateMany({ userId: ownerId, cluster: { $in: legacyValues } }, clearLegacyCluster)
+      ))
+      : []),
+  ]);
 }
 
 router.get('/', async (req, res) => {
@@ -138,6 +195,7 @@ router.delete('/:id', async (req, res) => {
     if (!cluster) {
       return res.status(404).json({ error: 'Cluster not found' });
     }
+    await unlinkDeletedCluster({ ownerId, cluster });
     res.json({ ok: true });
   } catch (error) {
     console.error('Delete cluster error:', error);

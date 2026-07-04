@@ -3,12 +3,18 @@
   "version": "1.0.0",
   "type": "module",
   "main": "server.js",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "concurrently \"nodemon server.js\" \"npm run frontend-dev\"",
     "frontend-dev": "cd frontend && npm run dev",
     "start": "NODE_ENV=production node server.js",
     "build": "npm --prefix frontend ci --include=dev && npm --prefix frontend run build",
+    "check:no-glob": "node scripts/checkNoGlob.mjs",
+    "verify": "npm run check:no-glob && npm audit --audit-level=low && npm test && npm run build && npm --prefix frontend audit --audit-level=low && npm --prefix frontend run lint",
     "test": "vitest run",
+    "test:daily-loop": "vitest run routes/__tests__/entrySuggestedTaskFlow.test.js",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage"
@@ -20,27 +26,23 @@
     "dotenv": "^17.2.0",
     "express": "^4.18.2",
     "express-rate-limit": "^8.2.1",
-
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "jwt-decode": "^4.0.0",
     "mongodb": "^6.17.0",
     "mongoose": "^8.16.3",
     "multer": "^2.0.2",
-    "nodemailer": "^7.0.5",
+    "nodemailer": "^9.0.3",
     "react-datepicker": "^8.4.0",
     "react-hot-toast": "^2.5.2",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
-    "@vitest/ui": "^4.0.7",
-    "autoprefixer": "^10.4.21",
+    "@vitest/ui": "^4.1.9",
     "concurrently": "^9.2.0",
     "nodemon": "^3.0.2",
-    "postcss": "^8.5.6",
     "supertest": "^7.1.4",
-    "tailwindcss": "^3.4.17",
     "vite": "^7.0.4",
-    "vitest": "^4.0.7"
+    "vitest": "^4.1.9"
   }
 }
