@@ -141,6 +141,9 @@ npm run verify
 # Focused daily-loop smoke test
 npm run test:daily-loop
 
+# Opt-in browser smoke for Stream -> Review -> accepted task on day page
+npm run test:browser-smoke
+
 # Start production server (requires build first)
 npm start
 ```
@@ -230,12 +233,23 @@ npm test
 # Run focused daily-loop smoke coverage
 npm run test:daily-loop
 
+# Run browser-level daily loop smoke against a live local app/database
+RUN_BROWSER_SMOKE=1 BROWSER_SMOKE_START_SERVER=1 npm run test:browser-smoke
+
 # Run the full local verification gate
 npm run verify
 
 # Run frontend lint
 cd frontend && npm run lint
 ```
+
+The browser smoke uses Playwright and exercises the UI path from Stream capture to Review Inbox acceptance to the dated Daily Page. It requires a working local app with a disposable MongoDB database and a valid `.env`. Install the Chromium browser once with:
+
+```bash
+npx playwright install chromium
+```
+
+By default, `npm run test:browser-smoke` skips unless `RUN_BROWSER_SMOKE=1` is set. Set `BROWSER_SMOKE_START_SERVER=1` to let Playwright start `npm run dev`, or leave it unset and point `E2E_BASE_URL` / `E2E_API_BASE` at already-running frontend/backend servers.
 
 ### Code Style
 

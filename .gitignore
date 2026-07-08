@@ -12,6 +12,8 @@ pnpm-debug.log*
 
 # Build output
 frontend/dist
+playwright-report/
+test-results/
 
 # OS / Editor junk
 .DS_Store

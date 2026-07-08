@@ -96,6 +96,26 @@ Only run destructive cleanup commands against a dedicated disposable smoke datab
 
 After local setup is complete, use a fresh test account or a disposable local database when possible.
 
+## Automated Browser Smoke
+
+The repo includes a minimal Playwright smoke test for the core daily loop:
+
+```bash
+npx playwright install chromium
+RUN_BROWSER_SMOKE=1 BROWSER_SMOKE_START_SERVER=1 npm run test:browser-smoke
+```
+
+This starts the normal dev servers, registers a disposable user, creates the Stream entry `I need to call the dentist tomorrow.`, verifies the pending Review Inbox task suggestion, accepts it, and confirms `Call the dentist` appears on tomorrow's `/day/:date` page.
+
+Requirements:
+
+- A working `.env` with `MONGODB_URI` pointing at a disposable test database.
+- `JWT_SECRET` set to a valid value.
+- Chromium installed through `npx playwright install chromium`.
+- Ports `3000` and `5173` available unless you set `E2E_API_BASE` and `E2E_BASE_URL`.
+
+Without `RUN_BROWSER_SMOKE=1`, `npm run test:browser-smoke` intentionally skips so normal unit/build validation does not depend on a live database or browser binary.
+
 ## Manual Smoke Checklist
 
 ### 1. Auth
