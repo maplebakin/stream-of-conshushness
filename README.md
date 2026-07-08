@@ -243,13 +243,13 @@ npm run verify
 cd frontend && npm run lint
 ```
 
-The browser smoke uses Playwright and exercises the UI path from Stream capture to Review Inbox acceptance to the dated Daily Page. It requires a working local app with a disposable MongoDB database and a valid `.env`. Install the Chromium browser once with:
+The browser smoke uses Playwright and exercises the UI paths from Stream capture to Review Inbox acceptance to the dated Daily Page, plus the ordinal calendar extraction path for `I'm going to visit my mom on the 13th.`. It requires a working local app with a disposable MongoDB database and a valid `.env`. Install the Chromium browser once with:
 
 ```bash
 npx playwright install chromium
 ```
 
-By default, `npm run test:browser-smoke` skips unless `RUN_BROWSER_SMOKE=1` is set. Set `BROWSER_SMOKE_START_SERVER=1` to let Playwright start `npm run dev`, or leave it unset and point `E2E_BASE_URL` / `E2E_API_BASE` at already-running frontend/backend servers.
+By default, `npm run test:browser-smoke` skips unless `RUN_BROWSER_SMOKE=1` is set. Set `BROWSER_SMOKE_START_SERVER=1` to let Playwright start isolated local smoke servers on frontend port `5174` and API port `3100`, or leave it unset and point `E2E_BASE_URL` / `E2E_API_BASE` at already-running frontend/backend servers.
 
 ### Code Style
 
