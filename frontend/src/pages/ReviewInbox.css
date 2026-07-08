@@ -30,7 +30,27 @@
   font-weight: 700;
 }
 
-.review-completed__item a {
+.review-completed__summary {
+  display: grid;
+  gap: 0.15rem;
+  min-width: min(100%, 18rem);
+}
+
+.review-completed__summary small {
+  color: var(--color-muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.review-completed__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.review-completed__actions a {
   color: var(--color-success);
 }
 
@@ -385,6 +405,20 @@
   }
 
   .review-source-actions .review-button {
+    width: fit-content;
+  }
+
+  .review-completed__item,
+  .review-completed__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .review-completed__actions {
+    width: 100%;
+  }
+
+  .review-completed__actions .review-button {
     width: fit-content;
   }
 }

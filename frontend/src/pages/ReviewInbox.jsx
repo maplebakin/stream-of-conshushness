@@ -18,6 +18,7 @@ import { acceptSuggestedGatherItem, rejectSuggestedGatherItem } from '../api/sug
 import { acceptSuggestedInterest, rejectSuggestedInterest } from '../api/suggestedInterests.js';
 import { approveRipple, dismissRipple } from '../api/ripples.js';
 import { useToast } from '../hooks/useToast.js';
+import { todayISOInToronto } from '../utils/date.js';
 import './ReviewInbox.css';
 
 const GROUPS = [
@@ -158,10 +159,26 @@ function actionTitle(item, draft = {}) {
   return suggestionTitle(item, draft) || 'Untitled review item';
 }
 
+function acceptedTaskFollowup(result, todayISO) {
+  const task = result?.task || result?.data?.task;
+  const dueDate = task?.dueDate || '';
+  const taskId = task?._id || task?.id || '';
+  const destination = dueDate ? `/day/${dueDate}` : '/inbox/tasks';
+
+  return {
+    label: dueDate ? 'Open due day' : 'Open task inbox',
+    to: destination,
+    detail: dueDate ? `Task created for ${dueDate}.` : 'Task created without a due date.',
+    kind: 'task',
+    taskId,
+    taskDueDate: dueDate,
+    canMoveToday: Boolean(taskId && dueDate !== todayISO),
+  };
+}
+
 function acceptedTarget(item, result) {
   if (item.kind === 'suggestedTask') {
-    const task = result?.task || result?.data?.task;
-    return { label: 'Open task inbox', to: task?.dueDate ? `/day/${task.dueDate}` : '/inbox/tasks' };
+    return acceptedTaskFollowup(result, todayISOInToronto());
   }
   if (item.kind === 'suggestedGatherItem') return { label: 'Open gather lists', to: '/gather-lists' };
   if (item.kind === 'suggestedInterest') return { label: 'Open interests', to: '/interests' };
@@ -186,6 +203,7 @@ export default function ReviewInbox() {
   const [completedItems, setCompletedItems] = useState([]);
   const [focusedKey, setFocusedKey] = useState('');
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [followupBusyKeys, setFollowupBusyKeys] = useState(() => new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -354,6 +372,40 @@ export default function ReviewInbox() {
         [field]: value,
       },
     }));
+  }
+
+  async function moveAcceptedTaskToToday(completedItem) {
+    if (!completedItem?.taskId) return;
+    const todayISO = todayISOInToronto();
+    const busyKey = completedItem.key;
+
+    setFollowupBusyKeys((current) => new Set(current).add(busyKey));
+    try {
+      const { data: updatedTask } = await api.patch(`/api/tasks/${completedItem.taskId}`, { dueDate: todayISO });
+      const dueDate = updatedTask?.dueDate || todayISO;
+      setCompletedItems((current) => current.map((item) => (
+        item.key === busyKey
+          ? {
+              ...item,
+              label: 'Open today',
+              to: `/day/${dueDate}`,
+              detail: 'Task moved to today.',
+              taskDueDate: dueDate,
+              canMoveToday: false,
+            }
+          : item
+      )));
+      showToast(`Moved "${completedItem.title}" to today.`, { type: 'success' });
+    } catch (err) {
+      console.error('[ReviewInbox] move accepted task failed:', err?.response?.data || err.message);
+      showToast(err?.response?.data?.error || 'Could not move this task to today.', { type: 'error' });
+    } finally {
+      setFollowupBusyKeys((current) => {
+        const next = new Set(current);
+        next.delete(busyKey);
+        return next;
+      });
+    }
   }
 
   async function performAction(item, action) {
@@ -539,8 +591,23 @@ export default function ReviewInbox() {
         <section className="review-completed" aria-label="Recently accepted review items">
           {completedItems.map((item) => (
             <div key={item.key} className="review-completed__item">
-              <span>{item.outcome} "{item.title}"</span>
-              <Link to={item.to}>{item.label}</Link>
+              <div className="review-completed__summary">
+                <span>{item.outcome} "{item.title}"</span>
+                {item.detail && <small>{item.detail}</small>}
+              </div>
+              <div className="review-completed__actions">
+                <Link to={item.to}>{item.label}</Link>
+                {item.canMoveToday && (
+                  <button
+                    type="button"
+                    className="review-button review-button--ghost review-button--compact"
+                    onClick={() => moveAcceptedTaskToToday(item)}
+                    disabled={followupBusyKeys.has(item.key)}
+                  >
+                    {followupBusyKeys.has(item.key) ? 'Moving' : 'Move to today'}
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </section>

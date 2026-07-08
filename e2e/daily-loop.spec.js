@@ -103,9 +103,11 @@ test('Stream entry can be reviewed into a task on the correct day', async ({ pag
   await expect(suggestion.getByLabel('Title')).toHaveValue(/call the dentist/i);
   await expect(suggestion.getByText(`suggested due ${tomorrowISO}`)).toBeVisible();
   await suggestion.getByRole('button', { name: /^Accept$/ }).click();
-  await expect(
-    page.getByLabel('Recently accepted review items').getByText(/Accepted "Call the dentist"/i)
-  ).toBeVisible();
+  const acceptedItems = page.getByLabel('Recently accepted review items');
+  await expect(acceptedItems.getByText(/Accepted "Call the dentist"/i)).toBeVisible();
+  await expect(acceptedItems.getByText(`Task created for ${tomorrowISO}.`)).toBeVisible();
+  await expect(acceptedItems.getByRole('link', { name: 'Open due day' })).toBeVisible();
+  await expect(acceptedItems.getByRole('button', { name: 'Move to today' })).toBeVisible();
 
   await page.goto(`/day/${tomorrowISO}`);
   await expect(page.getByRole('heading', { name: /What needs attention now/i })).toBeVisible();
