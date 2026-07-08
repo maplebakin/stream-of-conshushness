@@ -18,6 +18,7 @@
 @media (max-width: 1100px) {
   .daily-page .daily-layout { grid-template-columns: 1fr; }
   .daily-page .daily-side { order: 2; }
+  .daily-page .daily-attention__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ---------------------------------------
@@ -122,6 +123,101 @@
 
 .daily-page .daily-actions .bg-spool {
   background: color-mix(in srgb, var(--color-surface) 86%, var(--color-spool) 14%);
+}
+
+/* ---------------------------------------
+   Daily Command Center
+---------------------------------------- */
+.daily-page .daily-attention {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.daily-page .daily-attention__lead {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(220px, 1.1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.daily-page .daily-attention__eyebrow {
+  margin: 0 0 0.2rem;
+  color: var(--color-vein);
+  font-family: var(--font-glow);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.daily-page .daily-attention h3 {
+  margin: 0;
+  color: var(--color-plum);
+  font-family: var(--font-thread);
+  font-size: 1.12rem;
+}
+
+.daily-page .daily-attention__recommendation {
+  margin: 0;
+  padding: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--color-surface) 84%, var(--color-ripple) 16%);
+  color: var(--color-ink);
+  line-height: 1.4;
+}
+
+.daily-page .daily-attention__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.daily-page .daily-attention__tile {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+  padding: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--color-surface) 92%, white 8%);
+  color: var(--color-ink);
+  text-decoration: none;
+}
+
+.daily-page .daily-attention__tile--action {
+  cursor: pointer;
+}
+
+.daily-page .daily-attention__tile--action:hover {
+  border-color: color-mix(in srgb, var(--color-spool) 48%, var(--color-border) 52%);
+  background: color-mix(in srgb, var(--color-surface) 84%, var(--color-spool) 16%);
+  transform: translateY(-1px);
+}
+
+.daily-page .daily-attention__label {
+  color: var(--color-vein);
+  font-family: var(--font-glow);
+  font-size: 0.78rem;
+}
+
+.daily-page .daily-attention__tile strong {
+  color: var(--color-plum);
+  font-family: var(--font-thread);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.daily-page .daily-attention__tile span:last-child {
+  min-width: 0;
+  color: var(--color-vein);
+  font-size: 0.86rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.daily-page .daily-attention__note {
+  font-size: 0.86rem;
 }
 
 /* ---------------------------------------
@@ -715,6 +811,11 @@
   }
 
   .daily-page .other-suggestions__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .daily-page .daily-attention__lead,
+  .daily-page .daily-attention__grid {
     grid-template-columns: 1fr;
   }
 

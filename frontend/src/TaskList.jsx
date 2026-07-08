@@ -12,7 +12,7 @@ import { describeRepeat } from './utils/repeat.js';
 import { useTasks } from './hooks/useTasks.js';
 import { useQueryClient } from '@tanstack/react-query';
 
-export default function TaskList({ date, header = 'Tasks', bucket }) {
+export default function TaskList({ date, header = 'Tasks', bucket, onTasksChanged }) {
   const { token } = useContext(AuthContext);
   const { showUndo, showToast } = useToast();
   const today = useMemo(() => todayISOInToronto(), []);
@@ -119,6 +119,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
       }
       queryClient.invalidateQueries(['tasks']);
       if (bucket) setBucketRefreshTick((x) => x + 1);
+      onTasksChanged?.();
     } catch (e) {
       console.error('Toggle complete failed:', e);
       showToast('Could not update task status. Please try again.', { type: 'error' });
@@ -151,6 +152,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
       setInboxCount((c) => Math.max(0, c - 1));
       queryClient.invalidateQueries(['tasks']);
       if (bucket) setBucketRefreshTick((x) => x + 1);
+      onTasksChanged?.();
       // Then try to link to journal entry for that date
       linkEntryForDate(updated._id, date);
     } catch (e) {
@@ -172,6 +174,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
       );
       queryClient.invalidateQueries(['tasks']);
       if (bucket) setBucketRefreshTick((x) => x + 1);
+      onTasksChanged?.();
       setNewTitle('');
       setShowComposer(false);
       // Link the freshly created task to this day's journal
@@ -225,6 +228,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
       // Refresh tasks
       await queryClient.invalidateQueries(['tasks']);
       if (bucket) setBucketRefreshTick((x) => x + 1);
+      onTasksChanged?.();
       setSelectedTasks(new Set());
     } catch (e) {
       console.error('Bulk complete failed:', e);
@@ -248,6 +252,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
       // Optimistically update UI
       queryClient.invalidateQueries(['tasks']);
       if (bucket) setBucketRefreshTick((x) => x + 1);
+      onTasksChanged?.();
       setSelectedTasks(new Set());
 
       // Show undo toast
@@ -262,6 +267,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
             );
             await queryClient.invalidateQueries(['tasks']);
             if (bucket) setBucketRefreshTick((x) => x + 1);
+            onTasksChanged?.();
           } catch (e) {
             console.error('Undo failed:', e);
             showToast('Failed to undo deletion. Please try again.', { type: 'error' });

@@ -40,6 +40,11 @@ describe('frontend stability endpoint contracts', () => {
     expect(reviewInbox).toContain('selectedKeys');
     expect(reviewInbox).toContain('applyBulkAction');
     expect(reviewInbox).toContain('sourceEntryExcerpt');
+    expect(reviewInbox).toContain('sourceEntryPath');
+    expect(reviewInbox).toContain('Open source entry');
+    expect(reviewInbox).toContain('review-shortcuts');
+    expect(reviewInbox).toContain('isTypingTarget');
+    expect(reviewInbox).toContain("key === 'j'");
     expect(reviewInbox).toContain('completedItems');
     expect(reviewInbox).toContain('acceptedTarget');
     expect(reviewInbox).toContain('Confirm dismiss');

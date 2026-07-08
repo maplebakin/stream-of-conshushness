@@ -71,6 +71,64 @@ function eventAliasKey(item) {
   return `${item?.date || ''}|${item?.title || ''}`;
 }
 
+function minutesFromHHMM(value) {
+  if (!value) return null;
+  const [hour, minute = '0'] = String(value).split(':');
+  const h = Number(hour);
+  const m = Number(minute);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return (h * 60) + m;
+}
+
+function currentTorontoMinutes() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Toronto',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const hour = Number(parts.find(part => part.type === 'hour')?.value || 0);
+  const minute = Number(parts.find(part => part.type === 'minute')?.value || 0);
+  return (hour * 60) + minute;
+}
+
+function chooseNextTimelineItem(timeline, dateISO, todayISO) {
+  if (!timeline.length) return null;
+  if (dateISO !== todayISO) return timeline[0];
+
+  const nowMinutes = currentTorontoMinutes();
+  return (
+    timeline.find((item) => {
+      const itemMinutes = minutesFromHHMM(item.time);
+      return itemMinutes !== null && itemMinutes >= nowMinutes;
+    }) ||
+    timeline.find((item) => !item.time) ||
+    timeline[0]
+  );
+}
+
+function chooseNextTask(dueTasks, radarTasks, dateISO) {
+  const dueToday = dueTasks.find(task => task?.dueDate === dateISO);
+  if (dueToday) return { task: dueToday, label: 'Dated task' };
+
+  const overdue = dueTasks.find(task => task?.dueDate && task.dueDate < dateISO);
+  if (overdue) return { task: overdue, label: 'Earlier task' };
+
+  const radar = radarTasks[0];
+  if (radar) return { task: radar, label: 'Undated task' };
+
+  return null;
+}
+
+function attentionRecommendation({ reviewCount, overdueCount, todayTaskCount, nextTask, nextTimelineItem }) {
+  if (reviewCount > 0) return 'Review new suggestions before planning more work.';
+  if (overdueCount > 0) return 'Start by choosing one earlier task to carry forward, finish, or clear.';
+  if (todayTaskCount > 0 && nextTask?.task?.title) return `Start with "${nextTask.task.title}".`;
+  if (nextTask?.task?.title) return `Choose whether "${nextTask.task.title}" belongs on this day.`;
+  if (nextTimelineItem?.title) return `Check "${nextTimelineItem.title}" on the schedule.`;
+  return 'No urgent signals here. Capture anything new or plan a focused block.';
+}
+
 /* ===================================================== */
 export default function DailyPage() {
   const { date: routeDate } = useParams();
@@ -107,6 +165,10 @@ export default function DailyPage() {
   const [loadingOtherSuggestions, setLoadingOtherSuggestions] = useState(false);
   const [otherSuggestionsError, setOtherSuggestionsError] = useState('');
   const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
+  const [taskAttentionRefreshKey, setTaskAttentionRefreshKey] = useState(0);
+  const [taskAttention, setTaskAttention] = useState({ dueToday: [], onYourRadar: [] });
+  const [loadingTaskAttention, setLoadingTaskAttention] = useState(false);
+  const [taskAttentionError, setTaskAttentionError] = useState('');
   const reviewCount = useReviewCount(Boolean(token), reviewRefreshKey);
 
   useEffect(() => {
@@ -127,6 +189,7 @@ export default function DailyPage() {
     .then(() => {
       localStorage.setItem('cf_last_run', todayISO);
       setTaskListKey(k => k + 1);
+      setTaskAttentionRefreshKey(k => k + 1);
     })
     .catch(() => {});
   }, [autoCarry, dateISO, todayISO, token]);
@@ -141,6 +204,7 @@ export default function DailyPage() {
     try {
       await axios.post('/api/tasks/carry-forward');
       setTaskListKey(k => k + 1);
+      setTaskAttentionRefreshKey(k => k + 1);
     } catch (e) {
       console.error('carry-forward failed', e);
     }
@@ -190,6 +254,27 @@ export default function DailyPage() {
 
   useEffect(() => { loadOtherSuggestionCounts(); }, [loadOtherSuggestionCounts]);
 
+  const loadTaskAttention = useCallback(async () => {
+    if (!token || !dateISO) return;
+    setLoadingTaskAttention(true);
+    setTaskAttentionError('');
+    try {
+      const { data } = await axios.get(`/api/tasks/day/${dateISO}`);
+      setTaskAttention({
+        dueToday: Array.isArray(data?.dueToday) ? data.dueToday : [],
+        onYourRadar: Array.isArray(data?.onYourRadar) ? data.onYourRadar : [],
+      });
+    } catch (err) {
+      console.error('loadTaskAttention error', err?.response?.data || err?.message || err);
+      setTaskAttention({ dueToday: [], onYourRadar: [] });
+      setTaskAttentionError('Could not load task summary.');
+    } finally {
+      setLoadingTaskAttention(false);
+    }
+  }, [token, dateISO]);
+
+  useEffect(() => { loadTaskAttention(); }, [loadTaskAttention, taskAttentionRefreshKey]);
+
   function handleEntryUpdated(updated) {
     const stillToday = entryDateISO(updated) === dateISO && entryHasMeaningfulText(updated);
     setEntries(prev => {
@@ -205,9 +290,15 @@ export default function DailyPage() {
   }
   function handleTaskCreated() {
     setTaskListKey(k => k + 1);
+    setTaskAttentionRefreshKey(k => k + 1);
   }
+  const handleTasksChanged = useCallback(() => {
+    setTaskAttentionRefreshKey(k => k + 1);
+  }, []);
+
   function refreshAutomationPanels() {
     setTaskListKey(k => k + 1);
+    setTaskAttentionRefreshKey(k => k + 1);
     setRippleListKey(k => k + 1);
     setSuggestionsKey(k => k + 1);
     setReviewRefreshKey(k => k + 1);
@@ -281,6 +372,29 @@ export default function DailyPage() {
     });
     return all;
   }, [appointments, events, important]);
+
+  const attentionSummary = useMemo(() => {
+    const dueTasks = Array.isArray(taskAttention.dueToday) ? taskAttention.dueToday : [];
+    const radarTasks = Array.isArray(taskAttention.onYourRadar) ? taskAttention.onYourRadar : [];
+    const overdueCount = dueTasks.filter(task => task?.dueDate && task.dueDate < dateISO).length;
+    const todayTaskCount = dueTasks.filter(task => task?.dueDate === dateISO).length;
+    const nextTask = chooseNextTask(dueTasks, radarTasks, dateISO);
+    const nextTimelineItem = chooseNextTimelineItem(timeline, dateISO, todayISO);
+
+    return {
+      overdueCount,
+      todayTaskCount,
+      nextTask,
+      nextTimelineItem,
+      recommendation: attentionRecommendation({
+        reviewCount: reviewCount.count,
+        overdueCount,
+        todayTaskCount,
+        nextTask,
+        nextTimelineItem,
+      }),
+    };
+  }, [dateISO, reviewCount.count, taskAttention, timeline, todayISO]);
 
   function openNewAppointment() {
     setEditingAppointment(null);
@@ -370,6 +484,58 @@ export default function DailyPage() {
         </div>
       </header>
 
+      <section className="panel daily-attention" aria-labelledby="daily-attention-title">
+        <div className="daily-attention__lead">
+          <div>
+            <p className="daily-attention__eyebrow">Command Center</p>
+            <h3 id="daily-attention-title">What needs attention now?</h3>
+          </div>
+          <p className="daily-attention__recommendation">{attentionSummary.recommendation}</p>
+        </div>
+
+        <div className="daily-attention__grid" aria-live="polite">
+          <Link to="/review" className="daily-attention__tile daily-attention__tile--action">
+            <span className="daily-attention__label">Review Inbox</span>
+            <strong>{reviewCount.loading ? '...' : reviewCount.count}</strong>
+            <span>{reviewCount.count > 0 ? 'Pending suggestions' : 'No pending review items'}</span>
+          </Link>
+
+          <div className="daily-attention__tile">
+            <span className="daily-attention__label">Earlier Tasks</span>
+            <strong>{loadingTaskAttention ? '...' : attentionSummary.overdueCount}</strong>
+            <span>{attentionSummary.overdueCount > 0 ? 'Due before this day' : 'Nothing earlier is waiting'}</span>
+          </div>
+
+          <Link to={`/inbox/tasks/${dateISO}`} className="daily-attention__tile daily-attention__tile--action">
+            <span className="daily-attention__label">Today Tasks</span>
+            <strong>{loadingTaskAttention ? '...' : attentionSummary.todayTaskCount}</strong>
+            <span>
+              {attentionSummary.nextTask?.task?.title
+                ? `${attentionSummary.nextTask.label}: ${attentionSummary.nextTask.task.title}`
+                : 'No dated tasks for this day'}
+            </span>
+          </Link>
+
+          <a href="#daily-agenda" className="daily-attention__tile daily-attention__tile--action">
+            <span className="daily-attention__label">Next Schedule</span>
+            <strong>
+              {loadingAgenda
+                ? '...'
+                : attentionSummary.nextTimelineItem
+                  ? attentionSummary.nextTimelineItem.time ? formatHM(attentionSummary.nextTimelineItem.time) : 'All day'
+                  : 'None'}
+            </strong>
+            <span>{attentionSummary.nextTimelineItem?.title || 'Nothing scheduled for this day'}</span>
+          </a>
+        </div>
+
+        {(reviewCount.error || taskAttentionError) && (
+          <div className="daily-attention__note muted">
+            {[reviewCount.error, taskAttentionError].filter(Boolean).join(' ')}
+          </div>
+        )}
+      </section>
+
       <NotesSection date={dateISO} />
 
       <section className="daily-layout">
@@ -378,13 +544,27 @@ export default function DailyPage() {
             <h3 className="daily-section-heading">Due Today</h3>
             {renderSafe(
               TaskList,
-              { key: `due-${taskListKey}`, date: dateISO, bucket: 'dueToday', header: null, keepCompleted: false },
+              {
+                key: `due-${taskListKey}`,
+                date: dateISO,
+                bucket: 'dueToday',
+                header: null,
+                keepCompleted: false,
+                onTasksChanged: handleTasksChanged,
+              },
               'TaskList'
             )}
             <h3 className="daily-section-heading daily-section-heading--spaced">On Your Radar</h3>
             {renderSafe(
               TaskList,
-              { key: `radar-${taskListKey}`, date: dateISO, bucket: 'onYourRadar', header: null, keepCompleted: false },
+              {
+                key: `radar-${taskListKey}`,
+                date: dateISO,
+                bucket: 'onYourRadar',
+                header: null,
+                keepCompleted: false,
+                onTasksChanged: handleTasksChanged,
+              },
               'TaskList'
             )}
             <div className="daily-suggestions">
@@ -463,7 +643,7 @@ export default function DailyPage() {
               const safeText =
                 toDisplay(en?.text ?? en?.content ?? '') || <span className="muted">(no text)</span>;
               return (
-                <div key={en._id} className="entry-card">
+                <div key={en._id} id={`entry-${en._id}`} className="entry-card">
                   <div className="entry-text">{safeText}</div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                     {renderSafe(EntryQuickAssign, {
@@ -486,7 +666,7 @@ export default function DailyPage() {
         </div>
 
         <aside className="daily-side">
-          <div className="panel">
+          <div className="panel" id="daily-agenda">
             <div className="side-header">
               <h3 className="font-thread text-vein">Appointments & Events</h3>
               <div style={{ display: 'flex', gap: 8 }}>

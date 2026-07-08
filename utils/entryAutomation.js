@@ -298,6 +298,10 @@ function cleanCalendarTitle(value = "") {
     .trim();
 
   title = title
+    .replace(/^(?:i|we)\s+(?:am|are)['’]?\s+going\s+to\s+/i, "")
+    .replace(/^(?:i|we)['’]?m\s+going\s+to\s+/i, "")
+    .replace(/^(?:i|we)\s+(?:plan|planned)\s+to\s+/i, "")
+    .replace(/^(?:i|we)['’]?m\s+planning\s+to\s+/i, "")
     .replace(/^(?:i|we)\s+(?:have|had|got)\s+(?:a|an|the)?\s*/i, "")
     .replace(/^(?:i|we)['’]ve\s+(?:got\s+)?(?:a|an|the)?\s*/i, "")
     .replace(/^there(?:'|’)?s\s+(?:a|an|the)?\s*/i, "")
@@ -307,6 +311,74 @@ function cleanCalendarTitle(value = "") {
 
   if (!title) return "";
   return title.charAt(0).toUpperCase() + title.slice(1);
+}
+
+function daysInMonth(year, monthIndex) {
+  return new Date(Date.UTC(year, monthIndex + 1, 0, 12)).getUTCDate();
+}
+
+function resolveOrdinalDayDate(day, entryDateISO = null) {
+  const ordinalDay = Number(day);
+  if (!Number.isInteger(ordinalDay) || ordinalDay < 1 || ordinalDay > 31) return "";
+
+  const base = entryDateISO && /^\d{4}-\d{2}-\d{2}$/.test(String(entryDateISO))
+    ? new Date(`${entryDateISO}T12:00:00Z`)
+    : new Date();
+  if (Number.isNaN(base.getTime())) return "";
+
+  let year = base.getUTCFullYear();
+  let month = base.getUTCMonth();
+  const baseDay = base.getUTCDate();
+
+  if (ordinalDay < baseDay || ordinalDay > daysInMonth(year, month)) {
+    for (let offset = 1; offset <= 12; offset += 1) {
+      const candidateMonth = month + offset;
+      const candidateYear = year + Math.floor(candidateMonth / 12);
+      const normalizedMonth = candidateMonth % 12;
+      if (ordinalDay <= daysInMonth(candidateYear, normalizedMonth)) {
+        year = candidateYear;
+        month = normalizedMonth;
+        break;
+      }
+    }
+  }
+
+  if (ordinalDay > daysInMonth(year, month)) return "";
+  return [
+    year,
+    String(month + 1).padStart(2, "0"),
+    String(ordinalDay).padStart(2, "0"),
+  ].join("-");
+}
+
+function parseOrdinalDayHits(raw = "", entryDateISO = null) {
+  const hits = [];
+  const re = /\bon\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)\b/gi;
+  let match;
+  while ((match = re.exec(raw))) {
+    const dateISO = resolveOrdinalDayDate(match[1], entryDateISO);
+    if (!dateISO) continue;
+    hits.push({
+      text: match[0],
+      index: match.index,
+      dateISO,
+      hasTime: false,
+    });
+  }
+  return hits;
+}
+
+function isPersonalPlanText(text = "") {
+  const source = String(text || "").toLowerCase();
+  if (!source) return false;
+  return /\b(?:i|we)(?:'m|'re| am| are)?\s+(?:going|planning)\s+to\b/.test(source) ||
+    /\b(?:i|we)\s+(?:plan|planned)\s+to\b/.test(source) ||
+    /\b(?:visit|visiting|see|meet|meeting|go to|go over to|come over|dinner|lunch|brunch)\b/.test(source);
+}
+
+function shouldCreateDateOnlyEvent(raw = "") {
+  const eventHint = /(birthday|anniversary|holiday|christmas|easter|thanksgiving|new year)/i;
+  return eventHint.test(raw) || isPersonalPlanText(raw);
 }
 
 function parseAppointmentsFromText(text = "", entryDateISO = null) {
@@ -320,26 +392,41 @@ function parseAppointmentsFromText(text = "", entryDateISO = null) {
     const appointments = [];
     const importantEvents = [];
 
-    const eventHint = /(birthday|anniversary|holiday|christmas|easter|thanksgiving|new year)/i;
     const apptHint = /(appointment|dentist|doctor|clinic|meeting|call|pickup|drop[- ]?off|therapy|vet|interview)/i;
+    const parsedHits = [
+      ...results.map((r) => {
+        const date = r.start?.date?.();
+        if (!date || Number.isNaN(date.getTime())) return null;
+        return {
+          text: String(r.text || ""),
+          index: typeof r.index === "number" ? r.index : raw.toLowerCase().indexOf(String(r.text || "").toLowerCase()),
+          dateISO: toISODateString(date),
+          hasTime: r.start?.isCertain?.("hour") || r.start?.isCertain?.("minute"),
+          date,
+        };
+      }).filter(Boolean),
+      ...parseOrdinalDayHits(raw, entryDateISO),
+    ];
 
-    for (const r of results) {
-      const date = r.start?.date?.();
-      if (!date || Number.isNaN(date.getTime())) continue;
-      const dateISO = toISODateString(date);
+    const seenHits = new Set();
+    for (const hit of parsedHits) {
+      const dateISO = hit.dateISO;
       if (!dateISO) continue;
+      const hitKey = `${hit.index}|${hit.text}|${dateISO}|${hit.hasTime ? "time" : "day"}`;
+      if (seenHits.has(hitKey)) continue;
+      seenHits.add(hitKey);
 
-      const hasTime = r.start?.isCertain?.("hour") || r.start?.isCertain?.("minute");
-      const idx = typeof r.index === "number" ? r.index : raw.toLowerCase().indexOf(String(r.text || "").toLowerCase());
+      const hasTime = !!hit.hasTime;
+      const idx = hit.index;
       const titleRaw = idx > 0 ? raw.slice(0, idx).trim() : raw.trim();
-      const title = cleanCalendarTitle(titleRaw.replace(/[,:-]+$/g, "").trim()) || cleanCalendarTitle(String(r.text || "").trim());
+      const title = cleanCalendarTitle(titleRaw.replace(/[,:-]+$/g, "").trim()) || cleanCalendarTitle(String(hit.text || "").trim());
       if (!title) continue;
 
       if (hasTime && apptHint.test(raw)) {
-        const hh = String(date.getHours()).padStart(2, "0");
-        const mm = String(date.getMinutes()).padStart(2, "0");
+        const hh = String(hit.date.getHours()).padStart(2, "0");
+        const mm = String(hit.date.getMinutes()).padStart(2, "0");
         appointments.push({ title, date: dateISO, timeStart: `${hh}:${mm}` });
-      } else if (eventHint.test(raw)) {
+      } else if (shouldCreateDateOnlyEvent(raw)) {
         importantEvents.push({ title, date: dateISO, details: "" });
       }
     }
@@ -348,6 +435,42 @@ function parseAppointmentsFromText(text = "", entryDateISO = null) {
   } catch (err) {
     console.warn("[entryAutomation] parseAppointmentsFromText failed:", err?.message || err);
     return { appointments: [], importantEvents: [] };
+  }
+}
+
+async function runParsedCalendarSideEffects({ entry, userId }) {
+  try {
+    const parsed = parseAppointmentsFromText(entry?.text || "", entry?.date);
+
+    if (Array.isArray(parsed?.appointments)) {
+      for (const ap of parsed.appointments) {
+        const timeStart = normalizeHHMM(ap.timeStart);
+        if (!timeStart) continue;
+        await upsertAppointment({
+          userId,
+          title: ap.title,
+          date: normalizeDate(ap.date),
+          timeStart,
+          cluster: entry.cluster || null,
+          entryId: entry._id,
+        });
+      }
+    }
+
+    if (Array.isArray(parsed?.importantEvents)) {
+      for (const ev of parsed.importantEvents) {
+        await upsertImportantEvent({
+          userId,
+          title: ev.title,
+          date: normalizeDate(ev.date),
+          details: ev.details || "",
+          cluster: entry.cluster || null,
+          entryId: entry._id,
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("[entryAutomation] parsed appointment/event side-effects failed:", err?.message || err);
   }
 }
 
@@ -768,39 +891,7 @@ export async function createEntryWithAutomation({ userId, payload = {} }) {
 
   await runNlpSideEffects({ entry, analysis, userId });
 
-  try {
-    const parsed = parseAppointmentsFromText(entry?.text || "", entry?.date);
-
-    if (Array.isArray(parsed?.appointments)) {
-      for (const ap of parsed.appointments) {
-        const timeStart = normalizeHHMM(ap.timeStart);
-        if (!timeStart) continue;
-        await upsertAppointment({
-          userId,
-          title: ap.title,
-          date: normalizeDate(ap.date),
-          timeStart,
-          cluster: entry.cluster || null,
-          entryId: entry._id,
-        });
-      }
-    }
-
-    if (Array.isArray(parsed?.importantEvents)) {
-      for (const ev of parsed.importantEvents) {
-        await upsertImportantEvent({
-          userId,
-          title: ev.title,
-          date: normalizeDate(ev.date),
-          details: ev.details || "",
-          cluster: entry.cluster || null,
-          entryId: entry._id,
-        });
-      }
-    }
-  } catch (err) {
-    console.warn("[entryAutomation] parsed appointment/event side-effects failed:", err?.message || err);
-  }
+  await runParsedCalendarSideEffects({ entry, userId });
 
   if (!gatherOnlyEntry && !interestOnlyEntry) {
     await generateRipplesAndSuggestions({ entry, text: normalized.text, userId });
@@ -875,6 +966,7 @@ export async function updateEntryWithAutomation({ userId, entryId, updates = {} 
   if (coreChanged) {
     await clearAutomationCalendarArtifacts({ userId, entryId: updated._id });
     await runNlpSideEffects({ entry: updated, analysis, userId });
+    await runParsedCalendarSideEffects({ entry: updated, userId });
   }
 
   await clearRippleArtifacts({ userId, entryId: updated._id });
@@ -898,6 +990,8 @@ export async function updateEntryWithAutomation({ userId, entryId, updates = {} 
 export const __testables = {
   buildSuggestedTasks,
   normalizeOptionalString,
+  parseAppointmentsFromText,
+  resolveOrdinalDayDate,
 };
 
 export default {

@@ -91,6 +91,9 @@ vi.mock('../../models/Cluster.js', () => ({
 }));
 
 const { createEntryWithAutomation } = await import('../entryAutomation.js');
+const { __testables } = await import('../entryAutomation.js');
+
+const visitMomText = "I'm going to visit my mom on the 13th! It'll be the first time I've visited as really myself and not as a mom since I've had Colton, I'm really looking forward to it.";
 
 describe('entry automation calendar extraction', () => {
   beforeEach(() => {
@@ -131,15 +134,32 @@ describe('entry automation calendar extraction', () => {
     mocks.appointmentCreate.mockImplementation(async (doc) => ({ _id: 'appointment-1', ...doc }));
   });
 
-  async function createEntry(text) {
+  async function createEntry(text, date = '2026-06-08') {
     return createEntryWithAutomation({
       userId: 'user-1',
       payload: {
-        date: '2026-06-08',
+        date,
         text,
       },
     });
   }
+
+  it('resolves standalone ordinal dates against the entry date', () => {
+    expect(__testables.resolveOrdinalDayDate(13, '2026-07-08')).toBe('2026-07-13');
+    expect(__testables.resolveOrdinalDayDate(13, '2026-07-13')).toBe('2026-07-13');
+    expect(__testables.resolveOrdinalDayDate(13, '2026-07-14')).toBe('2026-08-13');
+  });
+
+  it('parses a dated personal visit plan into a clean important event candidate', () => {
+    const parsed = __testables.parseAppointmentsFromText(visitMomText, '2026-07-08');
+
+    expect(parsed.appointments).toEqual([]);
+    expect(parsed.importantEvents).toHaveLength(1);
+    expect(parsed.importantEvents[0]).toMatchObject({
+      title: 'Visit my mom',
+      date: '2026-07-13',
+    });
+  });
 
   it('creates a linked appointment from a high-confidence dated appointment entry', async () => {
     const entry = await createEntry("I have a doctor's appointment at 3pm on June 25th.");
@@ -158,6 +178,24 @@ describe('entry automation calendar extraction', () => {
     }));
     expect(mocks.suggestedGatherItemInsertMany).not.toHaveBeenCalled();
     expect(mocks.taskInsertMany).not.toHaveBeenCalled();
+  });
+
+  it('creates a linked important event from a dated personal visit plan', async () => {
+    const entry = await createEntry(visitMomText, '2026-07-08');
+
+    expect(entry).toMatchObject({
+      _id: 'entry-1',
+      text: visitMomText,
+    });
+    expect(mocks.importantEventCreate).toHaveBeenCalledTimes(1);
+    expect(mocks.importantEventCreate).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'user-1',
+      title: 'Visit my mom',
+      date: '2026-07-13',
+      entryId: 'entry-1',
+      source: 'entry-automation',
+    }));
+    expect(mocks.appointmentCreate).not.toHaveBeenCalled();
   });
 
   it.each([

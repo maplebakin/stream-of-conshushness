@@ -167,6 +167,7 @@ vi.mock('../../models/Cluster.js', () => ({
 }));
 
 const entriesRouter = (await import('../entries.js')).default;
+const visitMomText = "I'm going to visit my mom on the 13th! It'll be the first time I've visited as really myself and not as a mom since I've had Colton, I'm really looking forward to it.";
 
 describe('entry calendar automation artifacts', () => {
   const userId = new ObjectId();
@@ -299,5 +300,26 @@ describe('entry calendar automation artifacts', () => {
       entryId: entry._id,
       source: 'entry-automation',
     });
+  });
+
+  it('creates a linked important event from a dated personal visit plan', async () => {
+    const entryRes = await request(app)
+      .post('/api/entries')
+      .send({
+        date: '2026-07-08',
+        text: visitMomText,
+      });
+
+    expect(entryRes.status).toBe(201);
+    const entry = store.entries[0];
+    expect(store.appointments).toHaveLength(0);
+    expect(store.importantEvents).toHaveLength(1);
+    expect(store.importantEvents[0]).toMatchObject({
+      date: '2026-07-13',
+      entryId: entry._id,
+      source: 'entry-automation',
+    });
+    expect(store.importantEvents[0].title.toLowerCase()).toContain('visit');
+    expect(store.importantEvents[0].title.toLowerCase()).toContain('mom');
   });
 });

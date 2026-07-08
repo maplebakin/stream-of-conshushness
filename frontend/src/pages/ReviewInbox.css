@@ -34,6 +34,37 @@
   color: var(--color-success);
 }
 
+.review-shortcuts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0.65rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-surface-soft) 34%, var(--color-surface) 66%);
+  color: var(--color-muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.review-shortcuts kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  min-height: 1.35rem;
+  margin-inline: 0.1rem;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
+  border-radius: 0.35rem;
+  background: color-mix(in srgb, var(--color-surface) 92%, white 8%);
+  color: var(--color-text-strong);
+  font-family: var(--font-sans);
+  font-size: 0.76rem;
+  line-height: 1;
+}
+
 .review-inbox__search {
   display: flex;
   align-items: center;
@@ -165,6 +196,11 @@
   );
 }
 
+.review-inbox-item.is-focused {
+  outline: 3px solid color-mix(in srgb, var(--color-spool) 34%, transparent);
+  outline-offset: 2px;
+}
+
 .review-inbox-item__select {
   display: inline-flex;
   align-items: center;
@@ -270,6 +306,19 @@
   text-transform: uppercase;
 }
 
+.review-source-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.review-source-actions__text {
+  color: var(--color-muted);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
 .review-inbox-item__meta {
   display: flex;
   align-items: center;
@@ -289,6 +338,12 @@
   gap: var(--space-2);
 }
 
+.review-button--compact {
+  min-height: 32px;
+  padding: 0.28rem 0.62rem;
+  font-size: 0.82rem;
+}
+
 @media (max-width: 760px) {
   .review-inbox-item {
     grid-template-columns: auto minmax(0, 1fr);
@@ -306,5 +361,18 @@
 
   .review-inbox-item__actions .review-button {
     flex: 1 1 130px;
+  }
+
+  .review-shortcuts {
+    align-items: flex-start;
+  }
+
+  .review-source-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .review-source-actions .review-button {
+    width: fit-content;
   }
 }

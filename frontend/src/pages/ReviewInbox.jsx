@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CalendarDays,
@@ -55,6 +55,40 @@ function sourceLabel(item) {
 
 function sourcePreview(item) {
   return String(item.sourceText || item.sourceEntryExcerpt || '').trim();
+}
+
+function sourceEntryPath(item) {
+  const hasSourceContext = item.sourceEntryId || item.sourceEntryExcerpt || item.sourceText || item.sourceDate;
+  if (!hasSourceContext) return '';
+  const date = item.sourceDate || item.date || '';
+  if (!date) return '';
+  const hash = item.sourceEntryId ? `#entry-${encodeURIComponent(item.sourceEntryId)}` : '';
+  return `/day/${date}${hash}`;
+}
+
+function sourceLinkLabel(item) {
+  return item.sourceEntryId || item.sourceEntryExcerpt ? 'Open source entry' : 'View source day';
+}
+
+function trustText(item) {
+  const parts = [];
+  if (item.sourceText) parts.push('Detected from source text');
+  else if (item.sourceEntryExcerpt) parts.push('Linked to source entry');
+  else if (item.sourceEntryId) parts.push('Linked to source entry');
+  if (item.sourceDate) parts.push(`source date ${item.sourceDate}`);
+  if (item.dueDate && item.kind === 'suggestedTask') parts.push(`suggested due ${item.dueDate}`);
+  return parts.join(' · ');
+}
+
+function isTypingTarget(target) {
+  if (!target) return false;
+  const tagName = String(target.tagName || '').toLowerCase();
+  return (
+    tagName === 'input' ||
+    tagName === 'textarea' ||
+    tagName === 'select' ||
+    target.isContentEditable
+  );
 }
 
 function matchesSearch(item, query) {
@@ -150,6 +184,8 @@ export default function ReviewInbox() {
   const [confirmingKey, setConfirmingKey] = useState('');
   const [bulkConfirmAction, setBulkConfirmAction] = useState('');
   const [completedItems, setCompletedItems] = useState([]);
+  const [focusedKey, setFocusedKey] = useState('');
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -189,6 +225,14 @@ export default function ReviewInbox() {
   const selectedCount = selectedItems.length;
   const allVisibleSelected = visibleCount > 0 && filteredItems.every((item) => selectedKeys.has(itemKey(item)));
   const selectedHasCalendar = selectedItems.some((item) => calendarItem(item.kind));
+  const focusedItem = useMemo(
+    () => filteredItems.find((item) => itemKey(item) === focusedKey) || null,
+    [filteredItems, focusedKey]
+  );
+  const focusedItemRef = useRef(null);
+  const busyIdsRef = useRef(busyIds);
+  const applyActionRef = useRef(null);
+  const toggleSelectedRef = useRef(null);
 
   useEffect(() => {
     const availableKeys = new Set(items.map(itemKey));
@@ -202,6 +246,22 @@ export default function ReviewInbox() {
     setConfirmingKey('');
     setBulkConfirmAction('');
   }, [activeGroup, normalizedQuery]);
+
+  useEffect(() => {
+    if (!filteredItems.length) {
+      if (focusedKey) setFocusedKey('');
+      return;
+    }
+    if (!filteredItems.some((item) => itemKey(item) === focusedKey)) {
+      setFocusedKey(itemKey(filteredItems[0]));
+    }
+  }, [filteredItems, focusedKey]);
+
+  useEffect(() => {
+    if (!focusedKey) return;
+    const element = document.getElementById(`review-item-${focusedKey}`);
+    element?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [focusedKey]);
 
   function setBusy(item, busy) {
     const key = itemKey(item);
@@ -249,7 +309,7 @@ export default function ReviewInbox() {
     });
   }
 
-  function toggleSelected(item) {
+  const toggleSelected = useCallback((item) => {
     const key = itemKey(item);
     setSelectedKeys((current) => {
       const next = new Set(current);
@@ -258,7 +318,7 @@ export default function ReviewInbox() {
       return next;
     });
     setBulkConfirmAction('');
-  }
+  }, []);
 
   function toggleVisibleSelection() {
     setSelectedKeys((current) => {
@@ -277,6 +337,13 @@ export default function ReviewInbox() {
     setSelectedKeys(new Set());
     setBulkConfirmAction('');
   }
+
+  const moveFocus = useCallback((delta) => {
+    if (!filteredItems.length) return;
+    const currentIndex = Math.max(0, filteredItems.findIndex((item) => itemKey(item) === focusedKey));
+    const nextIndex = Math.min(filteredItems.length - 1, Math.max(0, currentIndex + delta));
+    setFocusedKey(itemKey(filteredItems[nextIndex]));
+  }, [filteredItems, focusedKey]);
 
   function updateDraft(item, field, value) {
     const key = itemKey(item);
@@ -402,6 +469,47 @@ export default function ReviewInbox() {
     }
   }
 
+  useEffect(() => {
+    focusedItemRef.current = focusedItem;
+    busyIdsRef.current = busyIds;
+    applyActionRef.current = applyAction;
+    toggleSelectedRef.current = toggleSelected;
+  });
+
+  useEffect(() => {
+    function onKeyDown(event) {
+      if (isTypingTarget(event.target) || event.altKey || event.ctrlKey || event.metaKey) return;
+
+      const key = event.key;
+      if (key === '?' || (key === '/' && event.shiftKey)) {
+        event.preventDefault();
+        setShowShortcuts((value) => !value);
+        return;
+      }
+      if (!filteredItems.length) return;
+
+      if (key === 'j' || key === 'ArrowDown') {
+        event.preventDefault();
+        moveFocus(1);
+      } else if (key === 'k' || key === 'ArrowUp') {
+        event.preventDefault();
+        moveFocus(-1);
+      } else if (key === 'x' && focusedItemRef.current) {
+        event.preventDefault();
+        toggleSelectedRef.current?.(focusedItemRef.current);
+      } else if (key === 'a' && focusedItemRef.current && !busyIdsRef.current.has(itemKey(focusedItemRef.current))) {
+        event.preventDefault();
+        applyActionRef.current?.(focusedItemRef.current, 'primary');
+      } else if (key === 'r' && focusedItemRef.current && !busyIdsRef.current.has(itemKey(focusedItemRef.current))) {
+        event.preventDefault();
+        applyActionRef.current?.(focusedItemRef.current, 'secondary');
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [filteredItems.length, moveFocus]);
+
   return (
     <div className="page review-inbox">
       <header className="page-header review-inbox__header">
@@ -412,6 +520,14 @@ export default function ReviewInbox() {
           </p>
         </div>
         <div className="page-actions">
+          <button
+            type="button"
+            className="review-button review-button--ghost"
+            onClick={() => setShowShortcuts((value) => !value)}
+            aria-expanded={showShortcuts}
+          >
+            Shortcuts
+          </button>
           <button type="button" className="review-button review-button--ghost" onClick={load} disabled={loading}>
             <RefreshCw size={16} aria-hidden="true" />
             {loading ? 'Loading' : 'Refresh'}
@@ -427,6 +543,17 @@ export default function ReviewInbox() {
               <Link to={item.to}>{item.label}</Link>
             </div>
           ))}
+        </section>
+      )}
+
+      {showShortcuts && (
+        <section className="review-shortcuts" aria-label="Review Inbox keyboard shortcuts">
+          <span><kbd>j</kbd>/<kbd>↓</kbd> next</span>
+          <span><kbd>k</kbd>/<kbd>↑</kbd> previous</span>
+          <span><kbd>x</kbd> select</span>
+          <span><kbd>a</kbd> accept or keep</span>
+          <span><kbd>r</kbd> reject or dismiss</span>
+          <span><kbd>?</kbd> hide help</span>
         </section>
       )}
 
@@ -528,9 +655,19 @@ export default function ReviewInbox() {
             const selected = selectedKeys.has(key);
             const confirmDismiss = confirmingKey === key;
             const preview = sourcePreview(item);
+            const sourcePath = sourceEntryPath(item);
+            const confidenceText = trustText(item);
+            const focused = focusedKey === key;
 
             return (
-              <article key={key} className={`review-inbox-item review-inbox-item--${item.group}${selected ? ' is-selected' : ''}`}>
+              <article
+                key={key}
+                id={`review-item-${key}`}
+                className={`review-inbox-item review-inbox-item--${item.group}${selected ? ' is-selected' : ''}${focused ? ' is-focused' : ''}`}
+                tabIndex={-1}
+                data-review-key={key}
+                onClick={() => setFocusedKey(key)}
+              >
                 <label className="review-inbox-item__select">
                   <input
                     type="checkbox"
@@ -595,6 +732,16 @@ export default function ReviewInbox() {
                       <span>{item.sourceText ? 'Source text' : 'Source entry'}</span>
                       {preview}
                     </p>
+                  )}
+                  {(confidenceText || sourcePath) && (
+                    <div className="review-source-actions">
+                      {confidenceText && <span className="review-source-actions__text">{confidenceText}</span>}
+                      {sourcePath && (
+                        <Link to={sourcePath} className="review-button review-button--ghost review-button--compact">
+                          {sourceLinkLabel(item)}
+                        </Link>
+                      )}
+                    </div>
                   )}
                   <div className="review-inbox-item__meta">
                     {Array.isArray(item.meta) && item.meta.map((meta) => (
