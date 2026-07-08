@@ -132,6 +132,10 @@
   display: grid;
   gap: var(--space-3);
   margin-bottom: var(--space-3);
+  border-color: color-mix(in srgb, var(--color-ripple) 18%, var(--color-border) 82%);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 94%, white 6%), var(--color-surface)),
+    var(--color-surface);
 }
 
 .daily-page .daily-attention__lead {
@@ -159,10 +163,11 @@
 
 .daily-page .daily-attention__recommendation {
   margin: 0;
-  padding: var(--space-2);
-  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  min-height: 100%;
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-ripple) 32%, var(--color-border) 68%);
   border-radius: var(--radius-input);
-  background: color-mix(in srgb, var(--color-surface) 84%, var(--color-ripple) 16%);
+  background: color-mix(in srgb, var(--color-surface) 82%, var(--color-ripple) 18%);
   color: var(--color-ink);
   line-height: 1.4;
 }
@@ -176,13 +181,16 @@
 .daily-page .daily-attention__tile {
   min-width: 0;
   display: grid;
-  gap: 0.2rem;
-  padding: var(--space-2);
+  grid-template-rows: auto auto 1fr;
+  gap: 0.28rem;
+  min-height: 118px;
+  padding: var(--space-3);
   border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
   border-radius: var(--radius-input);
   background: color-mix(in srgb, var(--color-surface) 92%, white 8%);
   color: var(--color-ink);
   text-decoration: none;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 
 .daily-page .daily-attention__tile--action {
@@ -195,6 +203,16 @@
   transform: translateY(-1px);
 }
 
+.daily-page .daily-attention__tile--action:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.daily-page .daily-attention__tile--needs-action {
+  border-color: color-mix(in srgb, var(--color-spool) 42%, var(--color-border) 58%);
+  background: color-mix(in srgb, var(--color-surface) 82%, var(--color-spool) 18%);
+}
+
 .daily-page .daily-attention__label {
   color: var(--color-vein);
   font-family: var(--font-glow);
@@ -204,7 +222,7 @@
 .daily-page .daily-attention__tile strong {
   color: var(--color-plum);
   font-family: var(--font-thread);
-  font-size: 1.25rem;
+  font-size: 1.55rem;
   line-height: 1;
 }
 
@@ -456,6 +474,32 @@
   gap: var(--space-2); margin-bottom: var(--space-2);
 }
 .daily-page .entry-card .entry-text { margin-bottom: .5rem; }
+
+.daily-page .entry-actions-row,
+.daily-page .side-header__actions,
+.daily-page .agenda-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.daily-page .agenda-type-label {
+  margin-left: var(--space-2);
+}
+
+.daily-page .agenda-details {
+  margin-top: 0.2rem;
+}
+
+.daily-page .agenda-actions,
+.daily-page .hourly-schedule-wrap {
+  margin-top: var(--space-2);
+}
+
+.daily-page .hourly-schedule-hidden {
+  margin-top: var(--space-1);
+}
 
 .daily-page .today-notes-panel {
   display: grid;

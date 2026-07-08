@@ -494,13 +494,16 @@ export default function DailyPage() {
         </div>
 
         <div className="daily-attention__grid" aria-live="polite">
-          <Link to="/review" className="daily-attention__tile daily-attention__tile--action">
+          <Link
+            to="/review"
+            className={`daily-attention__tile daily-attention__tile--action${reviewCount.count > 0 ? ' daily-attention__tile--needs-action' : ''}`}
+          >
             <span className="daily-attention__label">Review Inbox</span>
             <strong>{reviewCount.loading ? '...' : reviewCount.count}</strong>
             <span>{reviewCount.count > 0 ? 'Pending suggestions' : 'No pending review items'}</span>
           </Link>
 
-          <div className="daily-attention__tile">
+          <div className={`daily-attention__tile${attentionSummary.overdueCount > 0 ? ' daily-attention__tile--needs-action' : ''}`}>
             <span className="daily-attention__label">Earlier Tasks</span>
             <strong>{loadingTaskAttention ? '...' : attentionSummary.overdueCount}</strong>
             <span>{attentionSummary.overdueCount > 0 ? 'Due before this day' : 'Nothing earlier is waiting'}</span>
@@ -645,7 +648,7 @@ export default function DailyPage() {
               return (
                 <div key={en._id} id={`entry-${en._id}`} className="entry-card">
                   <div className="entry-text">{safeText}</div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div className="entry-actions-row">
                     {renderSafe(EntryQuickAssign, {
                       entry: en,
                       onUpdated: handleEntryUpdated,
@@ -669,7 +672,7 @@ export default function DailyPage() {
           <div className="panel" id="daily-agenda">
             <div className="side-header">
               <h3 className="font-thread text-vein">Appointments & Events</h3>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="side-header__actions">
                 <button className="button chip" onClick={loadAgenda} title="Refresh agenda">Refresh</button>
               </div>
             </div>
@@ -696,18 +699,18 @@ export default function DailyPage() {
                       <div className="agenda-main">
                         <div className="agenda-title">
                           {item.title}
-                          {item.type === 'important' && <span className="muted" style={{ marginLeft: 8 }}>(Important)</span>}
+                          {item.type === 'important' && <span className="agenda-type-label muted">(Important)</span>}
                         </div>
                         <div className="agenda-meta muted">
                           {item.type === 'appointment' ? appointmentDetails.join(' · ') : 'All day'}
                         </div>
                         {item.type === 'appointment' && item.details && (
-                          <div className="agenda-meta muted" style={{ marginTop: 3 }}>
+                          <div className="agenda-meta agenda-details muted">
                             {item.details}
                           </div>
                         )}
                         {item.type === 'appointment' && (
-                          <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                          <div className="agenda-actions">
                             <button type="button" className="button chip" onClick={() => openEditAppointment(item)} title="Edit appointment">Edit</button>
                             <button
                               type="button"
@@ -740,7 +743,7 @@ export default function DailyPage() {
           </div>
 
           <div className="panel">
-            <div className="side-header" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <div className="side-header">
               <h3 className="font-thread text-vein">Hourly Schedule</h3>
               <button
                 className="button chip"
@@ -755,11 +758,11 @@ export default function DailyPage() {
             </div>
 
             {showSchedule ? (
-              <div style={{ marginTop: 8 }}>
+              <div className="hourly-schedule-wrap">
                 <HourlySchedule date={dateISO} />
               </div>
             ) : (
-              <p className="muted" style={{ marginTop: 4 }}>Hidden</p>
+              <p className="muted hourly-schedule-hidden">Hidden</p>
             )}
           </div>
 

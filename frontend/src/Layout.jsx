@@ -62,12 +62,27 @@ export default function Layout() {
             aria-label="Secondary navigation"
           >
             <div className="sidebar-inner">
-              <h2 className="sidebar-title">Review</h2>
-              <ul className="sidebar-nav">
+              <h2 className="sidebar-title">Command</h2>
+              <ul className="sidebar-nav sidebar-nav--primary">
+                <li>
+                  <NavLink to="/today" className={linkClass} title="Today">
+                    <span>Today</span>
+                  </NavLink>
+                </li>
                 <li>
                   <NavLink to="/review" className={linkClass} title="Review Inbox">
                     <span>Review Inbox</span>
                     {reviewCount > 0 && <strong className="sidebar-badge">{reviewCount}</strong>}
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/search" className={linkClass} title="Search">
+                    <span>Search</span>
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/calendar" className={linkClass} title="Calendar">
+                    <span>Calendar</span>
                   </NavLink>
                 </li>
               </ul>
@@ -92,11 +107,6 @@ export default function Layout() {
                   </NavLink>
                 </li>
                 <li>
-                  <NavLink to="/ripples" className={linkClass} title="Ripples">
-                    💡 <span>Ripples</span>
-                  </NavLink>
-                </li>
-                <li>
                   <NavLink to="/sections" className={linkClass} title="Sections">
                     🗂️ <span>Sections</span>
                   </NavLink>
@@ -111,6 +121,11 @@ export default function Layout() {
                     🎯 <span>Goals</span>
                   </NavLink>
                 </li>
+                <li>
+                  <NavLink to="/ripples" className={linkClass} title="Ripples">
+                    💡 <span>Ripples</span>
+                  </NavLink>
+                </li>
               </ul>
 
               <div className="sidebar-sep" />
@@ -120,11 +135,6 @@ export default function Layout() {
                 <li>
                   <NavLink to="/habits/analytics" className={linkClass} title="Habit Analytics">
                     📊 <span>Habit Analytics</span>
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink to="/search" className={linkClass} title="Search">
-                    🔍 <span>Search</span>
                   </NavLink>
                 </li>
                 <li>
@@ -159,7 +169,7 @@ export default function Layout() {
               <div className="sidebar-sep" />
 
               {/* Theme Toggle */}
-              <div style={{ padding: '0.5rem' }}>
+              <div className="sidebar-theme">
                 <ThemeToggle variant="button" />
               </div>
             </div>

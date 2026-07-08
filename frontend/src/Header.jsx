@@ -23,6 +23,12 @@ function isActivePath(pathname, to) {
     // /ripples and any child routes
     return pathname === '/ripples' || pathname.startsWith('/ripples/');
   }
+  if (to === '/review') {
+    return pathname === '/review';
+  }
+  if (to === '/search') {
+    return pathname === '/search';
+  }
   if (to === '/interests') {
     return pathname === '/interests' || pathname.startsWith('/interests/');
   }
@@ -74,47 +80,24 @@ export default function Header() {
       <nav className="primary-nav" aria-label="Primary navigation">
         <NavItem to="/" label="🌊 Stream" pathname={location.pathname} />
         <NavItem to="/today" label="📍 Today" pathname={location.pathname} />
+        <NavItem to="/review" label="Review" pathname={location.pathname} />
         <NavItem to="/calendar" label="📆 Calendar" pathname={location.pathname} />
+        <NavItem to="/search" label="Search" pathname={location.pathname} />
 
         {isAuthenticated && user && (
           <Link
             to="/account"
             title="Account"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              textDecoration: 'none',
-              marginLeft: '8px',
-            }}
+            className="account-link"
           >
             {user.profilePicture ? (
               <img
                 src={user.profilePicture}
                 alt={`${user.username}'s profile`}
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: '50%',
-                  objectFit: 'cover',
-                  border: '2px solid var(--border-primary)',
-                }}
+                className="account-avatar"
               />
             ) : (
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: '50%',
-                  background: 'var(--accent-primary)',
-                  border: '2px solid var(--border-primary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '0.9rem',
-                  fontWeight: 'bold',
-                  color: 'white',
-                }}
-              >
+              <div className="account-avatar account-avatar--initial">
                 {user.username?.[0]?.toUpperCase() || '?'}
               </div>
             )}
