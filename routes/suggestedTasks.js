@@ -109,6 +109,9 @@ router.put('/:id/accept', async (req, res) => {
     const clusterInput = req.body?.clusterId || req.body?.cluster || sug.cluster;
     const resolvedClusterId = clusterInput ? await resolveClusterIdForOwner(userId, clusterInput) : null;
     const clusters = resolvedClusterId ? [resolvedClusterId] : [];
+    const title = typeof req.body?.title === 'string' && req.body.title.trim()
+      ? req.body.title.trim().slice(0, 200)
+      : sug.title;
     const section = req.body?.section || sug.section;
     const sections = section ? [String(section)] : [];
     const priority = priorityToNumber(req.body?.priority ?? sug.priority);
@@ -117,7 +120,7 @@ router.put('/:id/accept', async (req, res) => {
 
     const task = await Task.create({
       userId,
-      title: sug.title,
+      title,
       priority,
       dueDate,
       rrule: sug.repeat || sug.rrule || '',

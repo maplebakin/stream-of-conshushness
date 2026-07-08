@@ -82,7 +82,12 @@ describe('review inbox route', () => {
         title: 'Printer ink',
         status: 'pending',
         list: 'Office',
-        sourceEntryId: { _id: 'entry-2', date: '2026-06-07', title: 'Office' },
+        sourceEntryId: {
+          _id: 'entry-2',
+          date: '2026-06-07',
+          title: 'Office',
+          text: 'Remember printer ink before the next office day.',
+        },
       },
     ]));
     mocks.suggestedInterestFind.mockReturnValue(makeQuery([
@@ -91,7 +96,12 @@ describe('review inbox route', () => {
         title: 'Tap dance',
         status: 'pending',
         category: 'Movement',
-        sourceEntryId: { _id: 'entry-3', date: '2026-06-06', title: 'Ideas' },
+        sourceEntryId: {
+          _id: 'entry-3',
+          date: '2026-06-06',
+          title: 'Ideas',
+          html: '<p>Look into tap dance classes this fall.</p>',
+        },
       },
     ]));
     mocks.rippleFind.mockReturnValue(makeQuery([
@@ -105,7 +115,12 @@ describe('review inbox route', () => {
         date: '2026-06-11',
         timeStart: '10:00',
         source: 'entry-automation',
-        entryId: { _id: 'entry-4', date: '2026-06-08', title: 'Planning' },
+        entryId: {
+          _id: 'entry-4',
+          date: '2026-06-08',
+          title: 'Planning',
+          content: 'Therapy is probably Thursday morning at 10.',
+        },
       },
     ]));
     mocks.eventFind.mockReturnValue(makeQuery([
@@ -114,7 +129,12 @@ describe('review inbox route', () => {
         title: 'Tax deadline',
         date: '2026-06-15',
         source: 'entry-automation',
-        entryId: { _id: 'entry-5', date: '2026-06-08', title: 'Dates' },
+        entryId: {
+          _id: 'entry-5',
+          date: '2026-06-08',
+          title: 'Dates',
+          text: 'Tax deadline is coming up in mid June.',
+        },
       },
     ]));
 
@@ -134,11 +154,31 @@ describe('review inbox route', () => {
     expect(res.body.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'suggestion-task-1', kind: 'suggestedTask', group: 'tasks' }),
-        expect.objectContaining({ id: 'suggestion-gather-1', kind: 'suggestedGatherItem', group: 'gather' }),
-        expect.objectContaining({ id: 'suggestion-interest-1', kind: 'suggestedInterest', group: 'interests' }),
+        expect.objectContaining({
+          id: 'suggestion-gather-1',
+          kind: 'suggestedGatherItem',
+          group: 'gather',
+          sourceEntryExcerpt: 'Remember printer ink before the next office day.',
+        }),
+        expect.objectContaining({
+          id: 'suggestion-interest-1',
+          kind: 'suggestedInterest',
+          group: 'interests',
+          sourceEntryExcerpt: 'Look into tap dance classes this fall.',
+        }),
         expect.objectContaining({ id: 'ripple-free', kind: 'ripple', group: 'ripples' }),
-        expect.objectContaining({ id: 'appointment-1', kind: 'calendarAppointment', group: 'calendar' }),
-        expect.objectContaining({ id: 'event-1', kind: 'calendarEvent', group: 'calendar' }),
+        expect.objectContaining({
+          id: 'appointment-1',
+          kind: 'calendarAppointment',
+          group: 'calendar',
+          sourceEntryExcerpt: 'Therapy is probably Thursday morning at 10.',
+        }),
+        expect.objectContaining({
+          id: 'event-1',
+          kind: 'calendarEvent',
+          group: 'calendar',
+          sourceEntryExcerpt: 'Tax deadline is coming up in mid June.',
+        }),
       ])
     );
     expect(res.body.items.some((item) => item.id === 'ripple-task')).toBe(false);

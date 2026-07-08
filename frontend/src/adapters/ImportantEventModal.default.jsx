@@ -2,9 +2,11 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
+import { useToast } from '../hooks/useToast.js';
 
 export default function ImportantEventModal({ defaultDate = '', onClose, onSaved }) {
   const { token } = useContext(AuthContext);
+  const { showToast } = useToast();
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(defaultDate);
@@ -24,7 +26,7 @@ export default function ImportantEventModal({ defaultDate = '', onClose, onSaved
       onClose?.();
     } catch (e) {
       console.error('create important event failed', e?.response?.data || e.message);
-      alert('Could not save event.');
+      showToast('Could not save event.', { type: 'error' });
     } finally {
       setSaving(false);
     }

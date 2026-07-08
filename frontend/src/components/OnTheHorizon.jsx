@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from '../api/axiosInstance.js';
-import { getAppointmentDetailParts } from '../utils/appointmentIds.js';
+import { getAppointmentDetailParts, getStoredAppointmentId } from '../utils/appointmentIds.js';
 
 function itemIcon(type) {
   return type === 'appointment' ? '🗓️' : '⭐';
@@ -18,6 +18,9 @@ export default function OnTheHorizon({
   onAddEvent,
   onEditAppointment,
   onDeleteAppointment,
+  confirmingAppointmentDeleteId = '',
+  confirmingAppointmentDeleteMessage = '',
+  onCancelAppointmentDelete,
 }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -80,6 +83,8 @@ export default function OnTheHorizon({
           {items.map((item) => {
             const isAppointment = item.type === 'appointment';
             const detailParts = isAppointment ? getAppointmentDetailParts(item) : [];
+            const appointmentDeleteId = isAppointment ? getStoredAppointmentId(item) : '';
+            const confirmingDelete = appointmentDeleteId && confirmingAppointmentDeleteId === appointmentDeleteId;
             return (
               <li
                 key={`${item.type}-${item.id}`}
@@ -114,8 +119,18 @@ export default function OnTheHorizon({
                       </button>
                     )}
                     {onDeleteAppointment && (
-                      <button type="button" className="button chip" onClick={() => onDeleteAppointment(item)} title="Delete appointment">
-                        Delete
+                      <button
+                        type="button"
+                        className="button chip"
+                        onClick={() => onDeleteAppointment(item)}
+                        title={confirmingDelete ? confirmingAppointmentDeleteMessage || 'Confirm delete appointment' : 'Delete appointment'}
+                      >
+                        {confirmingDelete ? 'Confirm Delete' : 'Delete'}
+                      </button>
+                    )}
+                    {confirmingDelete && onCancelAppointmentDelete && (
+                      <button type="button" className="button chip" onClick={onCancelAppointmentDelete}>
+                        Cancel
                       </button>
                     )}
                   </span>

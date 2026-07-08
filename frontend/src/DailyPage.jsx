@@ -26,6 +26,7 @@ import { renderSafe } from './utils/safeRender.js';
 import { toDisplayDate, todayISOInToronto, formatHM as formatHMUtil } from './utils/date.js';
 import { toDisplay } from './utils/display.js';
 import { isClustered } from './utils/isClustered.js';
+import { useReviewCount } from './hooks/useReviewCount.js';
 
 import './Main.css';
 import './dailypage.css';
@@ -85,6 +86,8 @@ export default function DailyPage() {
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [showApptModal, setShowApptModal] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState(null);
+  const [confirmingAppointmentDeleteId, setConfirmingAppointmentDeleteId] = useState('');
+  const [confirmingAppointmentDeleteMessage, setConfirmingAppointmentDeleteMessage] = useState('');
   const [autoCarry, setAutoCarry] = useState(() => localStorage.getItem('auto_cf') === '1');
   const [showSchedule, setShowSchedule] = useState(
     () => localStorage.getItem('show_sched') !== '0'
@@ -103,6 +106,8 @@ export default function DailyPage() {
   const [otherSuggestionCounts, setOtherSuggestionCounts] = useState({ gather: 0, interests: 0 });
   const [loadingOtherSuggestions, setLoadingOtherSuggestions] = useState(false);
   const [otherSuggestionsError, setOtherSuggestionsError] = useState('');
+  const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
+  const reviewCount = useReviewCount(Boolean(token), reviewRefreshKey);
 
   useEffect(() => {
     if (!routeDate) {
@@ -205,6 +210,7 @@ export default function DailyPage() {
     setTaskListKey(k => k + 1);
     setRippleListKey(k => k + 1);
     setSuggestionsKey(k => k + 1);
+    setReviewRefreshKey(k => k + 1);
     loadOtherSuggestionCounts();
   }
 
@@ -278,20 +284,31 @@ export default function DailyPage() {
 
   function openNewAppointment() {
     setEditingAppointment(null);
+    setConfirmingAppointmentDeleteId('');
+    setConfirmingAppointmentDeleteMessage('');
     setShowApptModal(true);
   }
 
   function openEditAppointment(appointment) {
     setEditingAppointment(appointment);
+    setConfirmingAppointmentDeleteId('');
+    setConfirmingAppointmentDeleteMessage('');
     setShowApptModal(true);
   }
 
   async function deleteAppointment(appointment) {
     const id = getStoredAppointmentId(appointment);
     if (!id) return;
-    if (!window.confirm(getAppointmentDeleteConfirmation(appointment))) return;
+    const confirmationMessage = getAppointmentDeleteConfirmation(appointment);
+    if (confirmingAppointmentDeleteId !== id) {
+      setConfirmingAppointmentDeleteId(id);
+      setConfirmingAppointmentDeleteMessage(confirmationMessage);
+      return;
+    }
     try {
       await axios.delete(`/api/appointments/${encodeURIComponent(id)}`);
+      setConfirmingAppointmentDeleteId('');
+      setConfirmingAppointmentDeleteMessage('');
       loadAgenda();
     } catch (err) {
       console.error('delete appointment failed', err?.response?.data || err.message);
@@ -373,7 +390,12 @@ export default function DailyPage() {
             <div className="daily-suggestions">
               <div className="side-header">
                 <h3 className="daily-section-heading">Suggested Tasks</h3>
-                <Link className="button chip" to={`/inbox/tasks/${dateISO}`}>Task inbox</Link>
+                <div className="daily-review-actions">
+                  <Link className="button chip" to="/review">
+                    Review Inbox{reviewCount.count > 0 ? ` (${reviewCount.count})` : ''}
+                  </Link>
+                  <Link className="button chip" to={`/inbox/tasks/${dateISO}`}>Task inbox</Link>
+                </div>
               </div>
               {renderSafe(
                 SuggestedTasksInbox,
@@ -483,6 +505,8 @@ export default function DailyPage() {
                   const appointmentDetails = item.type === 'appointment'
                     ? getAppointmentDetailParts(item, formatHM)
                     : [];
+                  const appointmentDeleteId = item.type === 'appointment' ? getStoredAppointmentId(item) : '';
+                  const confirmingDelete = appointmentDeleteId && confirmingAppointmentDeleteId === appointmentDeleteId;
 
                   return (
                     <li key={`${item.type}-${item._id}`} className="agenda-item">
@@ -505,7 +529,26 @@ export default function DailyPage() {
                         {item.type === 'appointment' && (
                           <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
                             <button type="button" className="button chip" onClick={() => openEditAppointment(item)} title="Edit appointment">Edit</button>
-                            <button type="button" className="button chip" onClick={() => deleteAppointment(item)} title="Delete appointment">Delete</button>
+                            <button
+                              type="button"
+                              className="button chip"
+                              onClick={() => deleteAppointment(item)}
+                              title={confirmingDelete ? confirmingAppointmentDeleteMessage || 'Confirm delete appointment' : 'Delete appointment'}
+                            >
+                              {confirmingDelete ? 'Confirm Delete' : 'Delete'}
+                            </button>
+                            {confirmingDelete && (
+                              <button
+                                type="button"
+                                className="button chip"
+                                onClick={() => {
+                                  setConfirmingAppointmentDeleteId('');
+                                  setConfirmingAppointmentDeleteMessage('');
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

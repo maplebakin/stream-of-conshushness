@@ -6,6 +6,7 @@ import { toDisplay, formatRecurrence } from './utils/display.js';
 import TaskModal from './TaskModal.jsx';
 import { normalizeClusterList } from './utils/clusterHelpers.js';
 import { todayISOInToronto } from './utils/date.js';
+import { useToast } from './hooks/useToast.js';
 import './RippleReviewUI.css';
 
 const band = (c) => (Number(c) >= 0.66 ? 'high' : Number(c) >= 0.33 ? 'medium' : 'low');
@@ -79,6 +80,7 @@ async function dismissRipple(id, headers) {
  */
 export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) {
   const { token } = useContext(AuthContext);
+  const { showToast } = useToast();
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : {}),
     [token]
@@ -181,7 +183,7 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
       setRipples(prev => prev.filter(r => (r._id || r.id) !== id));
     } catch (e) {
       console.error('dismiss error:', e);
-      alert('Could not dismiss ripple.');
+      showToast('Could not dismiss ripple.', { type: 'error' });
     }
   }
 

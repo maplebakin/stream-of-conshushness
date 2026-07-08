@@ -6,6 +6,7 @@ const dd = String(today.getDate()).padStart(2, '0');
 const todayISO = `${yyyy}-${mm}-${dd}`;
 
 const noop = (...args) => console.log('noop called with:', ...args);
+const logAction = (label) => (...args) => console.log(`[adapterMocks] ${label}:`, ...args);
 
 export const DEFAULT_PROPS = {
   AnalyzeEntryButton: {
@@ -16,8 +17,8 @@ export const DEFAULT_PROPS = {
     open: true,
     date: `${todayISO}T13:00:00`,
     initialData: null,
-    onClose: () => alert('close()'),
-    onSave: (data) => alert('save:\n' + JSON.stringify(data, null, 2)),
+    onClose: logAction('close'),
+    onSave: logAction('save'),
   },
   DailyRipples: {
     date: todayISO,
@@ -26,8 +27,8 @@ export const DEFAULT_PROPS = {
     open: true,
     initialEntry: null,
     defaultDate: todayISO,
-    onClose: () => alert('close()'),
-    onSaved: (entry) => alert('saved:\n' + JSON.stringify(entry, null, 2)),
+    onClose: logAction('close'),
+    onSaved: logAction('saved'),
   },
   EntryQuickAssign: {
     entryId: 'demo-entry',

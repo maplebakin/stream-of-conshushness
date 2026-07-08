@@ -1,6 +1,7 @@
 import { useState, useEffect, useContext } from 'react';
 import axios from './api/axiosInstance.js';
 import { AuthContext } from './AuthContext.jsx';
+import ConfirmButton from './components/ConfirmButton.jsx';
 
 export default function GoalPage() {
   const { isAuthenticated } = useContext(AuthContext);
@@ -118,7 +119,6 @@ export default function GoalPage() {
 
   const deleteGoal = async (goalId) => {
     if (!isAuthenticated) return;
-    if (!window.confirm('Delete this goal?')) return;
     setActionError('');
 
     try {
@@ -192,7 +192,9 @@ export default function GoalPage() {
               {goal.description && <p>{goal.description}</p>}
               <div>
                 <button type="button" onClick={() => startEdit(goal)}>Edit</button>
-                <button type="button" onClick={() => deleteGoal(goal._id)}>Delete</button>
+                <ConfirmButton onConfirm={() => deleteGoal(goal._id)} confirmLabel="Confirm Delete">
+                  Delete
+                </ConfirmButton>
               </div>
             </>
           )}

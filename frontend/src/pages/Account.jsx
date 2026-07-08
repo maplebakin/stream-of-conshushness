@@ -20,6 +20,7 @@ export default function Account() {
   const [verifying, setVerifying] = useState(false);
   const [msg, setMsg] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [confirmingRemovePicture, setConfirmingRemovePicture] = useState(false);
 
   async function load() {
     try {
@@ -54,7 +55,7 @@ export default function Account() {
     }
   }
 
-  async function confirm() {
+  async function confirmEmailCode() {
     setMsg('');
     setVerifying(true);
     try {
@@ -72,6 +73,7 @@ export default function Account() {
   async function handleProfilePictureUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
+    setConfirmingRemovePicture(false);
 
     // Check file type
     if (!file.type.startsWith('image/')) {
@@ -111,12 +113,16 @@ export default function Account() {
   }
 
   async function removeProfilePicture() {
-    if (!window.confirm('Remove your profile picture?')) return;
+    if (!confirmingRemovePicture) {
+      setConfirmingRemovePicture(true);
+      return;
+    }
 
     setMsg('');
     try {
       await axios.patch('/api/me', { profilePicture: '' });
       setMsg('Profile picture removed.');
+      setConfirmingRemovePicture(false);
       await load();
     } catch (e) {
       setMsg(e?.response?.data?.error || 'Failed to remove profile picture.');
@@ -222,7 +228,17 @@ export default function Account() {
                   disabled={uploading}
                   style={{ background: 'var(--status-error, #dc2626)', color: 'white' }}
                 >
-                  Remove Picture
+                  {confirmingRemovePicture ? 'Confirm Remove' : 'Remove Picture'}
+                </button>
+              )}
+              {profile?.profilePicture && confirmingRemovePicture && (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setConfirmingRemovePicture(false)}
+                  disabled={uploading}
+                >
+                  Cancel
                 </button>
               )}
             </div>
@@ -266,7 +282,7 @@ export default function Account() {
               className="auth-input"
               style={{ maxWidth: 150 }}
             />
-            <button className="btn" onClick={confirm} disabled={verifying || code.length !== 6}>
+            <button className="btn" onClick={confirmEmailCode} disabled={verifying || code.length !== 6}>
               {verifying ? 'Verifying…' : 'Verify & Save'}
             </button>
           </div>

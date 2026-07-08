@@ -49,7 +49,7 @@
 
 .sidebar-nav .nav-link,
 .sidebar-nav a {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: var(--space-2);
   padding: 0.42rem 0.7rem;
@@ -61,6 +61,18 @@
   color: color-mix(in srgb, var(--color-vein) 85%, white 15%);
   background: transparent;
   transition: background-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.sidebar-badge {
+  margin-inline-start: auto;
+  min-width: 1.45rem;
+  padding: 0.08rem 0.42rem;
+  border-radius: var(--radius-button);
+  background: var(--color-plum);
+  color: var(--color-mist);
+  font-size: 0.74rem;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .sidebar-nav .nav-link:hover,

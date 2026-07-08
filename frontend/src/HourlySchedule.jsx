@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useContext, useMemo, useRef } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
+import { useToast } from './hooks/useToast.js';
 import './HourlySchedule.css';
 
 function formatHourLabel(h24) {
@@ -16,6 +17,7 @@ export default function HourlySchedule({
   endHour = 18,         // inclusive (0–23)
 }) {
   const { token } = useContext(AuthContext);
+  const { showToast } = useToast();
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
   const hours = useMemo(() => {
@@ -87,7 +89,7 @@ export default function HourlySchedule({
       setSchedule(s => ({ ...s, [hourKey]: prev }));
       liveRef.current && (liveRef.current.textContent = 'Save failed');
       console.warn('HourlySchedule save error:', err?.response?.data || err.message);
-      alert('Could not save this slot. Please try again.');
+      showToast('Could not save this slot. Please try again.', { type: 'error' });
     } finally {
       setSavingHour(null);
     }

@@ -11,6 +11,29 @@
   gap: var(--space-3);
 }
 
+.review-completed {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.review-completed__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0.65rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--color-success) 30%, var(--color-border) 70%);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-success) 10%, var(--color-surface) 90%);
+  color: var(--color-text-strong);
+  font-weight: 700;
+}
+
+.review-completed__item a {
+  color: var(--color-success);
+}
+
 .review-inbox__search {
   display: flex;
   align-items: center;
@@ -80,6 +103,41 @@
   color: var(--color-ink);
 }
 
+.review-inbox__bulk {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-surface-soft) 36%, var(--color-surface) 64%);
+}
+
+.review-inbox__select-visible {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-vein);
+  font-weight: 700;
+}
+
+.review-inbox__selected-count {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.review-inbox__bulk-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .review-inbox__list {
   display: grid;
   gap: var(--space-3);
@@ -87,7 +145,7 @@
 
 .review-inbox-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: var(--space-4);
   align-items: center;
   padding: var(--space-4);
@@ -96,6 +154,23 @@
   border-radius: var(--radius-card);
   background: linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 96%, white 4%), var(--color-surface));
   box-shadow: 0 8px 20px rgba(66, 45, 34, 0.06), var(--shadow-border);
+}
+
+.review-inbox-item.is-selected {
+  border-color: color-mix(in srgb, var(--color-spool) 44%, var(--color-border) 56%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-spool) 12%, var(--color-surface) 88%),
+    var(--color-surface)
+  );
+}
+
+.review-inbox-item__select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: start;
+  min-height: 2rem;
 }
 
 .review-inbox-item--tasks {
@@ -142,6 +217,59 @@
   line-height: 1.35;
 }
 
+.review-edit-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 0.45fr);
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.review-edit-field {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.review-edit-field--wide {
+  min-width: 0;
+}
+
+.review-edit-field input {
+  min-width: 0;
+  width: 100%;
+  min-height: 40px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--color-surface) 92%, white 8%);
+  color: var(--color-text-strong);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: none;
+}
+
+.review-source-preview {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  max-width: 78ch;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.review-source-preview span {
+  color: var(--color-vein);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .review-inbox-item__meta {
   display: flex;
   align-items: center;
@@ -163,10 +291,16 @@
 
 @media (max-width: 760px) {
   .review-inbox-item {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+
+  .review-edit-grid {
+    grid-template-columns: 1fr;
   }
 
   .review-inbox-item__actions {
+    grid-column: 2;
     justify-content: stretch;
   }
 

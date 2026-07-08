@@ -58,6 +58,7 @@ export default function GlobalSearch() {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [hiddenResultKeys, setHiddenResultKeys] = useState(() => new Set());
 
   // Perform search when query params change
   useEffect(() => {
@@ -86,6 +87,7 @@ export default function GlobalSearch() {
       });
 
       setResults(response.data);
+      setHiddenResultKeys(new Set());
     } catch (error) {
       console.error('Search failed:', error);
       toast.error('Search failed. Please try again.');
@@ -166,6 +168,32 @@ export default function GlobalSearch() {
         break;
       default:
         break;
+    }
+  };
+
+  const resultKey = (item, group = '') => `${item.type || group}:${item._id || item.id || item.slug || item.title}`;
+
+  const handleResultAction = async (item, action) => {
+    try {
+      if (action === 'open') {
+        handleNavigate(item);
+        return;
+      }
+
+      if (action === 'completeTask') {
+        await axiosInstance.patch(`/api/tasks/${item._id}/toggle`);
+        setHiddenResultKeys((current) => new Set([...current, resultKey(item)]));
+        toast.success('Task completed.');
+        return;
+      }
+
+      if (action === 'review') {
+        navigate('/review');
+        return;
+      }
+    } catch (error) {
+      console.error('[GlobalSearch] action failed:', error?.response?.data || error.message);
+      toast.error(error?.response?.data?.error || 'Could not update this result.');
     }
   };
 
@@ -333,12 +361,15 @@ export default function GlobalSearch() {
             {results.total > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {RESULT_GROUPS.flatMap((group) => (
-                  (results[group] || []).map((item) => (
+                  (results[group] || [])
+                    .filter((item) => !hiddenResultKeys.has(resultKey(item, group)))
+                    .map((item) => (
                     <SearchResultItem
-                      key={`${item.type || group}-${item._id}`}
+                      key={resultKey(item, group)}
                       item={item}
                       query={results.query}
                       onNavigate={handleNavigate}
+                      onAction={handleResultAction}
                       getTypeLabel={getTypeLabel}
                       getTypeColor={getTypeColor}
                       highlightMatch={highlightMatch}
@@ -364,13 +395,20 @@ export default function GlobalSearch() {
   );
 }
 
-function SearchResultItem({ item, query, onNavigate, getTypeLabel, getTypeColor, highlightMatch }) {
+function SearchResultItem({ item, query, onNavigate, onAction, getTypeLabel, getTypeColor, highlightMatch }) {
   const getTitle = () => {
     if (item.title) return item.title;
     if (item.name) return item.name;
     if (item.date) return `Entry from ${item.date}`;
     return 'Untitled';
   };
+
+  const actions = [];
+  actions.push({ key: 'open', label: 'Open' });
+  if (item.type === 'task' && !item.completed) actions.push({ key: 'completeTask', label: 'Complete' });
+  if (['suggestedTask', 'suggestedGatherItem', 'suggestedInterest'].includes(item.type)) {
+    actions.push({ key: 'review', label: 'Review' });
+  }
 
   return (
     <div
@@ -434,6 +472,22 @@ function SearchResultItem({ item, query, onNavigate, getTypeLabel, getTypeColor,
           {item.status}
         </span>
       )}
+
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+        {actions.map((action) => (
+          <button
+            key={action.key}
+            type="button"
+            className="review-button review-button--ghost"
+            onClick={(event) => {
+              event.stopPropagation();
+              onAction(item, action.key);
+            }}
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

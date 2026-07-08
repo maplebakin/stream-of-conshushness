@@ -17,7 +17,9 @@ function listSourceFiles(dir = frontendRoot) {
 
 function importSourcesForFile(filePath) {
   const source = readFileSync(filePath, 'utf8');
-  return [...source.matchAll(/^\s*import\s+(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"];?/gm)]
+  const staticImports = [...source.matchAll(/^\s*import\s+(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"];?/gm)];
+  const dynamicImports = [...source.matchAll(/\bimport\(\s*['"]([^'"]+)['"]\s*\)/g)];
+  return [...staticImports, ...dynamicImports]
     .map((match) => match[1])
     .filter((specifier) => specifier.startsWith('.'));
 }
@@ -157,7 +159,7 @@ describe('frontend duplicate component reference contracts', () => {
     const harness = read('frontend/src/adapters/AdapterHarness.jsx');
     const adapterIndex = read('frontend/src/adapters/index.js');
 
-    expect(app).toContain("import AdapterHarness from './adapters/AdapterHarness.jsx'");
+    expect(app).toContain("const AdapterHarness = lazy(() => import('./adapters/AdapterHarness.jsx'))");
     expect(app).toContain('path="/_adapters" element={<AdapterHarness />}');
     expect(importedBy('frontend/src/adapters/AdapterHarness.jsx')).toEqual(['frontend/src/App.jsx']);
     expect(harness).toContain("import ADAPTERS from './index.js'");

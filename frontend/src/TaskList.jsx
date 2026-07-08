@@ -239,7 +239,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
     setBulkActionLoading(true);
     try {
       const ids = Array.from(selectedTasks);
-      // Store tasks before deleting for undo
+      // Store task ids before deleting so undo can restore the original records.
       const tasksToDelete = tasks.filter(t => selectedTasks.has(t._id));
 
       // Delete tasks
@@ -252,27 +252,16 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
 
       // Show undo toast
       showUndo(
-        `Deleted ${tasksToDelete.length} task${tasksToDelete.length > 1 ? 's' : ''}`,
+        `Moved ${tasksToDelete.length} task${tasksToDelete.length > 1 ? 's' : ''} to trash`,
         async () => {
-          // Undo callback: recreate the tasks
           try {
-            const recreatePromises = tasksToDelete.map(task =>
-              axios.post('/api/tasks', {
-                title: task.title,
-                notes: task.notes || '',
-                dueDate: task.dueDate,
-                priority: task.priority || 0,
-                clusters: task.clusters || [],
-                sections: task.sections || [],
-                rrule: task.rrule || '',
-                completed: task.completed || false,
-                status: task.status || 'todo',
-              }, { headers: authHeaders })
+            await Promise.all(
+              tasksToDelete.map(task =>
+                axios.post(`/api/tasks/${encodeURIComponent(task._id)}/restore`, {}, { headers: authHeaders })
+              )
             );
-            await Promise.all(recreatePromises);
-            // Refresh tasks after undo
             await queryClient.invalidateQueries(['tasks']);
-      if (bucket) setBucketRefreshTick((x) => x + 1);
+            if (bucket) setBucketRefreshTick((x) => x + 1);
           } catch (e) {
             console.error('Undo failed:', e);
             showToast('Failed to undo deletion. Please try again.', { type: 'error' });

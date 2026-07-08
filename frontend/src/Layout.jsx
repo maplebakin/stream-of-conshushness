@@ -1,15 +1,17 @@
 // frontend/src/Layout.jsx
-import React, { useContext } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import Header from './Header.jsx';
 import ThemeToggle from './components/ThemeToggle.jsx';
 import { AuthContext } from './AuthContext.jsx';
+import { listReviewItems } from './api/review.js';
 import './Main.css';
 import './Sidebar.css';
 
 export default function Layout() {
   const { pathname } = useLocation();
   const { user } = useContext(AuthContext);
+  const [reviewCount, setReviewCount] = useState(0);
 
   // Pages that render their own sidebar should suppress the global right sidebar.
   const hideRightSidebar =
@@ -21,6 +23,25 @@ export default function Layout() {
     `nav-link${isActive ? ' active' : ''}`;
 
   const bodyClass = `app-body${hideRightSidebar ? ' no-right-sidebar' : ''}`;
+
+  useEffect(() => {
+    let ignore = false;
+    if (!user) {
+      setReviewCount(0);
+      return () => { ignore = true; };
+    }
+
+    listReviewItems({ limit: 1 })
+      .then(({ counts }) => {
+        if (!ignore) setReviewCount(Number(counts?.total) || 0);
+      })
+      .catch((error) => {
+        console.warn('[Layout] review count failed:', error?.response?.data || error.message);
+        if (!ignore) setReviewCount(0);
+      });
+
+    return () => { ignore = true; };
+  }, [user, pathname]);
 
   return (
     <div className={`app-layout ${hideRightSidebar ? 'no-right-sidebar' : ''}`}>
@@ -46,26 +67,7 @@ export default function Layout() {
                 <li>
                   <NavLink to="/review" className={linkClass} title="Review Inbox">
                     <span>Review Inbox</span>
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink to="/gather-lists" className={linkClass} title="Gather Lists">
-                    🧺 <span>Gather</span>
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink to="/inbox/tasks" className={linkClass} title="Task Inbox">
-                    ✅ <span>Tasks</span>
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink to="/ripples" className={linkClass} title="Ripples">
-                    💡 <span>Ripples</span>
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink to="/interests" className={linkClass} title="Sparks & Interests">
-                    ✨ <span>Interests</span>
+                    {reviewCount > 0 && <strong className="sidebar-badge">{reviewCount}</strong>}
                   </NavLink>
                 </li>
               </ul>
@@ -74,6 +76,26 @@ export default function Layout() {
 
               <h2 className="sidebar-title">Organize</h2>
               <ul className="sidebar-nav">
+                <li>
+                  <NavLink to="/inbox/tasks" className={linkClass} title="Tasks">
+                    ✅ <span>Tasks</span>
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/gather-lists" className={linkClass} title="Gather Lists">
+                    🧺 <span>Gather</span>
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/interests" className={linkClass} title="Sparks & Interests">
+                    ✨ <span>Interests</span>
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/ripples" className={linkClass} title="Ripples">
+                    💡 <span>Ripples</span>
+                  </NavLink>
+                </li>
                 <li>
                   <NavLink to="/sections" className={linkClass} title="Sections">
                     🗂️ <span>Sections</span>

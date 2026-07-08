@@ -10,7 +10,8 @@ import { AuthContext } from './AuthContext.jsx';
 import { getLocalTodayISO, toDisplayDate } from './utils/date.js';
 import SafeHTML from './components/SafeHTML.jsx'; // (top of file)
 import RecentActivityWidget from './components/RecentActivityWidget.jsx';
-import { confirmAndTrashEntry } from './utils/entryDeletion.js';
+import { confirmAndTrashEntry, getEntryTrashConfirmationMessage } from './utils/entryDeletion.js';
+import { useReviewCount } from './hooks/useReviewCount.js';
 
 /* ---------- Robust sort helpers so newest stay on top across reloads ---------- */
 const parseDayMs = (v) => {
@@ -98,7 +99,10 @@ export default function MainPage() {
   const [quickEntryText, setQuickEntryText] = useState('');
   const [recentActivityOpen, setRecentActivityOpen] = useState(false);
   const [streamTutorialDismissed, setStreamTutorialDismissed] = useState(getStreamTutorialDismissed);
+  const [confirmingEntryDeleteId, setConfirmingEntryDeleteId] = useState('');
+  const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
   const quickEntryRef = useRef(null);
+  const reviewCount = useReviewCount(Boolean(token), reviewRefreshKey);
 
   const fetchEntries = useCallback(async () => {
     if (!token) {
@@ -132,10 +136,15 @@ export default function MainPage() {
   const todayISO = getLocalTodayISO?.() || new Date().toISOString().slice(0, 10);
 
   const handleDelete = async (entry) => {
+    if (confirmingEntryDeleteId !== entry?._id) {
+      setConfirmingEntryDeleteId(entry?._id || '');
+      return;
+    }
+
     try {
       const result = await confirmAndTrashEntry({
         entry,
-        confirmDelete: window.confirm.bind(window),
+        confirmDelete: () => true,
         deleteRequest: (id) => axios.delete(`/api/entries/${id}`),
         onDeleted: (id) => {
           setEntries((prev) => prev.filter((e) => e._id !== id));
@@ -143,6 +152,7 @@ export default function MainPage() {
       });
 
       if (result.deleted) {
+        setConfirmingEntryDeleteId('');
         toast.success('Entry moved to trash');
       }
     } catch (err) {
@@ -179,6 +189,7 @@ export default function MainPage() {
       const res = await axios.post('/api/entries', { text, date: todayISO });
       const created = normalizeEntry(res.data || {});
       setEntries((prev) => [created, ...prev]);
+      setReviewRefreshKey((key) => key + 1);
       resetQuickEntry();
     } catch (err) {
       console.error('quick entry create error:', err);
@@ -323,8 +334,10 @@ export default function MainPage() {
 
         <nav className="stream-review-links" aria-label="Review captured items">
           <span>Review captured threads</span>
+          <Link to="/review">
+            Review Inbox{reviewCount.count > 0 ? ` (${reviewCount.count})` : ''}
+          </Link>
           <Link to="/inbox/tasks">Tasks</Link>
-          <Link to="/ripples">Ripples</Link>
           <Link to="/gather-lists">Gather</Link>
           <Link to="/interests">Interests</Link>
         </nav>
@@ -446,12 +459,22 @@ export default function MainPage() {
               <div className="entry-actions">
                 <button
                   type="button"
-                  className="icon-btn"
+                  className={`icon-btn${confirmingEntryDeleteId === entry._id ? ' icon-btn--confirm' : ''}`}
                   onClick={() => handleDelete(entry)}
-                  title="Move to trash"
+                  title={confirmingEntryDeleteId === entry._id ? getEntryTrashConfirmationMessage(entry) : 'Move to trash'}
                 >
-                  🗑️
+                  {confirmingEntryDeleteId === entry._id ? 'Confirm' : '🗑️'}
                 </button>
+                {confirmingEntryDeleteId === entry._id && (
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn--confirm"
+                    onClick={() => setConfirmingEntryDeleteId('')}
+                    title="Cancel"
+                  >
+                    Cancel
+                  </button>
+                )}
               </div>
             </article>
           ))}

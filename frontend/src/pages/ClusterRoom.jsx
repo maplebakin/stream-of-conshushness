@@ -78,6 +78,7 @@ export default function ClusterRoom() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
   const [editForm, setEditForm] = useState({ name: '', slug: '', color: '#9b87f5', icon: '🗂️' });
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const [tasks, setTasks] = useState([]);
   const [tasksLoading, setTasksLoading] = useState(false);
@@ -273,6 +274,7 @@ export default function ClusterRoom() {
 
   function beginEdit() {
     if (!activeCluster) return;
+    setConfirmingDelete(false);
     setEditForm({
       name: activeCluster.name,
       slug: activeCluster.slug,
@@ -305,6 +307,7 @@ export default function ClusterRoom() {
 
     if (!Object.keys(updates).length) {
       setEditOpen(false);
+      setConfirmingDelete(false);
       return;
     }
 
@@ -316,6 +319,7 @@ export default function ClusterRoom() {
       if (!updated) throw new Error('Unexpected response');
       setActiveCluster(updated);
       setEditOpen(false);
+      setConfirmingDelete(false);
       if (updated.slug !== activeCluster.slug) {
         navigate(`/clusters/${encodeURIComponent(updated.slug)}`, { replace: true });
       }
@@ -329,10 +333,14 @@ export default function ClusterRoom() {
 
   async function handleDelete() {
     if (!activeCluster) return;
-    if (!window.confirm(`Delete ${activeCluster.name}? This cannot be undone.`)) return;
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      return;
+    }
     try {
       await axios.delete(`/api/clusters/${activeCluster.id}`);
       setActiveCluster(null);
+      setConfirmingDelete(false);
       navigate('/clusters');
     } catch (err) {
       console.error('Delete cluster failed:', err);
@@ -569,7 +577,14 @@ export default function ClusterRoom() {
           {activeCluster && (
             <div className="cluster-detail__header-actions">
               <button type="button" className="pill pill-muted" onClick={beginEdit}>Rename</button>
-              <button type="button" className="pill cluster-detail__delete" onClick={handleDelete}>Delete</button>
+              <button type="button" className="pill cluster-detail__delete" onClick={handleDelete}>
+                {confirmingDelete ? 'Confirm Delete' : 'Delete'}
+              </button>
+              {confirmingDelete && (
+                <button type="button" className="pill pill-muted" onClick={() => setConfirmingDelete(false)}>
+                  Cancel
+                </button>
+              )}
             </div>
           )}
         </div>

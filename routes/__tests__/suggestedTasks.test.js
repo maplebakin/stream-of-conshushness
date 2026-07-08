@@ -187,6 +187,39 @@ describe('Suggested Tasks acceptance', () => {
     expect(res.body).toHaveProperty('suggestedTask');
   });
 
+  it('uses an edited title when accepting a suggestion', async () => {
+    const save = vi.fn().mockResolvedValue();
+    const suggestedTaskDoc = {
+      _id: new mongoose.Types.ObjectId(),
+      userId,
+      title: 'call mom',
+      priority: 'low',
+      dueDate: null,
+      repeat: '',
+      cluster: '',
+      status: 'pending',
+      sourceRippleId: null,
+      save,
+    };
+
+    mockFindOne.mockResolvedValue(suggestedTaskDoc);
+    mockResolveClusterIdForOwner.mockResolvedValue(null);
+    mockCreate.mockResolvedValue({
+      _id: new mongoose.Types.ObjectId(),
+      userId,
+      title: 'Call Mom',
+    });
+
+    const res = await request(makeApp())
+      .put(`/api/suggested-tasks/${suggestedTaskDoc._id.toString()}/accept`)
+      .send({ title: '  Call Mom  ' });
+
+    expect(res.status).toBe(200);
+    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Call Mom',
+    }));
+  });
+
   it('marks same-entry duplicate pending suggestions accepted when accepting one suggestion', async () => {
     const sourceRippleId = new mongoose.Types.ObjectId();
     const duplicateRippleId = new mongoose.Types.ObjectId();

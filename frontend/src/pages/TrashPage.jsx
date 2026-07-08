@@ -39,6 +39,8 @@ export default function TrashPage() {
   const [restoringTaskId, setRestoringTaskId] = useState(null);
   const [deletingTaskId, setDeletingTaskId] = useState(null);
   const [restoringEntryId, setRestoringEntryId] = useState(null);
+  const [confirmingTaskDeleteId, setConfirmingTaskDeleteId] = useState(null);
+  const [confirmingEmptyTrash, setConfirmingEmptyTrash] = useState(false);
 
   const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
@@ -71,6 +73,7 @@ export default function TrashPage() {
   }, [fetchTrash, token]);
 
   async function handleTaskRestore(taskId) {
+    setConfirmingTaskDeleteId(null);
     setRestoringTaskId(taskId);
     try {
       await axios.post(`/api/tasks/${taskId}/restore`, {}, { headers: authHeaders });
@@ -85,12 +88,16 @@ export default function TrashPage() {
   }
 
   async function handleTaskPermanentDelete(taskId) {
-    if (!window.confirm('Permanently delete this task? This cannot be undone.')) return;
+    if (confirmingTaskDeleteId !== taskId) {
+      setConfirmingTaskDeleteId(taskId);
+      return;
+    }
 
     setDeletingTaskId(taskId);
     try {
       await axios.delete(`/api/tasks/${taskId}/permanent`, { headers: authHeaders });
       showToast('Task permanently deleted.', { type: 'info' });
+      setConfirmingTaskDeleteId(null);
       await fetchTrash();
     } catch (e) {
       console.error('Permanent delete failed:', e);
@@ -101,12 +108,16 @@ export default function TrashPage() {
   }
 
   async function handleEmptyTrash() {
-    if (!window.confirm('Permanently delete ALL items in trash? This cannot be undone.')) return;
+    if (!confirmingEmptyTrash) {
+      setConfirmingEmptyTrash(true);
+      return;
+    }
 
     setLoading(true);
     try {
       const { data } = await axios.post('/api/tasks/trash/empty', {}, { headers: authHeaders });
       showToast(`Permanently deleted ${data.deletedCount} task(s).`, { type: 'info' });
+      setConfirmingEmptyTrash(false);
       await fetchTrash();
     } catch (e) {
       console.error('Empty trash failed:', e);
@@ -117,6 +128,7 @@ export default function TrashPage() {
   }
 
   async function handleEntryRestore(entryId) {
+    setConfirmingTaskDeleteId(null);
     setRestoringEntryId(entryId);
     try {
       await restoreEntry(entryId);
@@ -128,6 +140,12 @@ export default function TrashPage() {
     } finally {
       setRestoringEntryId(null);
     }
+  }
+
+  function taskDeleteLabel(taskId) {
+    if (deletingTaskId === taskId) return 'Deleting...';
+    if (confirmingTaskDeleteId === taskId) return 'Confirm Delete';
+    return 'Delete Forever';
   }
 
   const hasAnyTrash = tasks.length > 0 || entries.length > 0;
@@ -154,7 +172,17 @@ export default function TrashPage() {
               disabled={loading}
               style={{ background: 'var(--status-error, #dc2626)', color: 'white' }}
             >
-              Empty Task Trash
+              {confirmingEmptyTrash ? 'Confirm Empty Trash' : 'Empty Task Trash'}
+            </button>
+          )}
+          {confirmingEmptyTrash && (
+            <button
+              className="btn"
+              type="button"
+              onClick={() => setConfirmingEmptyTrash(false)}
+              disabled={loading}
+            >
+              Cancel
             </button>
           )}
         </header>
@@ -296,8 +324,18 @@ export default function TrashPage() {
                           disabled={restoringTaskId === task._id || deletingTaskId === task._id}
                           style={{ background: 'var(--status-error, #dc2626)', color: 'white' }}
                         >
-                          {deletingTaskId === task._id ? 'Deleting...' : 'Delete Forever'}
+                          {taskDeleteLabel(task._id)}
                         </button>
+                        {confirmingTaskDeleteId === task._id && (
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={() => setConfirmingTaskDeleteId(null)}
+                            disabled={deletingTaskId === task._id}
+                          >
+                            Cancel
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

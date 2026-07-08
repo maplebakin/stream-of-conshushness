@@ -369,6 +369,15 @@
   color: var(--color-accent);
 }
 
+.icon-btn--confirm {
+  min-height: 34px;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: var(--radius-button);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
 .loading,
 .empty-state {
   text-align: center;

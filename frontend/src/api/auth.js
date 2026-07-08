@@ -1,23 +1,14 @@
 // /frontend/src/api/auth.js
-import api from './axiosInstance';
+import api, { setToken } from './axiosInstance';
 
 // Login with whatever the user types (username or email)
 export async function login(identifier, password) {
   const { data } = await api.post('/api/login', { identifier, password }); // server aliases /api/auth/*
-  if (data?.token) {
-    // normalize storage
-    localStorage.setItem('auth_token', data.token);
-    localStorage.setItem('token', data.token);
-  }
   return data;
 }
 
 export async function register({ username, password, email }) {
   const { data } = await api.post('/api/register', { username, password, email });
-  if (data?.token) {
-    localStorage.setItem('auth_token', data.token);
-    localStorage.setItem('token', data.token);
-  }
   return data;
 }
 
@@ -28,19 +19,11 @@ export async function forgot(identifier) {
 
 export async function resetWithToken(token, newPassword) {
   const { data } = await api.post('/api/reset', { token, newPassword });
-  if (data?.token) {
-    localStorage.setItem('auth_token', data.token);
-    localStorage.setItem('token', data.token);
-  }
   return data;
 }
 
 export async function resetWithCode(username, code, newPassword) {
   const { data } = await api.post('/api/reset', { username, code, newPassword });
-  if (data?.token) {
-    localStorage.setItem('auth_token', data.token);
-    localStorage.setItem('token', data.token);
-  }
   return data;
 }
 
@@ -65,8 +48,7 @@ export async function verifyEmail(code) {
 }
 
 export function logout() {
-  localStorage.removeItem('auth_token');
-  localStorage.removeItem('auth_user');
+  setToken('', null);
   localStorage.removeItem('token');
   localStorage.removeItem('authToken');
   localStorage.removeItem('jwt');

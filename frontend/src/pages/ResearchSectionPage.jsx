@@ -213,7 +213,7 @@ function SubjectForm({ initial = {}, onSave, onCancel, allSubjects = [], subject
 
 // ─── SubjectDetail ────────────────────────────────────────────────────────────
 
-function SubjectDetail({ subject, onEdit, onDelete }) {
+function SubjectDetail({ subject, onEdit, onDelete, confirmingDelete, onCancelDelete }) {
   if (!subject) return null;
 
   const parents = subject.parentIds || [];
@@ -232,7 +232,12 @@ function SubjectDetail({ subject, onEdit, onDelete }) {
         </div>
         <div style={styles.detailActions}>
           <button style={styles.btnSecondary} onClick={onEdit}>Edit</button>
-          <button style={styles.btnDanger} onClick={onDelete}>Delete</button>
+          <button style={styles.btnDanger} onClick={onDelete}>
+            {confirmingDelete ? 'Confirm Delete' : 'Delete'}
+          </button>
+          {confirmingDelete && (
+            <button style={styles.btnSecondary} onClick={onCancelDelete}>Cancel</button>
+          )}
         </div>
       </div>
 
@@ -320,6 +325,7 @@ export default function ResearchSectionPage() {
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [confirmingDeleteSubjectId, setConfirmingDeleteSubjectId] = useState('');
 
   // Load list
   const loadSubjects = useCallback(async (query = '') => {
@@ -344,6 +350,7 @@ export default function ResearchSectionPage() {
       const { data } = await axios.get(`/api/research/${sectionKey}/subjects/${id}`);
       setSelected(data.subject);
       setView('list');
+      setConfirmingDeleteSubjectId('');
     } catch (e) {
       console.error('Failed to load subject:', e);
     }
@@ -354,21 +361,28 @@ export default function ResearchSectionPage() {
     setSubjects(prev => [...prev, data.subject].sort((a, b) => a.name.localeCompare(b.name)));
     setSelected(data.subject);
     setView('list');
+    setConfirmingDeleteSubjectId('');
   }
 
   async function handleUpdate(body) {
     const { data } = await axios.patch(`/api/research/${sectionKey}/subjects/${selected._id}`, body);
     setSubjects(prev => prev.map(s => s._id === data.subject._id ? data.subject : s));
+    setConfirmingDeleteSubjectId('');
     // Reload full populated detail
     await selectSubject(data.subject._id);
   }
 
   async function handleDelete() {
-    if (!window.confirm(`Delete "${selected.name}"? This cannot be undone.`)) return;
+    if (!selected?._id) return;
+    if (confirmingDeleteSubjectId !== selected._id) {
+      setConfirmingDeleteSubjectId(selected._id);
+      return;
+    }
     await axios.delete(`/api/research/${sectionKey}/subjects/${selected._id}`);
     setSubjects(prev => prev.filter(s => s._id !== selected._id));
     setSelected(null);
     setView('list');
+    setConfirmingDeleteSubjectId('');
   }
 
   function handleSearch(e) {
@@ -459,8 +473,10 @@ export default function ResearchSectionPage() {
         {view === 'list' && selected && (
           <SubjectDetail
             subject={selected}
-            onEdit={() => setView('edit')}
+            onEdit={() => { setConfirmingDeleteSubjectId(''); setView('edit'); }}
             onDelete={handleDelete}
+            confirmingDelete={confirmingDeleteSubjectId === selected._id}
+            onCancelDelete={() => setConfirmingDeleteSubjectId('')}
           />
         )}
       </div>

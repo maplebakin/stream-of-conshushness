@@ -55,6 +55,8 @@ export default function Calendar() {
   const [showApptModal, setShowApptModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState(null);
+  const [confirmingAppointmentDeleteId, setConfirmingAppointmentDeleteId] = useState('');
+  const [confirmingAppointmentDeleteMessage, setConfirmingAppointmentDeleteMessage] = useState('');
 
   const loadMonth = useCallback(async () => {
     // Assumes you’ve got an aggregator route; if not, this will just noop the badges.
@@ -86,19 +88,30 @@ export default function Calendar() {
 
   function openNewAppointment() {
     setEditingAppointment(null);
+    setConfirmingAppointmentDeleteId('');
+    setConfirmingAppointmentDeleteMessage('');
     setShowApptModal(true);
   }
 
   function openEditAppointment(appointment) {
     setEditingAppointment(appointment);
+    setConfirmingAppointmentDeleteId('');
+    setConfirmingAppointmentDeleteMessage('');
     setShowApptModal(true);
   }
 
   async function deleteAppointment(appointment) {
     const id = getStoredAppointmentId(appointment);
     if (!id) return;
-    if (!window.confirm(getAppointmentDeleteConfirmation(appointment))) return;
+    const confirmationMessage = getAppointmentDeleteConfirmation(appointment);
+    if (confirmingAppointmentDeleteId !== id) {
+      setConfirmingAppointmentDeleteId(id);
+      setConfirmingAppointmentDeleteMessage(confirmationMessage);
+      return;
+    }
     await axios.delete(`/api/appointments/${encodeURIComponent(id)}`, { headers });
+    setConfirmingAppointmentDeleteId('');
+    setConfirmingAppointmentDeleteMessage('');
     await loadMonth();
     refreshHorizon();
   }
@@ -116,6 +129,12 @@ export default function Calendar() {
           onAddEvent={() => setShowEventModal(true)}
           onEditAppointment={openEditAppointment}
           onDeleteAppointment={deleteAppointment}
+          confirmingAppointmentDeleteId={confirmingAppointmentDeleteId}
+          confirmingAppointmentDeleteMessage={confirmingAppointmentDeleteMessage}
+          onCancelAppointmentDelete={() => {
+            setConfirmingAppointmentDeleteId('');
+            setConfirmingAppointmentDeleteMessage('');
+          }}
         />
       </aside>
 

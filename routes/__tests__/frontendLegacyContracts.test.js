@@ -16,7 +16,9 @@ function listSourceFiles(dir = frontendRoot) {
 
 function importSourcesForFile(filePath) {
   const source = readFileSync(filePath, 'utf8');
-  return [...source.matchAll(/^\s*import\s+(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"];?/gm)]
+  const staticImports = [...source.matchAll(/^\s*import\s+(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"];?/gm)];
+  const dynamicImports = [...source.matchAll(/\bimport\(\s*['"]([^'"]+)['"]\s*\)/g)];
+  return [...staticImports, ...dynamicImports]
     .map((match) => match[1])
     .filter((specifier) => specifier.startsWith('.'));
 }
@@ -51,9 +53,9 @@ describe('frontend legacy reference contracts', () => {
     const sectionPage = read('frontend/src/pages/SectionPage.jsx');
     const sectionPageRoom = read('frontend/src/pages/SectionPageRoom.jsx');
 
-    expect(app).toContain("import SectionsIndex from './pages/SectionsIndex.jsx'");
-    expect(app).toContain("import SectionPage from './pages/SectionPage.jsx'");
-    expect(app).toContain("import SectionPageRoom from './pages/SectionPageRoom.jsx'");
+    expect(app).toContain("const SectionsIndex = lazy(() => import('./pages/SectionsIndex.jsx'))");
+    expect(app).toContain("const SectionPage = lazy(() => import('./pages/SectionPage.jsx'))");
+    expect(app).toContain("const SectionPageRoom = lazy(() => import('./pages/SectionPageRoom.jsx'))");
     expect(app).toContain('path="/sections" element={<SectionsIndex />}');
     expect(app).toContain('path="/sections/:key" element={<SectionPage />}');
     expect(app).toContain('path="/sections/:sectionSlug/:pageSlug" element={<SectionPageRoom />}');
@@ -71,7 +73,7 @@ describe('frontend legacy reference contracts', () => {
     const header = read('frontend/src/Header.jsx');
     const commandPalette = read('frontend/src/components/CommandPalette.jsx');
 
-    expect(app).toContain("import Layout from './Layout.jsx'");
+    expect(app).toContain("const Layout = lazy(() => import('./Layout.jsx'))");
     expect(app).toContain("import CommandPalette from './components/CommandPalette.jsx'");
     expect(app).toContain('<CommandPalette');
     expect(app).toContain('<Route element={<Layout />}>');
@@ -85,7 +87,6 @@ describe('frontend legacy reference contracts', () => {
     expect(importedBy('frontend/src/Header.jsx')).toEqual([
       'frontend/src/GamePage.jsx',
       'frontend/src/Layout.jsx',
-      'frontend/src/ManageSections.jsx',
     ]);
     expect(importedBy('frontend/src/components/CommandPalette.jsx')).toEqual(['frontend/src/App.jsx']);
     expect(importedBy('frontend/src/Sidebar.jsx')).toEqual([]);
@@ -98,7 +99,6 @@ describe('frontend legacy reference contracts', () => {
       'frontend/src/pages/SectionLanding.jsx': 'export default function SectionLanding',
       'frontend/src/Sidebar.jsx': 'export default function Sidebar',
       'frontend/src/EntriesSection.jsx': 'export default function EntriesSection',
-      'frontend/src/ManageSections.jsx': 'export default function ManageSections',
     };
 
     for (const [path, exportSignature] of Object.entries(legacyCandidates)) {

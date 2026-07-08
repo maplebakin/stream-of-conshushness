@@ -36,12 +36,28 @@ function isoDate(value) {
   return '';
 }
 
+function plainText(value) {
+  if (!value || typeof value !== 'string') return '';
+  return value
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function sourceExcerpt(entry) {
+  if (!entry || typeof entry !== 'object') return '';
+  const text = plainText(entry.text || entry.content || entry.html || '');
+  if (!text) return '';
+  return text.length > 220 ? `${text.slice(0, 217).trimEnd()}...` : text;
+}
+
 function sourceEntryMeta(entry) {
   if (!entry || typeof entry !== 'object') return {};
   return {
     sourceEntryId: idOf(entry),
     sourceDate: isoDate(entry.date),
     sourceTitle: entry.title || '',
+    sourceEntryExcerpt: sourceExcerpt(entry),
   };
 }
 
@@ -103,6 +119,7 @@ function gatherSuggestionItem(item) {
     group: 'gather',
     title: item.title || 'Untitled gather suggestion',
     status: item.status || 'pending',
+    list: item.list || 'Things to Buy',
     sourceText: item.sourceText || '',
     createdAt: item.createdAt || '',
     meta: [
@@ -123,6 +140,7 @@ function interestSuggestionItem(item) {
     group: 'interests',
     title: item.title || 'Untitled interest suggestion',
     status: item.status || 'pending',
+    category: item.category || 'Learning Curiosities',
     sourceText: item.sourceText || '',
     createdAt: item.createdAt || '',
     meta: [
@@ -167,6 +185,7 @@ function appointmentItem(item) {
     sourceDate: source.sourceDate || date,
     sourceEntryId: source.sourceEntryId,
     sourceTitle: source.sourceTitle,
+    sourceEntryExcerpt: source.sourceEntryExcerpt,
     sourceText: item.details || '',
     createdAt: item.createdAt || '',
     meta: [
@@ -191,6 +210,7 @@ function eventItem(item) {
     sourceDate: source.sourceDate || isoDate(item.date),
     sourceEntryId: source.sourceEntryId,
     sourceTitle: source.sourceTitle,
+    sourceEntryExcerpt: source.sourceEntryExcerpt,
     sourceText: item.description || '',
     pinned: !!item.pinned,
     createdAt: item.createdAt || '',
@@ -223,23 +243,23 @@ router.get('/', async (req, res) => {
         .lean(),
       SuggestedGatherItem.find({ userId, status: 'pending' })
         .populate('clusters', 'name slug icon color')
-        .populate('sourceEntryId', 'date title')
+        .populate('sourceEntryId', 'date title text content html')
         .sort({ createdAt: -1 })
         .lean(),
       SuggestedInterest.find({ userId, status: 'pending' })
         .populate('clusters', 'name slug icon color')
-        .populate('sourceEntryId', 'date title')
+        .populate('sourceEntryId', 'date title text content html')
         .sort({ createdAt: -1 })
         .lean(),
       Ripple.find({ userId, status: 'pending' })
         .sort({ createdAt: -1 })
         .lean(),
       Appointment.find({ userId, source: 'entry-automation' })
-        .populate('entryId', 'date title')
+        .populate('entryId', 'date title text content html')
         .sort({ date: 1, startDate: 1, createdAt: -1 })
         .lean(),
       ImportantEvent.find({ userId, source: 'entry-automation' })
-        .populate('entryId', 'date title')
+        .populate('entryId', 'date title text content html')
         .sort({ date: 1, createdAt: -1 })
         .lean(),
     ]);

@@ -13,6 +13,7 @@ import { AuthContext } from '../AuthContext.jsx';
 import TaskList from '../adapters/TaskList.default.jsx';
 import '../Main.css';
 import SafeHTML from '../components/SafeHTML.jsx';
+import { useToast } from '../hooks/useToast.js';
 import './SectionPage.css';
 
 const VIEW_TABS = [
@@ -73,6 +74,7 @@ export default function SectionPage() {
   const routeKey = (params.key || params.sectionName || '').toLowerCase();
 
   const { token } = useContext(AuthContext);
+  const { showToast } = useToast();
 
   const [pages, setPages] = useState([]);
   const [allSections, setAllSections] = useState([]);
@@ -95,6 +97,8 @@ export default function SectionPage() {
   const [tasks, setTasks] = useState([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [tasksError, setTasksError] = useState('');
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [creatingTask, setCreatingTask] = useState(false);
   const [taskBusyIds, setTaskBusyIds] = useState(() => new Set());
   const [taskView, setTaskView] = useState('list');
   const taskPrefKeyRef = useRef(null);
@@ -475,9 +479,11 @@ export default function SectionPage() {
     try {
       await navigator.clipboard.writeText(url);
       setCopiedEntryId(entry._id);
+      showToast('Entry link copied.', { type: 'success' });
     } catch (err) {
       console.warn('Copy link failed:', err?.message || err);
-      window.prompt('Copy entry link', url);
+      setEntriesError('Could not copy the entry link.');
+      showToast('Could not copy the entry link.', { type: 'error' });
     }
   }
 
@@ -491,9 +497,10 @@ export default function SectionPage() {
 
   async function addTask() {
     if (!activeKey) return;
-    if (typeof window === 'undefined') return;
-    const title = window.prompt('New task title');
+    const title = newTaskTitle.trim();
     if (!title) return;
+    setCreatingTask(true);
+    setTasksError('');
     try {
       const res = await axios.post('/api/tasks', {
         title,
@@ -502,9 +509,14 @@ export default function SectionPage() {
       });
       const created = res.data;
       setTasks((prev) => [created, ...prev]);
+      setNewTaskTitle('');
+      showToast('Task added.', { type: 'success' });
     } catch (err) {
       console.warn('Add task failed:', err?.response?.data || err.message);
       setTasksError('Could not add task.');
+      showToast('Could not add task.', { type: 'error' });
+    } finally {
+      setCreatingTask(false);
     }
   }
 
@@ -806,9 +818,23 @@ export default function SectionPage() {
             {!loading && activePane === 'tasks' && (
               <div className="tasks-pane">
                 <div className="tasks-toolbar">
-                  <button type="button" className="primary" onClick={addTask}>
-                    Add task
-                  </button>
+                  <form
+                    className="task-quick-add"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      addTask();
+                    }}
+                  >
+                    <input
+                      value={newTaskTitle}
+                      onChange={(event) => setNewTaskTitle(event.target.value)}
+                      placeholder="New task title"
+                      disabled={creatingTask}
+                    />
+                    <button type="submit" className="primary" disabled={creatingTask || !newTaskTitle.trim()}>
+                      {creatingTask ? 'Adding...' : 'Add task'}
+                    </button>
+                  </form>
                   <div className="task-view-toggle">
                     <button
                       type="button"
