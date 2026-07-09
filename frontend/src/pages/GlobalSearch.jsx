@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import axiosInstance from '../api/axiosInstance';
+import { completeSearchTask, searchContent } from '../api/search.js';
 import toast from 'react-hot-toast';
 import '../base.css';
 import './GlobalSearch.css';
@@ -181,9 +181,7 @@ export default function GlobalSearch() {
       setLoading(true);
       setHasSearched(true);
 
-      const response = await axiosInstance.get('/search', {
-        params: { q: searchQuery, type: searchType, limit: 50 }
-      });
+      const response = await searchContent(searchQuery, searchType);
 
       setResults(response.data);
       setHiddenResultKeys(new Set());
@@ -235,7 +233,7 @@ export default function GlobalSearch() {
       }
 
       if (action === 'completeTask') {
-        await axiosInstance.patch(`/api/tasks/${item._id}/toggle`);
+        await completeSearchTask(item._id);
         setHiddenResultKeys((current) => new Set([...current, resultKey(item)]));
         toast.success('Task completed.');
         return;
