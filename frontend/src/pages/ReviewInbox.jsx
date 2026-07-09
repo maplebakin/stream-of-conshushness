@@ -12,8 +12,16 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import api from '../api/axiosInstance.js';
-import { listReviewItems } from '../api/review.js';
+import {
+  acceptSuggestedTask,
+  dismissCalendarAppointment,
+  dismissCalendarEvent,
+  keepCalendarAppointment,
+  keepCalendarEvent,
+  listReviewItems,
+  moveTaskToDate,
+  rejectSuggestedTask,
+} from '../api/review.js';
 import { acceptSuggestedGatherItem, rejectSuggestedGatherItem } from '../api/suggestedGatherItems.js';
 import { acceptSuggestedInterest, rejectSuggestedInterest } from '../api/suggestedInterests.js';
 import { approveRipple, dismissRipple } from '../api/ripples.js';
@@ -381,7 +389,7 @@ export default function ReviewInbox() {
 
     setFollowupBusyKeys((current) => new Set(current).add(busyKey));
     try {
-      const { data: updatedTask } = await api.patch(`/api/tasks/${completedItem.taskId}`, { dueDate: todayISO });
+      const { data: updatedTask } = await moveTaskToDate(completedItem.taskId, todayISO);
       const dueDate = updatedTask?.dueDate || todayISO;
       setCompletedItems((current) => current.map((item) => (
         item.key === busyKey
@@ -418,10 +426,8 @@ export default function ReviewInbox() {
     }
 
     if (item.kind === 'suggestedTask') {
-      return api.put(
-        `/api/suggested-tasks/${id}/${action === 'primary' ? 'accept' : 'reject'}`,
-        action === 'primary' ? suggestionPayload(item, draft) : {}
-      );
+      if (action === 'primary') return acceptSuggestedTask(id, suggestionPayload(item, draft));
+      return rejectSuggestedTask(id);
     } else if (item.kind === 'suggestedGatherItem') {
       if (action === 'primary') return acceptSuggestedGatherItem(id, suggestionPayload(item, draft));
       return rejectSuggestedGatherItem(id);
@@ -432,11 +438,11 @@ export default function ReviewInbox() {
       if (action === 'primary') return approveRipple(id);
       return dismissRipple(id);
     } else if (item.kind === 'calendarAppointment') {
-      if (action === 'primary') return api.patch(`/api/appointments/${id}`, {});
-      return api.delete(`/api/appointments/${id}`);
+      if (action === 'primary') return keepCalendarAppointment(id);
+      return dismissCalendarAppointment(id);
     } else if (item.kind === 'calendarEvent') {
-      if (action === 'primary') return api.patch(`/api/important-events/${id}`, { pinned: !!item.pinned });
-      return api.delete(`/api/important-events/${id}`);
+      if (action === 'primary') return keepCalendarEvent(id, item.pinned);
+      return dismissCalendarEvent(id);
     }
     return null;
   }
