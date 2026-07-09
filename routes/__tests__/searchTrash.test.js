@@ -21,6 +21,7 @@ function makeQuery(docs) {
       return query;
     }),
     select: vi.fn(() => query),
+    populate: vi.fn(() => query),
     limit: vi.fn(() => query),
     lean: vi.fn(() => query),
     cursor: vi.fn(() => makeAsyncCursor(query._docs)),
@@ -160,5 +161,54 @@ describe('search excludes trashed entries', () => {
     expect(res.body.entries.some((entry) => entry.text === 'Alpha trashed')).toBe(false);
     expect(res.body.tasks).toHaveLength(1);
     expect(res.body.total).toBe(3);
+  });
+
+  it('includes source metadata for suggested task search results', async () => {
+    fixtures.suggestedTaskDocs = [
+      {
+        _id: 'suggested-task-1',
+        title: 'Alpha review task',
+        status: 'pending',
+        dueDate: new Date('2026-07-09T00:00:00.000Z'),
+        sourceRippleId: {
+          _id: 'ripple-1',
+          entryId: 'entry-1',
+          dateKey: '2026-07-08',
+          text: 'I need to handle the alpha review task tomorrow.',
+        },
+      },
+    ];
+
+    const handler = findHandler('/');
+    const req = { user: { userId: 'user123' }, query: { q: 'Alpha', type: 'suggestedTasks', limit: 10 } };
+    const res = {
+      statusCode: 200,
+      body: null,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(data) {
+        this.body = data;
+        return this;
+      },
+    };
+
+    try {
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.suggestedTasks).toHaveLength(1);
+      expect(res.body.suggestedTasks[0]).toMatchObject({
+        type: 'suggestedTask',
+        dueDate: '2026-07-09',
+        sourceRippleId: 'ripple-1',
+        sourceEntryId: 'entry-1',
+        sourceDate: '2026-07-08',
+        sourceText: 'I need to handle the alpha review task tomorrow.',
+      });
+    } finally {
+      fixtures.suggestedTaskDocs = [];
+    }
   });
 });

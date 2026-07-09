@@ -1,0 +1,21 @@
+.search-result__location {
+  margin: 0.65rem 0 0;
+  color: var(--text-tertiary);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.search-result__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .search-result__actions .review-button {
+    flex: 1 1 150px;
+    justify-content: center;
+  }
+}

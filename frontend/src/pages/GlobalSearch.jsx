@@ -6,6 +6,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import axiosInstance from '../api/axiosInstance';
 import toast from 'react-hot-toast';
 import '../base.css';
+import './GlobalSearch.css';
 
 const SEARCH_TYPES = [
   'all',
@@ -47,6 +48,104 @@ const FILTER_LABELS = {
 
 function filterLabel(type) {
   return FILTER_LABELS[type] || type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+function sourceEntryPath(item) {
+  if (!item?.sourceDate) return '';
+  const hash = item.sourceEntryId ? `#entry-${encodeURIComponent(item.sourceEntryId)}` : '';
+  return `/day/${item.sourceDate}${hash}`;
+}
+
+function primaryDestination(item) {
+  switch (item.type) {
+    case 'entry': {
+      const hash = item._id ? `#entry-${encodeURIComponent(item._id)}` : '';
+      return item.date ? { path: `/day/${item.date}${hash}`, label: 'Open entry day' } : null;
+    }
+    case 'task':
+      return item.dueDate
+        ? { path: `/day/${item.dueDate}`, label: 'Open due day' }
+        : { path: '/inbox/tasks', label: 'Open task inbox' };
+    case 'goal':
+      return { path: '/goals', label: 'Open goals' };
+    case 'note':
+      return item.date ? { path: `/day/${item.date}`, label: 'Open note day' } : null;
+    case 'appointment':
+    case 'importantEvent':
+    case 'scheduleItem':
+      return item.date
+        ? { path: `/day/${item.date}`, label: 'Open day' }
+        : { path: '/calendar', label: 'Open calendar' };
+    case 'gatherItem':
+      return { path: '/gather-lists', label: 'Open gather lists' };
+    case 'interest':
+      return { path: '/interests', label: 'Open interests' };
+    case 'suggestedTask':
+    case 'suggestedGatherItem':
+    case 'suggestedInterest':
+      return { path: '/review', label: 'Open Review Inbox' };
+    case 'habit':
+      return { path: '/habits/analytics', label: 'Open habits' };
+    case 'researchSubject':
+      return { path: '/sections', label: 'Open research' };
+    case 'game':
+      return { path: item.slug ? `/section/games/${item.slug}` : '/section/games', label: 'Open game' };
+    case 'gameNote':
+      return { path: '/section/games', label: 'Open games' };
+    case 'section':
+      return item.slug ? { path: `/sections/${item.slug}`, label: 'Open section' } : { path: '/sections', label: 'Open sections' };
+    case 'sectionPage':
+      return item.sectionKey && item.slug
+        ? { path: `/sections/${item.sectionKey}/${item.slug}`, label: 'Open page' }
+        : { path: '/sections', label: 'Open sections' };
+    case 'cluster':
+      return item.slug ? { path: `/clusters/${item.slug}`, label: 'Open cluster' } : { path: '/clusters', label: 'Open clusters' };
+    default:
+      return null;
+  }
+}
+
+function locationText(item) {
+  switch (item.type) {
+    case 'entry':
+      return item.date ? `Entry on ${item.date}` : 'Entry';
+    case 'task':
+      return item.dueDate ? `Task due ${item.dueDate}` : 'Task in Task Inbox';
+    case 'note':
+      return item.date ? `Note from ${item.date}` : 'Note';
+    case 'appointment':
+      return item.date ? `Appointment on ${item.date}` : 'Appointment in Calendar';
+    case 'importantEvent':
+      return item.date ? `Event on ${item.date}` : 'Event in Calendar';
+    case 'scheduleItem':
+      return item.date ? `Schedule block on ${item.date}` : 'Schedule block';
+    case 'suggestedTask':
+    case 'suggestedGatherItem':
+    case 'suggestedInterest':
+      return item.sourceDate
+        ? `Review suggestion from ${item.sourceDate}`
+        : 'Review suggestion in Review Inbox';
+    case 'gatherItem':
+      return item.list ? `Gather item in ${item.list}` : 'Gather item';
+    case 'interest':
+      return item.category ? `Interest in ${item.category}` : 'Interest';
+    case 'goal':
+      return 'Goal';
+    case 'section':
+      return 'Section';
+    case 'sectionPage':
+      return 'Section page';
+    case 'cluster':
+      return 'Cluster';
+    case 'habit':
+      return item.status ? `Habit: ${item.status}` : 'Habit';
+    default:
+      return '';
+  }
+}
+
+function isSuggestion(item) {
+  return ['suggestedTask', 'suggestedGatherItem', 'suggestedInterest'].includes(item.type);
 }
 
 export default function GlobalSearch() {
@@ -116,59 +215,8 @@ export default function GlobalSearch() {
   };
 
   const handleNavigate = (item) => {
-    switch (item.type) {
-      case 'entry':
-        navigate(`/day/${item.date}`);
-        break;
-      case 'task':
-        navigate(item.dueDate ? `/day/${item.dueDate}` : '/');
-        break;
-      case 'goal':
-        navigate('/goals');
-        break;
-      case 'note':
-        navigate(`/day/${item.date}`);
-        break;
-      case 'appointment':
-      case 'importantEvent':
-      case 'scheduleItem':
-        navigate(item.date ? `/day/${item.date}` : '/calendar');
-        break;
-      case 'gatherItem':
-      case 'suggestedGatherItem':
-        navigate('/gather-lists');
-        break;
-      case 'interest':
-      case 'suggestedInterest':
-        navigate('/interests');
-        break;
-      case 'suggestedTask':
-        navigate('/inbox/tasks');
-        break;
-      case 'habit':
-        navigate('/habits/analytics');
-        break;
-      case 'researchSubject':
-        navigate('/sections');
-        break;
-      case 'game':
-        navigate(item.slug ? `/section/games/${item.slug}` : '/section/games');
-        break;
-      case 'gameNote':
-        navigate('/section/games');
-        break;
-      case 'section':
-        navigate(`/sections/${item.slug}`);
-        break;
-      case 'sectionPage':
-        navigate(`/sections/${item.sectionKey}/${item.slug}`);
-        break;
-      case 'cluster':
-        navigate(`/clusters/${item.slug}`);
-        break;
-      default:
-        break;
-    }
+    const destination = primaryDestination(item);
+    if (destination?.path) navigate(destination.path);
   };
 
   const resultKey = (item, group = '') => `${item.type || group}:${item._id || item.id || item.slug || item.title}`;
@@ -177,6 +225,12 @@ export default function GlobalSearch() {
     try {
       if (action === 'open') {
         handleNavigate(item);
+        return;
+      }
+
+      if (action === 'openSource') {
+        const path = sourceEntryPath(item);
+        if (path) navigate(path);
         return;
       }
 
@@ -403,11 +457,15 @@ function SearchResultItem({ item, query, onNavigate, onAction, getTypeLabel, get
     return 'Untitled';
   };
 
+  const destination = primaryDestination(item);
+  const sourcePath = sourceEntryPath(item);
+  const where = locationText(item);
   const actions = [];
-  actions.push({ key: 'open', label: 'Open' });
-  if (item.type === 'task' && !item.completed) actions.push({ key: 'completeTask', label: 'Complete' });
-  if (['suggestedTask', 'suggestedGatherItem', 'suggestedInterest'].includes(item.type)) {
-    actions.push({ key: 'review', label: 'Review' });
+  if (destination) actions.push({ key: 'open', label: destination.label });
+  if (sourcePath && item.type !== 'entry') actions.push({ key: 'openSource', label: 'Open source entry' });
+  if (item.type === 'task' && !item.completed) actions.push({ key: 'completeTask', label: 'Complete task' });
+  if (isSuggestion(item) && destination?.path !== '/review') {
+    actions.push({ key: 'review', label: 'Review suggestion' });
   }
 
   return (
@@ -451,7 +509,14 @@ function SearchResultItem({ item, query, onNavigate, onAction, getTypeLabel, get
         </p>
       )}
 
-      {item.date && (
+      {where && (
+        <p className="search-result__location">
+          {where}
+          {item.source === 'entry-automation' ? ' · from entry automation' : ''}
+        </p>
+      )}
+
+      {item.date && !where && (
         <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)', margin: '0.5rem 0 0 0' }}>
           {item.date}
         </p>
@@ -473,7 +538,7 @@ function SearchResultItem({ item, query, onNavigate, onAction, getTypeLabel, get
         </span>
       )}
 
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+      <div className="search-result__actions">
         {actions.map((action) => (
           <button
             key={action.key}

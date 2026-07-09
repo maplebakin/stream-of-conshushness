@@ -37,6 +37,43 @@ function includesType(type, ...names) {
   return type === 'all' || names.includes(type);
 }
 
+function idOf(value) {
+  if (!value) return '';
+  if (typeof value === 'object' && value._id) return String(value._id);
+  return String(value);
+}
+
+function isoDate(value) {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    return match ? match[1] : '';
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  return '';
+}
+
+function sourceEntryMeta(entry) {
+  if (!entry || typeof entry !== 'object') return {};
+  return {
+    sourceEntryId: idOf(entry),
+    sourceDate: isoDate(entry.date),
+    sourceTitle: entry.title || '',
+  };
+}
+
+function sourceRippleMeta(ripple) {
+  if (!ripple || typeof ripple !== 'object') return {};
+  return {
+    sourceRippleId: idOf(ripple),
+    sourceEntryId: idOf(ripple.entryId),
+    sourceDate: isoDate(ripple.dateKey),
+    sourceText: ripple.text || '',
+  };
+}
+
 /**
  * GET /api/search?q=query&type=all&limit=50
  * Global search across all content types
@@ -117,7 +154,7 @@ router.get('/', async (req, res) => {
       })
         .sort({ createdAt: -1 })
         .limit(searchLimit)
-        .select('title notes status completed dueDate priority createdAt')
+        .select('title notes status completed dueDate priority entryId createdAt')
         .lean();
 
       results.tasks = tasks.map(t => ({
@@ -236,13 +273,16 @@ router.get('/', async (req, res) => {
       })
         .sort({ date: -1, createdAt: -1 })
         .limit(searchLimit)
-        .select('title details location date startDate timeStart timeEnd createdAt')
+        .select('title details location date startDate timeStart timeEnd entryId source createdAt')
+        .populate('entryId', 'date title')
         .lean();
 
       results.appointments = appointments.map((item) => ({
         ...item,
         type: 'appointment',
-        preview: getPreview(`${item.details || ''} ${item.location || ''}`, query)
+        preview: getPreview(`${item.details || ''} ${item.location || ''}`, query),
+        ...sourceEntryMeta(item.entryId),
+        source: item.source || ''
       }));
     }
 
@@ -256,13 +296,16 @@ router.get('/', async (req, res) => {
       })
         .sort({ date: -1, createdAt: -1 })
         .limit(searchLimit)
-        .select('title description date pinned createdAt')
+        .select('title description date pinned entryId source createdAt')
+        .populate('entryId', 'date title')
         .lean();
 
       results.importantEvents = importantEvents.map((item) => ({
         ...item,
         type: 'importantEvent',
-        preview: getPreview(item.description || '', query)
+        preview: getPreview(item.description || '', query),
+        ...sourceEntryMeta(item.entryId),
+        source: item.source || ''
       }));
     }
 
@@ -279,7 +322,7 @@ router.get('/', async (req, res) => {
       })
         .sort({ createdAt: -1 })
         .limit(searchLimit)
-        .select('title description list status sourceText tags createdAt')
+        .select('title description list status sourceText tags sourceEntryId createdAt')
         .lean();
 
       results.gatherItems = gatherItems.map((item) => ({
@@ -302,13 +345,15 @@ router.get('/', async (req, res) => {
       })
         .sort({ createdAt: -1 })
         .limit(searchLimit)
-        .select('title description list status sourceText tags createdAt')
+        .select('title description list status sourceText tags sourceEntryId createdAt')
+        .populate('sourceEntryId', 'date title')
         .lean();
 
       results.suggestedGatherItems = suggestedGatherItems.map((item) => ({
         ...item,
         type: 'suggestedGatherItem',
-        preview: getPreview(`${item.description || ''} ${item.sourceText || ''} ${item.list || ''}`, query)
+        preview: getPreview(`${item.description || ''} ${item.sourceText || ''} ${item.list || ''}`, query),
+        ...sourceEntryMeta(item.sourceEntryId)
       }));
     }
 
@@ -325,7 +370,7 @@ router.get('/', async (req, res) => {
       })
         .sort({ createdAt: -1 })
         .limit(searchLimit)
-        .select('title description category status sourceText tags createdAt')
+        .select('title description category status sourceText tags sourceEntryId createdAt')
         .lean();
 
       results.interests = interests.map((item) => ({
@@ -348,13 +393,15 @@ router.get('/', async (req, res) => {
       })
         .sort({ createdAt: -1 })
         .limit(searchLimit)
-        .select('title description category status sourceText tags createdAt')
+        .select('title description category status sourceText tags sourceEntryId createdAt')
+        .populate('sourceEntryId', 'date title')
         .lean();
 
       results.suggestedInterests = suggestedInterests.map((item) => ({
         ...item,
         type: 'suggestedInterest',
-        preview: getPreview(`${item.description || ''} ${item.sourceText || ''} ${item.category || ''}`, query)
+        preview: getPreview(`${item.description || ''} ${item.sourceText || ''} ${item.category || ''}`, query),
+        ...sourceEntryMeta(item.sourceEntryId)
       }));
     }
 
@@ -365,13 +412,16 @@ router.get('/', async (req, res) => {
       })
         .sort({ createdAt: -1 })
         .limit(searchLimit)
-        .select('title status priority dueDate repeat cluster section createdAt')
+        .select('title status priority dueDate repeat cluster section sourceRippleId createdAt')
+        .populate('sourceRippleId', 'entryId dateKey text')
         .lean();
 
       results.suggestedTasks = suggestedTasks.map((item) => ({
         ...item,
         type: 'suggestedTask',
-        preview: getPreview(`${item.priority || ''} ${item.cluster || ''} ${item.section || ''}`, query)
+        dueDate: isoDate(item.dueDate),
+        preview: getPreview(`${item.priority || ''} ${item.cluster || ''} ${item.section || ''}`, query),
+        ...sourceRippleMeta(item.sourceRippleId)
       }));
     }
 
