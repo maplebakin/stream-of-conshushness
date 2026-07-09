@@ -5,6 +5,7 @@ import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import { listSuggestedGatherItems } from './api/suggestedGatherItems.js';
 import { listSuggestedInterests } from './api/suggestedInterests.js';
+import { getCalendarDay } from './api/calendar.js';
 
 import TaskList from './TaskList.jsx';
 import SuggestedTasksInbox from './SuggestedTasksInbox.jsx';
@@ -329,10 +330,10 @@ export default function DailyPage() {
     if (!token || !dateISO) return;
     setLoadingAgenda(true);
     try {
-      const { data } = await axios.get(`/api/calendar/day/${dateISO}`);
-      setAppointments(Array.isArray(data.appointments) ? data.appointments : []);
-      setEvents(Array.isArray(data.events) ? data.events : []);
-      setImportant(Array.isArray(data.importantEvents) ? data.importantEvents : []);
+      const data = await getCalendarDay(dateISO);
+      setAppointments(data.appointments);
+      setEvents(data.events);
+      setImportant(data.importantEvents);
     } catch (err) {
       console.error('loadAgenda error', err?.message || err);
       setAppointments([]); setEvents([]); setImportant([]);

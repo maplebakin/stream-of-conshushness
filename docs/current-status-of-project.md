@@ -1,8 +1,8 @@
 # Current Status of Project
 
-Last updated: 2026-07-08
+Last updated: 2026-07-09
 Branch observed: `codex/review-inbox-maintenance`
-Latest observed commit: `7c5367f Improve review inbox usability`
+Latest observed commit: `6f1e3ff Show calendar artifact source context`
 
 This document is written as a handoff for another LLM or collaborator to brainstorm product and engineering improvements from the current codebase. It summarizes the live architecture, known usable surfaces, recent improvements, open risks, and high-value next directions. It is based on source inspection, existing docs, and the current test/build tooling; it is not a substitute for a fresh manual smoke test with real data.
 
@@ -84,6 +84,7 @@ This loop is the highest-value area to keep improving. The app has many feature 
 - Task soft-delete undo restores original records instead of recreating duplicate tasks.
 - `react-hot-toast` is the consolidated notification path.
 - Unreachable legacy `ManageSections` was removed.
+- An opt-in Playwright browser smoke now covers Stream capture -> Review Inbox acceptance -> the accepted task on its Daily Page, plus ordinal-date calendar extraction with visible source context. It intentionally skips unless `RUN_BROWSER_SMOKE=1`; it can start isolated local servers with `BROWSER_SMOKE_START_SERVER=1` and requires a live disposable MongoDB database.
 
 ## Current Strengths
 
@@ -143,9 +144,9 @@ Review Inbox is now useful, but its next usability frontier is confidence and sp
 - source entry editing from the review context,
 - clearer calendar keep/dismiss semantics.
 
-### 6. Real Browser Smoke Coverage Is Missing
+### 6. Browser Smoke Is Opt-In and Narrow
 
-The backend/unit/contract suite is strong, but there is no clear Playwright/Cypress-style browser smoke that proves Stream capture -> Review Inbox -> accept -> destination page works through the actual UI.
+The backend/unit/contract suite is strong, and `e2e/daily-loop.spec.js` now proves the core UI path through Playwright when explicitly enabled: Stream capture -> Review Inbox -> accepted task on the correct Daily Page. It also verifies ordinal-date calendar extraction, the Automation source label, and the source-entry link. The smoke is intentionally gated behind `RUN_BROWSER_SMOKE=1`, requires a live MongoDB-backed app, and therefore is not part of the default local test path.
 
 ### 7. API Wrappers Are Incomplete
 
@@ -198,12 +199,10 @@ This is large enough that future work should avoid broad rewrites. Prefer narrow
 
 ### Engineering Cleanup
 
-1. Add a browser-level daily-loop smoke test.
-   - Register/login disposable user.
-   - Create entry with "I need to call the dentist tomorrow."
-   - Verify Review Inbox item.
-   - Edit/accept suggestion.
-   - Verify task appears on the correct day.
+1. Expand the existing opt-in browser-level daily-loop smoke test.
+   - Keep the current disposable-user Stream -> Review -> accepted-task-on-Daily-Page coverage.
+   - Preserve ordinal-date calendar extraction and source-context coverage.
+   - Add the highest-risk edit/replacement and manual-calendar-protection paths only when a disposable MongoDB environment is available.
 
 2. Audit compatibility shims.
    - Map every compat endpoint to current frontend callers.
@@ -241,7 +240,7 @@ Use these prompts to generate grounded ideas:
 
 ## Suggested Implementation Order
 
-1. Add Playwright or equivalent browser smoke for the daily loop.
+1. Expand the existing opt-in Playwright browser smoke for the daily loop.
 2. Add source-entry links and keyboard shortcuts to Review Inbox.
 3. Improve `/day/:date` prioritization and reduce first-screen clutter.
 4. Extend Search actions for restore/edit/delete where APIs already exist.
@@ -268,4 +267,3 @@ Use these prompts to generate grounded ideas:
 - `docs/usability-roadmap.md`: current usability backlog.
 - `docs/manual-smoke-test.md`: manual functional checklist.
 - `NAVIGATION_AUDIT.md`, `STYLING_AUDIT.md`: useful history, but dates are older and should be checked against current code.
-
