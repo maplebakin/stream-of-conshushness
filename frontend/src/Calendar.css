@@ -289,3 +289,63 @@
     font-size: 0.72rem;
   }
 }
+
+/* Calendar as real-world context ------------------------------------ */
+.calendar-page {
+  gap: var(--space-5);
+  font-family: var(--font-sans);
+}
+
+.calendar-page > aside.panel,
+.calendar-panel {
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-card);
+}
+
+.calendar-panel {
+  padding: var(--space-4);
+}
+
+.calendar-header {
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-3);
+}
+
+.calendar-header .title h2 {
+  color: var(--color-text-strong);
+  font-family: var(--font-thread);
+  font-size: clamp(1.65rem, 2.5vw, 2.2rem);
+}
+
+.calendar-header .subtitle {
+  display: inline-flex;
+  margin-top: var(--space-1);
+  padding: 0.16rem 0.45rem;
+  border-radius: var(--radius-button);
+  background: color-mix(in srgb, var(--color-surface-tint) 56%, var(--color-surface) 44%);
+  font-size: 0.78rem;
+}
+
+.calendar-cell {
+  border-radius: var(--radius-input);
+  box-shadow: var(--shadow-border);
+}
+
+.calendar-cell:hover:not(.empty) {
+  background: color-mix(in srgb, var(--color-surface-accent) 62%, var(--color-surface) 38%);
+  box-shadow: var(--shadow-card);
+}
+
+.calendar-cell.today {
+  outline-color: var(--color-ripple);
+  background: color-mix(in srgb, var(--color-ripple) 11%, var(--color-surface) 89%);
+}
+
+.calendar-daynum {
+  color: var(--color-text-strong);
+}
+
+.calendar-page .pill {
+  background: color-mix(in srgb, var(--color-surface) 82%, var(--color-ripple) 18%);
+  font-weight: 750;
+}

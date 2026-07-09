@@ -745,7 +745,9 @@ export default function DailyPage() {
                           </div>
                         )}
                         <div className="agenda-source">
-                          <span className="agenda-origin-pill">{calendarOriginLabel(item)}</span>
+                          <span className={`agenda-origin-pill agenda-origin-pill--${item.source || 'manual'}`}>
+                            {calendarOriginLabel(item)}
+                          </span>
                           {sourceText && <span className="agenda-source-text">{sourceText}</span>}
                           {sourcePath && (
                             <Link to={sourcePath} className="button chip agenda-source-link">

@@ -8,17 +8,18 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-3) var(--space-6);
-  background: color-mix(in srgb, var(--color-surface) 86%, rgba(255,255,255,0.76) 14%);
+  min-height: var(--header-height);
+  padding: var(--space-3) clamp(var(--space-4), 4vw, var(--space-8));
+  background: color-mix(in srgb, var(--color-surface) 82%, rgba(255,255,255,0.88) 18%);
   border-bottom: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
-  box-shadow: var(--shadow-border);
+  box-shadow: 0 8px 24px rgba(72, 51, 38, 0.05), var(--shadow-border);
   backdrop-filter: blur(14px);
 }
 
 .app-header__title {
   margin: 0;
   font-family: var(--font-echo);
-  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  font-size: clamp(1.45rem, 2.4vw, 2.05rem);
   color: var(--color-text-strong);
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
 }
@@ -26,7 +27,7 @@
 .primary-nav {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -34,7 +35,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.55rem 0.95rem;
+  min-height: 40px;
+  padding: 0.5rem 0.82rem;
   border-radius: var(--radius-button);
   font-weight: 600;
   font-family: var(--font-sans);
@@ -54,9 +56,9 @@
 
 .nav-pill--active {
   color: var(--color-ink);
-  background: color-mix(in srgb, var(--color-surface) 64%, var(--color-spool) 36%);
+  background: color-mix(in srgb, var(--color-surface) 72%, var(--color-spool) 28%);
   border-color: color-mix(in srgb, var(--color-spool) 60%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-spool) 60%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-spool) 54%, transparent), 0 4px 10px rgba(78, 62, 116, 0.08);
 }
 
 .account-link {

@@ -422,3 +422,93 @@
     width: fit-content;
   }
 }
+
+/* Review as a calm decision queue ----------------------------------- */
+.review-inbox {
+  gap: var(--space-5);
+}
+
+.review-inbox__header {
+  padding: var(--space-3) var(--space-2) 0;
+}
+
+.review-inbox__toolbar {
+  padding: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-radius: var(--radius-panel);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-surface-tint) 46%, var(--color-surface) 54%), var(--color-surface));
+  box-shadow: var(--shadow-card);
+}
+
+.review-inbox__search {
+  min-height: 50px;
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--color-surface-elevated) 94%, white 6%);
+}
+
+.review-inbox__tabs {
+  grid-template-columns: repeat(auto-fit, minmax(146px, 1fr));
+}
+
+.review-inbox__tab {
+  min-height: 48px;
+  border-radius: var(--radius-input);
+}
+
+.review-inbox__tab.is-active {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-spool) 40%, transparent);
+}
+
+.review-inbox__bulk,
+.review-completed__item,
+.review-shortcuts {
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-border);
+}
+
+.review-inbox-item {
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-card);
+}
+
+.review-inbox-item:hover {
+  box-shadow: var(--shadow-soft);
+}
+
+.review-inbox-item.is-selected {
+  background: linear-gradient(120deg, color-mix(in srgb, var(--color-spool) 11%, var(--color-surface) 89%), var(--color-surface));
+}
+
+.review-inbox-item__kicker {
+  color: var(--color-vein);
+  letter-spacing: 0.08em;
+}
+
+.review-inbox-item h2 {
+  font-family: var(--font-thread);
+  font-size: 1.2rem;
+}
+
+.review-source-preview {
+  max-width: 88ch;
+  padding: var(--space-3);
+  border-left: 3px solid color-mix(in srgb, var(--color-ripple) 54%, var(--color-border) 46%);
+  background: color-mix(in srgb, var(--color-surface-accent) 34%, var(--color-surface) 66%);
+}
+
+.review-button--primary {
+  min-height: 40px;
+}
+
+@media (max-width: 760px) {
+  .review-inbox__header {
+    padding-inline: 0;
+  }
+
+  .review-inbox__toolbar,
+  .review-inbox-item {
+    padding: var(--space-3);
+  }
+}

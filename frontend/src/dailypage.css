@@ -516,6 +516,23 @@
   line-height: 1;
 }
 
+.daily-page .agenda-origin-pill--entry-automation {
+  border-color: color-mix(in srgb, var(--color-ripple) 42%, var(--color-border) 58%);
+  background: color-mix(in srgb, var(--color-ripple) 13%, var(--color-surface) 87%);
+  color: var(--color-success);
+}
+
+.daily-page .agenda-origin-pill--user-edited {
+  border-color: color-mix(in srgb, var(--color-lantern) 46%, var(--color-border) 54%);
+  background: color-mix(in srgb, var(--color-lantern) 14%, var(--color-surface) 86%);
+  color: var(--color-warning);
+}
+
+.daily-page .agenda-origin-pill--manual {
+  background: color-mix(in srgb, var(--color-surface-tint) 42%, var(--color-surface) 58%);
+  color: var(--color-vein);
+}
+
 .daily-page .agenda-source-text {
   line-height: 1.35;
 }
@@ -969,5 +986,165 @@
   .panel .task .task-actions {
     margin-left: 0;
     width: 100%;
+  }
+}
+
+/* Daily-loop visual hierarchy --------------------------------------- */
+.daily-page {
+  width: min(1380px, 100%);
+  margin: 0 auto;
+  padding: var(--space-5);
+}
+
+.daily-page .daily-header {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.daily-page .centered-header {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-panel);
+  background: linear-gradient(110deg, color-mix(in srgb, var(--color-surface-tint) 58%, var(--color-surface) 42%), var(--color-surface));
+  box-shadow: var(--shadow-card);
+}
+
+.daily-page .daily-actions {
+  justify-content: flex-start;
+  margin-top: 0;
+}
+
+.daily-page .daily-actions .button {
+  min-height: 40px;
+}
+
+.daily-page .daily-attention {
+  position: relative;
+  overflow: hidden;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding: var(--space-5);
+  border-color: color-mix(in srgb, var(--color-ripple) 34%, var(--color-border) 66%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-surface-accent) 64%, var(--color-surface) 36%), var(--color-surface));
+  box-shadow: var(--shadow-float);
+}
+
+.daily-page .daily-attention::after {
+  position: absolute;
+  inset: -8rem -5rem auto auto;
+  width: 17rem;
+  height: 17rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-lantern) 13%, transparent);
+  content: '';
+  pointer-events: none;
+}
+
+.daily-page .daily-attention__lead,
+.daily-page .daily-attention__grid {
+  position: relative;
+  z-index: 1;
+}
+
+.daily-page .daily-attention__eyebrow {
+  color: var(--color-ripple);
+  font-family: var(--font-sans);
+  font-weight: 800;
+  letter-spacing: 0.11em;
+}
+
+.daily-page .daily-attention h3 {
+  font-size: clamp(1.45rem, 2vw, 1.9rem);
+  line-height: 1.1;
+}
+
+.daily-page .daily-attention__recommendation {
+  display: flex;
+  align-items: center;
+  padding: var(--space-4);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--color-surface) 74%, white 26%);
+  box-shadow: var(--shadow-border);
+  font-size: 1rem;
+}
+
+.daily-page .daily-attention__tile {
+  min-height: 128px;
+  padding: var(--space-4);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--color-surface) 88%, white 12%);
+  box-shadow: var(--shadow-border);
+}
+
+.daily-page .daily-attention__tile--needs-action {
+  border-color: color-mix(in srgb, var(--color-lantern) 56%, var(--color-border) 44%);
+  background: color-mix(in srgb, var(--color-lantern) 12%, var(--color-surface) 88%);
+}
+
+.daily-page .daily-attention__tile strong {
+  font-size: 1.85rem;
+}
+
+.daily-page .daily-layout {
+  gap: var(--space-5);
+}
+
+.daily-page .panel {
+  padding: var(--space-4);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-card);
+}
+
+.daily-page .daily-section-heading,
+.daily-page .side-header h3 {
+  color: var(--color-text-strong);
+  font-size: 1.08rem;
+}
+
+.daily-page .daily-section-heading {
+  padding-inline-start: var(--space-2);
+  border-left: 3px solid color-mix(in srgb, var(--color-ripple) 70%, var(--color-spool) 30%);
+}
+
+.daily-page .daily-suggestions,
+.daily-page .ripple-box {
+  padding-top: var(--space-3);
+}
+
+.daily-page .agenda-item {
+  padding: var(--space-3);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--color-surface-tint) 34%, var(--color-surface) 66%);
+}
+
+.daily-page .agenda-origin-pill {
+  min-height: 26px;
+  background: color-mix(in srgb, var(--color-ripple) 13%, var(--color-surface) 87%);
+  color: var(--color-ripple);
+  letter-spacing: 0.03em;
+}
+
+.daily-page .agenda-source-link {
+  color: var(--color-plum);
+  font-weight: 750;
+}
+
+.daily-page .entry-card {
+  padding: var(--space-3);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--color-surface) 94%, white 6%);
+}
+
+@media (max-width: 720px) {
+  .daily-page {
+    padding: var(--space-3);
+  }
+
+  .daily-page .daily-attention {
+    padding: var(--space-4);
+  }
+
+  .daily-page .daily-attention h3 {
+    font-size: 1.45rem;
   }
 }

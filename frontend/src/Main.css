@@ -16,16 +16,16 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
-  background:
-    linear-gradient(180deg, rgba(255, 253, 248, 0.72), rgba(255, 253, 248, 0) 18rem),
-    var(--color-background);
+  background: transparent;
 }
 
 .app-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  gap: var(--space-6);
-  padding: var(--space-6);
+  grid-template-columns: minmax(0, 1fr) 264px;
+  gap: var(--space-5);
+  width: min(1500px, 100%);
+  margin: 0 auto;
+  padding: var(--space-6) clamp(var(--space-3), 3vw, var(--space-8));
   align-items: start;
 }
 
@@ -43,11 +43,11 @@ body {
 .app-content {
   flex: 1;
   min-height: 0;
-  padding: var(--space-4);
-  background: linear-gradient(145deg, color-mix(in srgb, var(--color-surface-elevated) 92%, white 8%), var(--color-surface-soft));
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-soft);
-  border: 1px solid var(--color-border);
+  padding: var(--space-3);
+  background: color-mix(in srgb, var(--color-surface-elevated) 88%, transparent);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-card);
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
 }
 
 .centered-header {
@@ -68,7 +68,7 @@ body {
 .app-body .section-sidebar {
   background: color-mix(in srgb, var(--color-surface) 92%, rgba(255,255,255,0) 8%);
   border: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--shadow-card);
 }
 
 .section-sidebar .sidebar-title {

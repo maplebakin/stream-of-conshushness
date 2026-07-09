@@ -317,64 +317,42 @@ export default function GlobalSearch() {
   };
 
   return (
-    <div className="page">
-      <div style={{ maxWidth: 900, margin: '0 auto' }}>
-        <h1 style={{ marginBottom: '1.5rem' }}>Search</h1>
+    <div className="page search-page">
+      <div className="search-page__inner">
+        <header className="search-page__header">
+          <p className="page-eyebrow">Recovery space</p>
+          <h1 className="page-title">Find your thread</h1>
+          <p className="page-subtitle">Search across captures, tasks, plans, and the details the app connected for you.</p>
+        </header>
 
         {/* Search Form */}
-        <form onSubmit={handleSearch} style={{ marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+        <form className="search-page__form" onSubmit={handleSearch}>
+          <div className="search-page__field-row">
             <input
               type="text"
+              className="search-page__field"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search across all your content..."
-              style={{
-                flex: 1,
-                padding: '0.75rem',
-                fontSize: '1rem',
-                border: '2px solid var(--border-primary)',
-                borderRadius: '8px',
-                background: 'var(--bg-primary)'
-              }}
               autoFocus
             />
             <button
               type="submit"
               disabled={loading || query.trim().length < 2}
-              style={{
-                padding: '0.75rem 1.5rem',
-                fontSize: '1rem',
-                fontWeight: 500,
-                background: 'var(--accent-primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading || query.trim().length < 2 ? 0.5 : 1
-              }}
+              className="button search-page__submit"
             >
               {loading ? 'Searching...' : 'Search'}
             </button>
           </div>
 
           {/* Type Filter */}
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div className="search-page__filters" aria-label="Search result filters">
             {SEARCH_TYPES.map((t) => (
               <button
                 key={t}
                 type="button"
                 onClick={() => handleTypeChange(t)}
-                style={{
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.875rem',
-                  fontWeight: type === t ? 600 : 400,
-                  background: type === t ? 'var(--accent-primary)' : 'var(--bg-secondary)',
-                  color: type === t ? 'white' : 'var(--text-primary)',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}
+                className={`search-page__filter${type === t ? ' is-active' : ''}`}
               >
                 {filterLabel(t)}
               </button>
@@ -384,7 +362,7 @@ export default function GlobalSearch() {
 
         {/* Loading State */}
         {loading && (
-          <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+          <div className="card search-state search-state--loading">
             <p>Searching...</p>
           </div>
         )}
@@ -393,17 +371,17 @@ export default function GlobalSearch() {
         {!loading && results && (
           <>
             {/* Results Summary */}
-            <div style={{ marginBottom: '1.5rem' }}>
-              <p style={{ color: 'var(--text-secondary)' }}>
+            <div className="search-results-summary">
+              <p>
                 Found <strong>{results.total}</strong> result{results.total !== 1 ? 's' : ''} for "{results.query}"
               </p>
             </div>
 
             {/* No Results */}
             {results.total === 0 && (
-              <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-                <p style={{ fontSize: '1.125rem', marginBottom: '0.5rem' }}>No results found</p>
-                <p style={{ color: 'var(--text-secondary)' }}>
+              <div className="card search-state">
+                <p className="search-state__title">No results found</p>
+                <p>
                   Try a different search term or filter
                 </p>
               </div>
@@ -411,7 +389,7 @@ export default function GlobalSearch() {
 
             {/* Results List */}
             {results.total > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div className="search-results-list">
                 {RESULT_GROUPS.flatMap((group) => (
                   (results[group] || [])
                     .filter((item) => !hiddenResultKeys.has(resultKey(item, group)))
@@ -435,9 +413,9 @@ export default function GlobalSearch() {
 
         {/* Empty State */}
         {!loading && !hasSearched && (
-          <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-            <p style={{ fontSize: '1.125rem', marginBottom: '0.5rem' }}>Start searching</p>
-            <p style={{ color: 'var(--text-secondary)' }}>
+          <div className="card search-state">
+            <p className="search-state__title">Start searching</p>
+            <p>
               Enter a search term to find entries, tasks, goals, notes, and more
             </p>
           </div>
@@ -468,41 +446,21 @@ function SearchResultItem({ item, query, onNavigate, onAction, getTypeLabel, get
 
   return (
     <div
-      className="card"
-      style={{
-        cursor: 'pointer',
-        transition: 'all 0.2s',
-        borderLeft: `4px solid ${getTypeColor(item.type)}`
-      }}
+      className="card search-result"
+      style={{ '--result-accent': getTypeColor(item.type) }}
       onClick={() => onNavigate(item)}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = getTypeColor(item.type);
-        e.currentTarget.style.transform = 'translateX(4px)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = 'transparent';
-        e.currentTarget.style.transform = 'translateX(0)';
-      }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
-        <h3 style={{ margin: 0, fontSize: '1.125rem' }}>{highlightMatch(getTitle(), query)}</h3>
+      <div className="search-result__header">
+        <h3>{highlightMatch(getTitle(), query)}</h3>
         <span
-          style={{
-            padding: '0.25rem 0.5rem',
-            fontSize: '0.75rem',
-            fontWeight: 600,
-            background: getTypeColor(item.type),
-            color: 'white',
-            borderRadius: '4px',
-            whiteSpace: 'nowrap'
-          }}
+          className="search-result__type"
         >
           {getTypeLabel(item.type)}
         </span>
       </div>
 
       {item.preview && (
-        <p style={{ color: 'var(--text-secondary)', margin: '0.5rem 0 0 0', fontSize: '0.95rem' }}>
+        <p className="search-result__preview">
           {highlightMatch(item.preview, query)}
         </p>
       )}
@@ -515,23 +473,13 @@ function SearchResultItem({ item, query, onNavigate, onAction, getTypeLabel, get
       )}
 
       {item.date && !where && (
-        <p style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)', margin: '0.5rem 0 0 0' }}>
+        <p className="search-result__date">
           {item.date}
         </p>
       )}
 
       {item.status && (
-        <span
-          style={{
-            display: 'inline-block',
-            marginTop: '0.5rem',
-            padding: '0.25rem 0.5rem',
-            fontSize: '0.75rem',
-            background: item.completed ? '#10B981' : '#6B7280',
-            color: 'white',
-            borderRadius: '4px'
-          }}
-        >
+        <span className={`search-result__status${item.completed ? ' is-complete' : ''}`}>
           {item.status}
         </span>
       )}
