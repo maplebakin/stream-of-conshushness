@@ -71,6 +71,26 @@ function eventAliasKey(item) {
   return `${item?.date || ''}|${item?.title || ''}`;
 }
 
+function calendarSourcePath(item) {
+  if (!item?.sourceDate) return '';
+  const hash = item.sourceEntryId ? `#entry-${encodeURIComponent(item.sourceEntryId)}` : '';
+  return `/day/${item.sourceDate}${hash}`;
+}
+
+function calendarOriginLabel(item) {
+  if (item?.source === 'entry-automation') return 'Automation';
+  if (item?.source === 'user-edited') return 'Edited';
+  return 'Manual';
+}
+
+function calendarSourceText(item) {
+  if (item?.sourceDate) return `From entry on ${item.sourceDate}`;
+  if (item?.sourceEntryId) return 'Created from Stream entry';
+  if (item?.source === 'entry-automation') return 'Created from Stream entry';
+  if (item?.source === 'user-edited') return 'Edited after creation';
+  return '';
+}
+
 function minutesFromHHMM(value) {
   if (!value) return null;
   const [hour, minute = '0'] = String(value).split(':');
@@ -334,6 +354,10 @@ export default function DailyPage() {
       timeEnd: a.timeEnd || null,
       location: a.location || '',
       details: a.details || '',
+      source: a.source || '',
+      sourceEntryId: a.sourceEntryId || '',
+      sourceDate: a.sourceDate || '',
+      sourceTitle: a.sourceTitle || '',
     }));
     const importantKeys = new Set((important || []).map(eventAliasKey));
     const evs = (events || [])
@@ -345,6 +369,10 @@ export default function DailyPage() {
         date: e.date,
         time: null,
         pinned: !!e.pinned,
+        source: e.source || '',
+        sourceEntryId: e.sourceEntryId || '',
+        sourceDate: e.sourceDate || '',
+        sourceTitle: e.sourceTitle || '',
       }));
     const imps = (important || []).map(e => ({
       _id: e._id,
@@ -353,6 +381,10 @@ export default function DailyPage() {
       date: e.date,
       time: null,
       note: e.details || e.description || '',
+      source: e.source || '',
+      sourceEntryId: e.sourceEntryId || '',
+      sourceDate: e.sourceDate || '',
+      sourceTitle: e.sourceTitle || '',
     }));
     const seen = new Set();
     const all = [...appts, ...imps, ...evs].filter((item) => {
@@ -690,6 +722,8 @@ export default function DailyPage() {
                     : [];
                   const appointmentDeleteId = item.type === 'appointment' ? getStoredAppointmentId(item) : '';
                   const confirmingDelete = appointmentDeleteId && confirmingAppointmentDeleteId === appointmentDeleteId;
+                  const sourcePath = calendarSourcePath(item);
+                  const sourceText = calendarSourceText(item);
 
                   return (
                     <li key={`${item.type}-${item._id}`} className="agenda-item">
@@ -709,6 +743,15 @@ export default function DailyPage() {
                             {item.details}
                           </div>
                         )}
+                        <div className="agenda-source">
+                          <span className="agenda-origin-pill">{calendarOriginLabel(item)}</span>
+                          {sourceText && <span className="agenda-source-text">{sourceText}</span>}
+                          {sourcePath && (
+                            <Link to={sourcePath} className="button chip agenda-source-link">
+                              Open source entry
+                            </Link>
+                          )}
+                        </div>
                         {item.type === 'appointment' && (
                           <div className="agenda-actions">
                             <button type="button" className="button chip" onClick={() => openEditAppointment(item)} title="Edit appointment">Edit</button>

@@ -5,6 +5,7 @@ import express from 'express';
 const taskFind = vi.fn();
 const appointmentFind = vi.fn();
 const eventFind = vi.fn();
+const entryFind = vi.fn();
 
 vi.mock('../../middleware/auth.js', () => ({
   default: (req, _res, next) => {
@@ -16,6 +17,12 @@ vi.mock('../../middleware/auth.js', () => ({
 vi.mock('../../models/Task.js', () => ({
   default: {
     find: (...args) => taskFind(...args),
+  },
+}));
+
+vi.mock('../../models/Entry.js', () => ({
+  default: {
+    find: (...args) => entryFind(...args),
   },
 }));
 
@@ -64,6 +71,7 @@ describe('calendar routes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    entryFind.mockReturnValue({ select: () => ({ lean: async () => [] }) });
     app = makeApp();
   });
 
@@ -166,6 +174,58 @@ describe('calendar routes', () => {
       date: '2024-04-10',
       isRecurring: true,
       seriesId: 'series1',
+    });
+  });
+
+  it('adds source entry metadata to source-linked day artifacts', async () => {
+    appointmentFind
+      .mockResolvedValueOnce([
+        {
+          _id: 'appt1',
+          title: 'Visit',
+          date: '2024-04-10',
+          rrule: '',
+          entryId: 'entry1',
+          source: 'entry-automation',
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    eventFind.mockReturnValue({
+      lean: async () => [
+        {
+          _id: 'event1',
+          title: 'Important visit',
+          date: '2024-04-10',
+          entryId: 'entry1',
+          source: 'entry-automation',
+        },
+      ],
+    });
+    entryFind.mockReturnValue({
+      select: () => ({
+        lean: async () => [
+          { _id: 'entry1', date: '2024-04-08', title: 'Source stream entry' },
+        ],
+      }),
+    });
+
+    const res = await request(app).get('/api/calendar/day/2024-04-10');
+
+    expect(entryFind).toHaveBeenCalledWith({
+      userId: 'user123',
+      _id: { $in: ['entry1'] },
+    });
+    expect(res.body.appointments[0]).toMatchObject({
+      source: 'entry-automation',
+      sourceEntryId: 'entry1',
+      sourceDate: '2024-04-08',
+      sourceTitle: 'Source stream entry',
+    });
+    expect(res.body.importantEvents[0]).toMatchObject({
+      source: 'entry-automation',
+      sourceEntryId: 'entry1',
+      sourceDate: '2024-04-08',
+      sourceTitle: 'Source stream entry',
     });
   });
 

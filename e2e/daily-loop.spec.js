@@ -127,5 +127,9 @@ test('Stream ordinal visit plan appears on the expected day agenda', async ({ pa
 
   await page.goto(`/day/${expectedDate}`);
   await expect(page.getByRole('heading', { name: /What needs attention now/i })).toBeVisible();
-  await expect(page.getByText(/Visit my mom/i).first()).toBeVisible();
+  const visitItem = page.getByRole('listitem').filter({ hasText: /Visit my mom/i });
+  await expect(visitItem).toBeVisible();
+  await expect(visitItem.getByText('Automation')).toBeVisible();
+  await expect(visitItem.getByText(/From entry on \d{4}-\d{2}-\d{2}/)).toBeVisible();
+  await expect(visitItem.getByRole('link', { name: 'Open source entry' })).toBeVisible();
 });

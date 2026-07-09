@@ -61,6 +61,7 @@ export function recurringInstance(series, date, userId) {
     cluster: series.cluster || '',
     clusters: Array.isArray(series.clusters) ? series.clusters : [],
     entryId: series.entryId || null,
+    source: series.source || '',
     isRecurring: true,
     seriesId: series._id,
   };

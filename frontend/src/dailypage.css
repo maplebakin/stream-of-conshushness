@@ -492,6 +492,40 @@
   margin-top: 0.2rem;
 }
 
+.daily-page .agenda-source {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  color: var(--color-muted);
+  font-size: 0.82rem;
+}
+
+.daily-page .agenda-origin-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.35rem;
+  padding: 0.12rem 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface-soft) 42%, var(--color-surface) 58%);
+  color: var(--color-vein);
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.daily-page .agenda-source-text {
+  line-height: 1.35;
+}
+
+.daily-page .agenda-source-link {
+  min-height: 30px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+}
+
 .daily-page .agenda-actions,
 .daily-page .hourly-schedule-wrap {
   margin-top: var(--space-2);

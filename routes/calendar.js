@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import auth from '../middleware/auth.js';
+import Entry from '../models/Entry.js';
 import Task from '../models/Task.js';
 import ImportantEvent from '../models/ImportantEvent.js';
 import {
@@ -14,6 +15,66 @@ r.use(auth);
 
 const isISO = isISODateString;
 
+function idOf(value) {
+  if (!value) return '';
+  if (typeof value === 'object' && value._id) return String(value._id);
+  return String(value);
+}
+
+function isoDate(value) {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    return match ? match[1] : '';
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  return '';
+}
+
+function toPlainCalendarItem(item) {
+  if (!item) return item;
+  if (typeof item.toObject === 'function') return item.toObject();
+  return { ...item };
+}
+
+function collectEntryIds(items = []) {
+  return [
+    ...new Set(
+      items
+        .map((item) => idOf(item?.entryId))
+        .filter(Boolean)
+    ),
+  ];
+}
+
+async function entryMetaById(userId, items = []) {
+  const ids = collectEntryIds(items);
+  if (!ids.length) return new Map();
+
+  const entries = await Entry.find({ userId, _id: { $in: ids } })
+    .select('date title')
+    .lean();
+
+  return new Map((entries || []).map((entry) => [
+    idOf(entry),
+    {
+      sourceEntryId: idOf(entry),
+      sourceDate: isoDate(entry.date),
+      sourceTitle: entry.title || '',
+    },
+  ]));
+}
+
+function attachSourceMeta(items = [], sourceMap = new Map()) {
+  return items.map((item) => {
+    const plain = toPlainCalendarItem(item);
+    const source = sourceMap.get(idOf(plain?.entryId));
+    return source ? { ...plain, ...source } : plain;
+  });
+}
+
 // GET /api/calendar/day/:date — appointments + events + important-events for a single day
 // NOTE: must be declared before /:ym to avoid route shadowing
 r.get('/day/:date', async (req, res) => {
@@ -23,10 +84,13 @@ r.get('/day/:date', async (req, res) => {
     return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
   }
   try {
-    const [appointments, events] = await Promise.all([
+    const [rawAppointments, rawEvents] = await Promise.all([
       appointmentInstancesInRange(userId, date, date),
       ImportantEvent.find({ userId, date }).lean(),
     ]);
+    const sourceMap = await entryMetaById(userId, [...rawAppointments, ...rawEvents]);
+    const appointments = attachSourceMeta(rawAppointments, sourceMap);
+    const events = attachSourceMeta(rawEvents, sourceMap);
     // /api/events and /api/important-events share the same model; return once as both keys
     res.json({ appointments, events, importantEvents: events });
   } catch (e) {
