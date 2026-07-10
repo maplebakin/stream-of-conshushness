@@ -421,6 +421,24 @@
   .review-completed__actions .review-button {
     width: fit-content;
   }
+
+  .review-inbox__bulk {
+    align-items: stretch;
+  }
+
+  .review-inbox__selected-count {
+    width: 100%;
+  }
+
+  .review-inbox__bulk-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .review-inbox__bulk-actions .review-button {
+    flex: 1 1 10rem;
+    min-height: 44px;
+  }
 }
 
 /* Review as a calm decision queue ----------------------------------- */
