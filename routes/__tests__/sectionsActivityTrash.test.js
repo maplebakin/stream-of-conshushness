@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   sectionFind: vi.fn(),
   entryAggregate: vi.fn(),
+  taskAggregate: vi.fn(),
 }));
 
 vi.mock('../../models/Section.js', () => ({
@@ -19,7 +20,7 @@ vi.mock('../../models/Entry.js', () => ({
 
 vi.mock('../../models/Task.js', () => ({
   default: {
-    aggregate: vi.fn().mockResolvedValue([]),
+    aggregate: mocks.taskAggregate,
   },
 }));
 
@@ -55,6 +56,7 @@ describe('section activity excludes trashed entries', () => {
       { _id: 'journal', count: 2 },
       { _id: 'archive', count: 0 },
     ]);
+    mocks.taskAggregate.mockResolvedValue([]);
   });
 
   it('counts only active entries and leaves trashed-only sections inactive', async () => {
@@ -76,6 +78,13 @@ describe('section activity excludes trashed entries', () => {
           }),
         }),
       ]),
+    );
+    expect(mocks.taskAggregate).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          $match: expect.objectContaining({ deletedAt: null }),
+        }),
+      ])
     );
 
     expect(res.statusCode).toBe(200);

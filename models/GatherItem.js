@@ -17,6 +17,7 @@ const GatherItemSchema = new Schema(
       index: true,
     },
     sourceEntryId: { type: Schema.Types.ObjectId, ref: 'Entry', default: null, index: true },
+    sourceSuggestionId: { type: Schema.Types.ObjectId, ref: 'SuggestedGatherItem', default: null },
     sourceText: { type: String, default: '' },
     tags: { type: [String], default: [] },
   },
@@ -26,5 +27,9 @@ const GatherItemSchema = new Schema(
 GatherItemSchema.index({ userId: 1, clusters: 1, status: 1 });
 GatherItemSchema.index({ userId: 1, list: 1, status: 1 });
 GatherItemSchema.index({ userId: 1, list: 1, normalizedTitle: 1, status: 1 });
+GatherItemSchema.index(
+  { userId: 1, sourceSuggestionId: 1 },
+  { unique: true, partialFilterExpression: { sourceSuggestionId: { $type: 'objectId' } } }
+);
 
 export default mongoose.model('GatherItem', GatherItemSchema);

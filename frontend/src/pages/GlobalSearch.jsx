@@ -1,10 +1,13 @@
 // frontend/src/pages/GlobalSearch.jsx
 // Global search page
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { completeSearchTask, searchContent } from '../api/search.js';
 import toast from 'react-hot-toast';
+import { sourceEntryPath, sourceStateLabel } from '../utils/sourceEntryState.js';
+import { requestErrorSummary } from '../utils/requestError.js';
+import { CalmEmptyState, SecondarySection } from '../components/UXPrimitives.jsx';
 import '../base.css';
 import './GlobalSearch.css';
 
@@ -24,7 +27,6 @@ const SEARCH_TYPES = [
   'interests',
   'suggestedInterests',
   'suggestedTasks',
-  'habits',
   'researchSubjects',
   'games',
   'gameNotes',
@@ -50,10 +52,13 @@ function filterLabel(type) {
   return FILTER_LABELS[type] || type.charAt(0).toUpperCase() + type.slice(1);
 }
 
-function sourceEntryPath(item) {
-  if (!item?.sourceDate) return '';
-  const hash = item.sourceEntryId ? `#entry-${encodeURIComponent(item.sourceEntryId)}` : '';
-  return `/day/${item.sourceDate}${hash}`;
+function readableDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return value || '';
+  return new Date(`${value}T12:00:00Z`).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 function primaryDestination(item) {
@@ -84,10 +89,10 @@ function primaryDestination(item) {
     case 'suggestedGatherItem':
     case 'suggestedInterest':
       return { path: '/review', label: 'Open Review Inbox' };
-    case 'habit':
-      return { path: '/habits/analytics', label: 'Open habits' };
     case 'researchSubject':
-      return { path: '/sections', label: 'Open research' };
+      return item.sectionSlug && item._id
+        ? { path: `/research/${encodeURIComponent(item.sectionSlug)}?subject=${encodeURIComponent(item._id)}`, label: 'Open research subject' }
+        : { path: '/sections', label: 'Open research' };
     case 'game':
       return { path: item.slug ? `/section/games/${item.slug}` : '/section/games', label: 'Open game' };
     case 'gameNote':
@@ -108,17 +113,17 @@ function primaryDestination(item) {
 function locationText(item) {
   switch (item.type) {
     case 'entry':
-      return item.date ? `Entry on ${item.date}` : 'Entry';
+      return item.date ? `Entry from ${readableDate(item.date)}` : 'Entry';
     case 'task':
-      return item.dueDate ? `Task due ${item.dueDate}` : 'Task in Task Inbox';
+      return item.dueDate ? `Task due ${readableDate(item.dueDate)}` : 'Task in Task Inbox';
     case 'note':
-      return item.date ? `Note from ${item.date}` : 'Note';
+      return item.date ? `Note from ${readableDate(item.date)}` : 'Note';
     case 'appointment':
-      return item.date ? `Appointment on ${item.date}` : 'Appointment in Calendar';
+      return item.date ? `Appointment on ${readableDate(item.date)}` : 'Appointment in Calendar';
     case 'importantEvent':
-      return item.date ? `Event on ${item.date}` : 'Event in Calendar';
+      return item.date ? `Event on ${readableDate(item.date)}` : 'Event in Calendar';
     case 'scheduleItem':
-      return item.date ? `Schedule block on ${item.date}` : 'Schedule block';
+      return item.date ? `Schedule block on ${readableDate(item.date)}` : 'Schedule block';
     case 'suggestedTask':
     case 'suggestedGatherItem':
     case 'suggestedInterest':
@@ -138,7 +143,7 @@ function locationText(item) {
     case 'cluster':
       return 'Cluster';
     case 'habit':
-      return item.status ? `Habit: ${item.status}` : 'Habit';
+      return item.status ? `Saved habit record · ${item.status}` : 'Saved habit record';
     default:
       return '';
   }
@@ -158,6 +163,9 @@ export default function GlobalSearch() {
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [hiddenResultKeys, setHiddenResultKeys] = useState(() => new Set());
+  const [busyResultKeys, setBusyResultKeys] = useState(() => new Set());
+  const searchSequenceRef = useRef(0);
+  const busyResultKeysRef = useRef(new Set());
 
   // Perform search when query params change
   useEffect(() => {
@@ -168,7 +176,18 @@ export default function GlobalSearch() {
       setQuery(q);
       setType(t);
       performSearch(q, t);
+      return;
     }
+
+    // Navigating back to a bare/short search invalidates any older request so
+    // it cannot repopulate a page that no longer represents that query.
+    searchSequenceRef.current += 1;
+    setQuery(q || '');
+    setType(t);
+    setResults(null);
+    setHiddenResultKeys(new Set());
+    setHasSearched(false);
+    setLoading(false);
   }, [searchParams]);
 
   const performSearch = async (searchQuery, searchType) => {
@@ -177,20 +196,24 @@ export default function GlobalSearch() {
       return;
     }
 
+    const sequence = searchSequenceRef.current + 1;
+    searchSequenceRef.current = sequence;
     try {
       setLoading(true);
       setHasSearched(true);
 
       const response = await searchContent(searchQuery, searchType);
+      if (sequence !== searchSequenceRef.current) return;
 
       setResults(response.data);
       setHiddenResultKeys(new Set());
     } catch (error) {
-      console.error('Search failed:', error);
+      if (sequence !== searchSequenceRef.current) return;
+      console.error('Search failed:', requestErrorSummary(error));
       toast.error('Search failed. Please try again.');
       setResults(null);
     } finally {
-      setLoading(false);
+      if (sequence === searchSequenceRef.current) setLoading(false);
     }
   };
 
@@ -220,6 +243,12 @@ export default function GlobalSearch() {
   const resultKey = (item, group = '') => `${item.type || group}:${item._id || item.id || item.slug || item.title}`;
 
   const handleResultAction = async (item, action) => {
+    const key = resultKey(item);
+    if (busyResultKeysRef.current.has(key)) return;
+    if (action === 'completeTask') {
+      busyResultKeysRef.current.add(key);
+      setBusyResultKeys((current) => new Set([...current, key]));
+    }
     try {
       if (action === 'open') {
         handleNavigate(item);
@@ -234,7 +263,8 @@ export default function GlobalSearch() {
 
       if (action === 'completeTask') {
         await completeSearchTask(item._id);
-        setHiddenResultKeys((current) => new Set([...current, resultKey(item)]));
+        setHiddenResultKeys((current) => new Set([...current, key]));
+        setResults((current) => current ? { ...current, total: Math.max(0, current.total - 1) } : current);
         toast.success('Task completed.');
         return;
       }
@@ -244,8 +274,17 @@ export default function GlobalSearch() {
         return;
       }
     } catch (error) {
-      console.error('[GlobalSearch] action failed:', error?.response?.data || error.message);
+      console.error('[GlobalSearch] action failed:', requestErrorSummary(error));
       toast.error(error?.response?.data?.error || 'Could not update this result.');
+    } finally {
+      if (action === 'completeTask') {
+        busyResultKeysRef.current.delete(key);
+        setBusyResultKeys((current) => {
+          const next = new Set(current);
+          next.delete(key);
+          return next;
+        });
+      }
     }
   };
 
@@ -328,7 +367,9 @@ export default function GlobalSearch() {
         {/* Search Form */}
         <form className="search-page__form" onSubmit={handleSearch}>
           <div className="search-page__field-row">
+            <label className="sr-only" htmlFor="global-search-query">Search your private content</label>
             <input
+              id="global-search-query"
               type="text"
               className="search-page__field"
               value={query}
@@ -345,24 +386,26 @@ export default function GlobalSearch() {
             </button>
           </div>
 
-          {/* Type Filter */}
-          <div className="search-page__filters" aria-label="Search result filters">
-            {SEARCH_TYPES.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => handleTypeChange(t)}
-                className={`search-page__filter${type === t ? ' is-active' : ''}`}
-              >
-                {filterLabel(t)}
-              </button>
-            ))}
-          </div>
+          <SecondarySection summary="Narrow the search" hint={type === 'all' ? 'Everything' : filterLabel(type)}>
+            <div className="search-page__filters" aria-label="Search result filters">
+              {SEARCH_TYPES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => handleTypeChange(t)}
+                  className={`search-page__filter${type === t ? ' is-active' : ''}`}
+                  aria-pressed={type === t}
+                >
+                  {filterLabel(t)}
+                </button>
+              ))}
+            </div>
+          </SecondarySection>
         </form>
 
         {/* Loading State */}
         {loading && (
-          <div className="card search-state search-state--loading">
+          <div className="card search-state search-state--loading" role="status" aria-live="polite">
             <p>Searching...</p>
           </div>
         )}
@@ -371,7 +414,7 @@ export default function GlobalSearch() {
         {!loading && results && (
           <>
             {/* Results Summary */}
-            <div className="search-results-summary">
+            <div className="search-results-summary" role="status" aria-live="polite">
               <p>
                 Found <strong>{results.total}</strong> result{results.total !== 1 ? 's' : ''} for "{results.query}"
               </p>
@@ -379,12 +422,9 @@ export default function GlobalSearch() {
 
             {/* No Results */}
             {results.total === 0 && (
-              <div className="card search-state">
-                <p className="search-state__title">No results found</p>
-                <p>
-                  Try a different search term or filter
-                </p>
-              </div>
+              <CalmEmptyState title="That thread hasn’t surfaced">
+                Try another phrase, or widen the search to everything.
+              </CalmEmptyState>
             )}
 
             {/* Results List */}
@@ -403,6 +443,7 @@ export default function GlobalSearch() {
                       getTypeLabel={getTypeLabel}
                       getTypeColor={getTypeColor}
                       highlightMatch={highlightMatch}
+                      busy={busyResultKeys.has(resultKey(item, group))}
                     />
                   ))
                 ))}
@@ -413,19 +454,16 @@ export default function GlobalSearch() {
 
         {/* Empty State */}
         {!loading && !hasSearched && (
-          <div className="card search-state">
-            <p className="search-state__title">Start searching</p>
-            <p>
-              Enter a search term to find entries, tasks, goals, notes, and more
-            </p>
-          </div>
+          <CalmEmptyState title="What are you trying to find?">
+            Search a person, phrase, task, place, or half-remembered thought.
+          </CalmEmptyState>
         )}
       </div>
     </div>
   );
 }
 
-function SearchResultItem({ item, query, onNavigate, onAction, getTypeLabel, getTypeColor, highlightMatch }) {
+function SearchResultItem({ item, query, onAction, getTypeLabel, getTypeColor, highlightMatch, busy }) {
   const getTitle = () => {
     if (item.title) return item.title;
     if (item.name) return item.name;
@@ -435,6 +473,7 @@ function SearchResultItem({ item, query, onNavigate, onAction, getTypeLabel, get
 
   const destination = primaryDestination(item);
   const sourcePath = sourceEntryPath(item);
+  const sourceState = sourceStateLabel(item);
   const where = locationText(item);
   const actions = [];
   if (destination) actions.push({ key: 'open', label: destination.label });
@@ -445,10 +484,9 @@ function SearchResultItem({ item, query, onNavigate, onAction, getTypeLabel, get
   }
 
   return (
-    <div
+    <article
       className="card search-result"
       style={{ '--result-accent': getTypeColor(item.type) }}
-      onClick={() => onNavigate(item)}
     >
       <div className="search-result__header">
         <h3>{highlightMatch(getTitle(), query)}</h3>
@@ -484,21 +522,27 @@ function SearchResultItem({ item, query, onNavigate, onAction, getTypeLabel, get
         </span>
       )}
 
+      {sourceState && (
+        <p className="search-result__location" aria-label={sourceState}>{sourceState}</p>
+      )}
+
       <div className="search-result__actions">
         {actions.map((action) => (
           <button
             key={action.key}
             type="button"
             className="review-button review-button--ghost"
+            disabled={busy}
+            aria-busy={busy && action.key === 'completeTask' ? 'true' : undefined}
             onClick={(event) => {
               event.stopPropagation();
               onAction(item, action.key);
             }}
           >
-            {action.label}
+            {busy && action.key === 'completeTask' ? 'Completing…' : action.label}
           </button>
         ))}
       </div>
-    </div>
+    </article>
   );
 }

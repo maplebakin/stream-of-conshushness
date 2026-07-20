@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   findOne: vi.fn(),
   findOneAndUpdate: vi.fn(),
   findOneAndDelete: vi.fn(),
+  taskUpdateMany: vi.fn(),
+  entryUpdateMany: vi.fn(),
 }));
 
 vi.mock('../../middleware/auth.js', () => ({
@@ -45,6 +47,15 @@ vi.mock('../../models/Goal.js', () => ({
 vi.mock('../../utils/clusterIds.js', () => ({
   normalizeClusterIds: (ids = []) => ids,
   resolveClusterIdForOwner: async () => null,
+  resolveClusterIdsForOwner: async (_userId, ids = []) => ids,
+}));
+
+vi.mock('../../models/Task.js', () => ({
+  default: { updateMany: (...args) => mocks.taskUpdateMany(...args) },
+}));
+
+vi.mock('../../models/Entry.js', () => ({
+  default: { updateMany: (...args) => mocks.entryUpdateMany(...args) },
 }));
 
 const router = (await import('../goals.js')).default;
@@ -110,6 +121,8 @@ describe('goals update/delete routes', () => {
       const [deleted] = mocks.store.splice(index, 1);
       return Promise.resolve(deleted);
     });
+    mocks.taskUpdateMany.mockResolvedValue({ modifiedCount: 0 });
+    mocks.entryUpdateMany.mockResolvedValue({ modifiedCount: 0 });
   });
 
   it('creates a valid goal scoped to the authenticated user', async () => {
@@ -179,6 +192,20 @@ describe('goals update/delete routes', () => {
     expect(res.body).toMatchObject({ _id: 'goal1', title: 'Updated', description: 'After', steps });
   });
 
+  it('cannot transfer goal ownership through update fields or operators', async () => {
+    const res = await request(app)
+      .patch('/api/goals/goal1')
+      .send({ title: 'Still mine', userId: 'other-user', $unset: { userId: 1 } });
+
+    expect(res.status).toBe(200);
+    expect(mocks.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'goal1', userId: 'user123' },
+      { title: 'Still mine' },
+      { new: true, runValidators: true }
+    );
+    expect(res.body.userId).toBe('user123');
+  });
+
   it('returns not found when updating another user goal', async () => {
     const res = await request(app)
       .patch('/api/goals/goal2')
@@ -208,6 +235,14 @@ describe('goals update/delete routes', () => {
     expect(deleteRes.status).toBe(200);
     expect(deleteRes.body).toEqual({ success: true });
     expect(mocks.findOneAndDelete).toHaveBeenCalledWith({ _id: 'goal1', userId: 'user123' });
+    expect(mocks.taskUpdateMany).toHaveBeenCalledWith(
+      { userId: 'user123', goalId: 'goal1' },
+      { $set: { goalId: null } }
+    );
+    expect(mocks.entryUpdateMany).toHaveBeenCalledWith(
+      { userId: 'user123', linkedGoal: 'goal1' },
+      { $set: { linkedGoal: null } }
+    );
 
     const listRes = await request(app).get('/api/goals');
 
@@ -220,7 +255,10 @@ describe('goals update/delete routes', () => {
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: 'Goal not found' });
-    expect(mocks.findOneAndDelete).toHaveBeenCalledWith({ _id: 'goal2', userId: 'user123' });
+    expect(mocks.findOne).toHaveBeenCalledWith({ _id: 'goal2', userId: 'user123' });
+    expect(mocks.findOneAndDelete).not.toHaveBeenCalled();
+    expect(mocks.taskUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.entryUpdateMany).not.toHaveBeenCalled();
   });
 
   it('returns not found when deleting a nonexistent goal', async () => {
@@ -228,6 +266,9 @@ describe('goals update/delete routes', () => {
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: 'Goal not found' });
+    expect(mocks.findOneAndDelete).not.toHaveBeenCalled();
+    expect(mocks.taskUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.entryUpdateMany).not.toHaveBeenCalled();
   });
 
   it('toggles a valid step on an authenticated user owned goal', async () => {

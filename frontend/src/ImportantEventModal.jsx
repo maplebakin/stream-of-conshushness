@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from './api/axiosInstance';
 import { useToast } from './hooks/useToast.js';
+import { requestErrorSummary } from './utils/requestError.js';
 import './modal.css';
 
 export default function ImportantEventModal({ date, onClose, onSaved }) {
@@ -36,7 +37,7 @@ export default function ImportantEventModal({ date, onClose, onSaved }) {
       onSaved?.();
       onClose?.();
     } catch (err) {
-      console.error('Create important event failed:', err);
+      console.error('Create important event failed:', requestErrorSummary(err));
       showToast('Could not create event.', { type: 'error' });
     } finally {
       setSaving(false);

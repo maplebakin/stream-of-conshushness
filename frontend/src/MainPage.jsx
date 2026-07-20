@@ -12,6 +12,16 @@ import SafeHTML from './components/SafeHTML.jsx'; // (top of file)
 import RecentActivityWidget from './components/RecentActivityWidget.jsx';
 import { confirmAndTrashEntry, getEntryTrashConfirmationMessage } from './utils/entryDeletion.js';
 import { useReviewCount } from './hooks/useReviewCount.js';
+import {
+  clearStreamDraft,
+  createClientRequestId,
+  draftIdentityAfterTextChange,
+  readStreamDraft,
+  streamDraftKey,
+  writeStreamDraft,
+} from './utils/streamDraft.js';
+import { requestErrorSummary } from './utils/requestError.js';
+import { CalmEmptyState, CompactPageHeader, SecondarySection } from './components/UXPrimitives.jsx';
 
 /* ---------- Robust sort helpers so newest stay on top across reloads ---------- */
 const parseDayMs = (v) => {
@@ -87,24 +97,38 @@ const normalizeEntry = (e) => {
 };
 
 export default function MainPage() {
-  const { token, isAuthenticated, logout } = useContext(AuthContext);
+  const { token, user, isAuthenticated, logout } = useContext(AuthContext);
 
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingEntry, setEditingEntry] = useState(null);
 
   // quick filters
   const [query, setQuery] = useState('');
   const [clusterFilter, setClusterFilter] = useState('all');
   const [quickEntryText, setQuickEntryText] = useState('');
-  const [recentActivityOpen, setRecentActivityOpen] = useState(false);
+  const [quickEntrySaving, setQuickEntrySaving] = useState(false);
+  const [quickEntryError, setQuickEntryError] = useState('');
+  const [quickDraftRecovered, setQuickDraftRecovered] = useState(false);
   const [streamTutorialDismissed, setStreamTutorialDismissed] = useState(getStreamTutorialDismissed);
   const [confirmingEntryDeleteId, setConfirmingEntryDeleteId] = useState('');
   const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
   const quickEntryRef = useRef(null);
+  const quickEntrySubmittingRef = useRef(false);
+  const quickEntryRequestIdRef = useRef('');
+  const quickEntrySubmittedTextRef = useRef('');
+  const quickEntryDateRef = useRef('');
+  const entriesRequestSequenceRef = useRef(0);
+  const currentOwnerRef = useRef('');
   const reviewCount = useReviewCount(Boolean(token), reviewRefreshKey);
+  const quickDraftKey = streamDraftKey(user);
+  const ownerId = String(user?.userId || user?._id || user?.id || '').trim();
+  currentOwnerRef.current = ownerId;
 
   const fetchEntries = useCallback(async () => {
+    const sequence = ++entriesRequestSequenceRef.current;
+    const requestOwnerId = ownerId;
     if (!token) {
       setEntries([]);
       setLoading(false);
@@ -113,11 +137,13 @@ export default function MainPage() {
     setLoading(true);
     try {
       const res = await axios.get('/api/entries');
+      if (sequence !== entriesRequestSequenceRef.current || requestOwnerId !== currentOwnerRef.current) return;
       const list = Array.isArray(res.data) ? res.data : [];
       const normalized = list.map(normalizeEntry);
       setEntries(stableSortEntriesDesc(normalized));
     } catch (err) {
-      console.error('⚠️ Error fetching entries:', err);
+      if (sequence !== entriesRequestSequenceRef.current || requestOwnerId !== currentOwnerRef.current) return;
+      console.error('⚠️ Error fetching entries:', requestErrorSummary(err));
       if (err?.response?.status === 401) {
         toast.error('Session expired. Please log in again.');
         logout?.();
@@ -125,15 +151,47 @@ export default function MainPage() {
         toast.error('Failed to load entries');
       }
     } finally {
-      setLoading(false);
+      if (sequence === entriesRequestSequenceRef.current && requestOwnerId === currentOwnerRef.current) {
+        setLoading(false);
+      }
     }
-  }, [token, logout]);
+  }, [token, logout, ownerId]);
 
   useEffect(() => {
     fetchEntries();
   }, [fetchEntries]);
 
   const todayISO = getLocalTodayISO?.() || new Date().toISOString().slice(0, 10);
+
+  useEffect(() => {
+    let storage = null;
+    try {
+      storage = window.localStorage;
+    } catch {
+      // Capture still works when browser storage is unavailable.
+    }
+
+    const draft = readStreamDraft(storage, quickDraftKey);
+    const text = draft?.text || '';
+    const requestId = draft?.clientRequestId || (text ? createClientRequestId() : '');
+    const draftDate = draft?.date || todayISO;
+
+    quickEntryRequestIdRef.current = requestId;
+    quickEntrySubmittedTextRef.current = draft?.submittedText || '';
+    quickEntryDateRef.current = draftDate;
+    setQuickEntryText(text);
+    setQuickDraftRecovered(Boolean(text));
+    setQuickEntryError('');
+
+    if (text && !draft?.clientRequestId) {
+      writeStreamDraft(storage, quickDraftKey, {
+        text,
+        date: draftDate,
+        clientRequestId: requestId,
+        submittedText: draft?.submittedText || '',
+      });
+    }
+  }, [quickDraftKey, todayISO]);
 
   const handleDelete = async (entry) => {
     if (confirmingEntryDeleteId !== entry?._id) {
@@ -156,16 +214,31 @@ export default function MainPage() {
         toast.success('Entry moved to trash');
       }
     } catch (err) {
-      console.error('delete error:', err);
+      console.error('delete error:', requestErrorSummary(err));
       toast.error('Could not move entry to trash');
     }
   };
 
   const handleSaved = (newEntryRaw) => {
     const newEntry = normalizeEntry(newEntryRaw);
-    setEntries((prev) => stableSortEntriesDesc([newEntry, ...prev]));
+    setEntries((prev) => stableSortEntriesDesc([
+      newEntry,
+      ...prev.filter((entry) => entry._id !== newEntry._id),
+    ]));
     setShowModal(false);
+    setEditingEntry(null);
+    setReviewRefreshKey((key) => key + 1);
   };
+
+  const openNewEntry = useCallback(() => {
+    setEditingEntry(null);
+    setShowModal(true);
+  }, []);
+
+  const openEditEntry = useCallback((entry) => {
+    setEditingEntry(entry);
+    setShowModal(true);
+  }, []);
 
   const autoResizeQuickEntry = useCallback(() => {
     const el = quickEntryRef.current;
@@ -174,28 +247,124 @@ export default function MainPage() {
     el.style.height = `${el.scrollHeight}px`;
   }, []);
 
+  useEffect(() => {
+    const animationFrame = requestAnimationFrame(autoResizeQuickEntry);
+    return () => cancelAnimationFrame(animationFrame);
+  }, [autoResizeQuickEntry, quickEntryText]);
+
   const resetQuickEntry = useCallback(() => {
     setQuickEntryText('');
+    setQuickDraftRecovered(false);
     const el = quickEntryRef.current;
     if (!el) return;
     el.style.height = 'auto';
   }, []);
 
+  const persistQuickDraft = useCallback((text, {
+    requestId = quickEntryRequestIdRef.current,
+    submittedText = quickEntrySubmittedTextRef.current,
+    date = quickEntryDateRef.current || todayISO,
+  } = {}) => {
+    let storage = null;
+    try {
+      storage = window.localStorage;
+    } catch {
+      return false;
+    }
+
+    return writeStreamDraft(storage, quickDraftKey, {
+      text,
+      date,
+      clientRequestId: requestId,
+      submittedText,
+    });
+  }, [quickDraftKey, todayISO]);
+
+  const handleQuickEntryChange = useCallback((value) => {
+    if (!value) {
+      quickEntryRequestIdRef.current = '';
+      quickEntrySubmittedTextRef.current = '';
+      quickEntryDateRef.current = todayISO;
+      setQuickEntryText('');
+      setQuickDraftRecovered(false);
+      setQuickEntryError('');
+      let storage = null;
+      try {
+        storage = window.localStorage;
+      } catch {
+        // Nothing to clear when storage is unavailable.
+      }
+      clearStreamDraft(storage, quickDraftKey);
+      return;
+    }
+
+    const identity = draftIdentityAfterTextChange({
+      clientRequestId: quickEntryRequestIdRef.current,
+      submittedText: quickEntrySubmittedTextRef.current,
+      nextText: value,
+    });
+    if (!quickEntryRequestIdRef.current || identity.clientRequestId !== quickEntryRequestIdRef.current) {
+      quickEntryDateRef.current = todayISO;
+    }
+    quickEntryRequestIdRef.current = identity.clientRequestId;
+    quickEntrySubmittedTextRef.current = identity.submittedText;
+    setQuickEntryText(value);
+    setQuickDraftRecovered(false);
+    setQuickEntryError('');
+    persistQuickDraft(value, {
+      requestId: identity.clientRequestId,
+      submittedText: identity.submittedText,
+      date: quickEntryDateRef.current,
+    });
+  }, [persistQuickDraft, quickDraftKey, todayISO]);
+
   const submitQuickEntry = useCallback(async () => {
     const text = quickEntryText.trim();
-    if (!text || !isAuthenticated) return;
+    if (!text || !isAuthenticated || quickEntrySubmittingRef.current) return;
+
+    const requestId = quickEntryRequestIdRef.current || createClientRequestId();
+    const entryDate = quickEntryDateRef.current || todayISO;
+    quickEntryRequestIdRef.current = requestId;
+    quickEntrySubmittedTextRef.current = text;
+    quickEntryDateRef.current = entryDate;
+    persistQuickDraft(quickEntryText, { requestId, submittedText: text, date: entryDate });
+
+    quickEntrySubmittingRef.current = true;
+    setQuickEntrySaving(true);
+    setQuickEntryError('');
 
     try {
-      const res = await axios.post('/api/entries', { text, date: todayISO });
+      const res = await axios.post('/api/entries', {
+        text,
+        date: entryDate,
+        clientRequestId: requestId,
+      });
       const created = normalizeEntry(res.data || {});
-      setEntries((prev) => [created, ...prev]);
+      setEntries((prev) => stableSortEntriesDesc([
+        created,
+        ...prev.filter((entry) => entry._id !== created._id),
+      ]));
       setReviewRefreshKey((key) => key + 1);
+      let storage = null;
+      try {
+        storage = window.localStorage;
+      } catch {
+        // The in-memory draft can still be cleared.
+      }
+      clearStreamDraft(storage, quickDraftKey);
+      quickEntryRequestIdRef.current = '';
+      quickEntrySubmittedTextRef.current = '';
+      quickEntryDateRef.current = todayISO;
       resetQuickEntry();
     } catch (err) {
-      console.error('quick entry create error:', err);
+      console.error('quick entry create error:', requestErrorSummary(err));
+      setQuickEntryError('Could not save yet. Your draft is still here; retry when you are ready.');
       toast.error('Could not create entry');
+    } finally {
+      quickEntrySubmittingRef.current = false;
+      setQuickEntrySaving(false);
     }
-  }, [quickEntryText, isAuthenticated, todayISO, resetQuickEntry]);
+  }, [quickEntryText, isAuthenticated, todayISO, persistQuickDraft, quickDraftKey, resetQuickEntry]);
 
   const dismissStreamTutorial = useCallback(() => {
     setStreamTutorialDismissed(true);
@@ -241,64 +410,16 @@ export default function MainPage() {
 
   return (
     <main className="stream-page">
-      {/* Header */}
-      <section className="stream-header">
-        <div className="stream-title">
-          <h1 className="font-echo text-3xl text-plum">Stream</h1>
-        </div>
+      <CompactPageHeader
+        eyebrow={toDisplayDate?.(todayISO) || todayISO}
+        title="Stream"
+        description="Drop the thought here. You can sort it out later."
+      />
 
-        <div className="stream-controls">
-          <div
-            className="today-chip font-glow text-vein"
-            title="Local date"
-            aria-live="polite"
-          >
-            {toDisplayDate?.(todayISO) || todayISO}
-          </div>
-
-          <input
-            type="search"
-            className="search-input font-glow"
-            placeholder="Search text, tags, mood…"
-            aria-label="Search entries"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-
-          <select
-            className="cluster-select font-thread"
-            value={clusterFilter}
-            onChange={(e) => setClusterFilter(e.target.value)}
-            aria-label="Filter entries by cluster"
-          >
-            {clusters.map((c) => (
-              <option key={c} value={c}>
-                {c === 'all' ? 'All Clusters' : c}
-              </option>
-            ))}
-          </select>
-
-
-        </div>
-      </section>
-
-      {/* Recent Activity Widget */}
-      <section className="recent-activity-collapsible">
-        <button
-          type="button"
-          className="recent-activity-toggle"
-          onClick={() => setRecentActivityOpen((v) => !v)}
-          aria-expanded={recentActivityOpen}
-        >
-          {recentActivityOpen ? '▾' : '▸'} Recent Activity
-        </button>
-        {recentActivityOpen && <RecentActivityWidget />}
-      </section>
-
-      {/* Body */}
       <section className="entry-feed">
         <form
           className="quick-entry quick-entry--primary"
+          aria-busy={quickEntrySaving}
           onSubmit={(e) => {
             e.preventDefault();
             submitQuickEntry();
@@ -310,7 +431,7 @@ export default function MainPage() {
             className="quick-entry-input"
             placeholder="Capture a thought, task, idea, appointment, or thing to remember..."
             value={quickEntryText}
-            onChange={(e) => setQuickEntryText(e.target.value)}
+            onChange={(e) => handleQuickEntryChange(e.target.value)}
             onInput={autoResizeQuickEntry}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -318,31 +439,40 @@ export default function MainPage() {
                 submitQuickEntry();
               }
             }}
-            disabled={!isAuthenticated}
+            disabled={!isAuthenticated || quickEntrySaving}
+            aria-describedby="quick-entry-status"
           />
-          <p className="quick-entry-help">Enter for a new line. Ctrl+Enter to capture.</p>
+          <p
+            id="quick-entry-status"
+            className={`quick-entry-help${quickEntryError ? ' quick-entry-help--error' : ''}`}
+            role={quickEntryError ? 'alert' : 'status'}
+            aria-live="polite"
+          >
+            {quickEntrySaving
+              ? 'Saving to Stream…'
+              : quickEntryError || (quickDraftRecovered
+                ? 'Recovered your unfinished draft. Ctrl+Enter to capture.'
+                : 'Enter for a new line. Ctrl+Enter to capture.')}
+          </p>
           <button
             type="submit"
             className="quick-entry-send"
-            disabled={!isAuthenticated || !quickEntryText.trim()}
+            disabled={!isAuthenticated || !quickEntryText.trim() || quickEntrySaving}
             title="Create entry"
             aria-label="Create entry"
           >
-            Save to Stream
+            {quickEntrySaving ? 'Catching it…' : 'Capture thought'}
           </button>
         </form>
 
-        <nav className="stream-review-links" aria-label="Review captured items">
-          <span>Review captured threads</span>
-          <Link to="/review">
-            Review Inbox{reviewCount.count > 0 ? ` (${reviewCount.count})` : ''}
+        {reviewCount.count > 0 && (
+          <Link to="/review" className="stream-review-summary">
+            <span><strong>{reviewCount.count}</strong> useful thread{reviewCount.count === 1 ? '' : 's'} ready to review</span>
+            <span>Take a look →</span>
           </Link>
-          <Link to="/inbox/tasks">Tasks</Link>
-          <Link to="/gather-lists">Gather</Link>
-          <Link to="/interests">Interests</Link>
-        </nav>
+        )}
 
-        {!streamTutorialDismissed && (
+        {!streamTutorialDismissed && !loading && entries.length === 0 && (
           <section className="stream-onboarding-card" aria-labelledby="stream-onboarding-title">
             <div className="stream-onboarding-header">
               <div className="stream-onboarding-copy">
@@ -366,18 +496,39 @@ export default function MainPage() {
               </button>
             </div>
 
-            <div className="stream-onboarding-examples" aria-label="Example entries">
-              <span>"I need to get milk" <strong>Grocery List</strong></span>
-              <span>"I have a doctor's appointment at 3pm on June 25th" <strong>On the Horizon</strong></span>
-              <span>"I'd like to learn about tap dance" <strong>Sparks & Interests</strong></span>
-              <span>"I'm nervous about my appointment" <strong>Entry only</strong></span>
-            </div>
           </section>
         )}
 
+        <SecondarySection
+          summary="Find or filter entries"
+          hint={query || clusterFilter !== 'all' ? 'Filters active' : 'Optional'}
+          className="stream-filter-disclosure"
+        >
+          <div className="stream-controls">
+            <input
+              type="search"
+              className="search-input font-glow"
+              placeholder="Search your entries…"
+              aria-label="Search entries"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <select
+              className="cluster-select font-thread"
+              value={clusterFilter}
+              onChange={(e) => setClusterFilter(e.target.value)}
+              aria-label="Filter entries by cluster"
+            >
+              {clusters.map((c) => (
+                <option key={c} value={c}>{c === 'all' ? 'Every cluster' : c}</option>
+              ))}
+            </select>
+          </div>
+        </SecondarySection>
+
         <div className="stream-feed-header">
           <h2>Recent entries</h2>
-          <span>{filtered.length} shown</span>
+          {(query || clusterFilter !== 'all') && <span>{filtered.length} found</span>}
         </div>
 
         {loading && (
@@ -387,28 +538,28 @@ export default function MainPage() {
         )}
 
         {!loading && filtered.length === 0 && (
-          <div className="empty-state" role="status" aria-live="polite">
-            <p className="font-glow text-vein">
-              {query || clusterFilter !== 'all'
-                ? 'No entries match your filters.'
-                : 'No entries yet. Start with whatever is on your mind.'}
-            </p>
-            <button
+          <CalmEmptyState
+            title={query || clusterFilter !== 'all' ? 'No matching threads' : 'Your Stream is ready'}
+            action={<button
               type="button"
-              className="add-entry-btn rounded-button bg-plum px-4 py-2 font-thread text-mist shadow-soft transition-all hover:bg-lantern hover:text-ink"
+              className="button"
               onClick={() => {
                 if (query || clusterFilter !== 'all') {
                   setQuery('');
                   setClusterFilter('all');
                 } else {
-                  setShowModal(true);
+                  openNewEntry();
                 }
               }}
               disabled={!isAuthenticated}
             >
-              {query || clusterFilter !== 'all' ? 'Clear filters' : 'Write first entry'}
-            </button>
-          </div>
+              {query || clusterFilter !== 'all' ? 'Clear filters' : 'Write your first thought'}
+            </button>}
+          >
+            {query || clusterFilter !== 'all'
+              ? 'Try another phrase or return to all entries.'
+              : 'Start with whatever is taking up space in your head.'}
+          </CalmEmptyState>
         )}
 
         {!loading &&
@@ -459,8 +610,18 @@ export default function MainPage() {
               <div className="entry-actions">
                 <button
                   type="button"
+                  className="icon-btn icon-btn--text"
+                  onClick={() => openEditEntry(entry)}
+                  aria-label={`Edit entry from ${entry.date || 'the Stream'}`}
+                  title="Edit entry"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
                   className={`icon-btn${confirmingEntryDeleteId === entry._id ? ' icon-btn--confirm' : ''}`}
                   onClick={() => handleDelete(entry)}
+                  aria-label={confirmingEntryDeleteId === entry._id ? 'Confirm moving entry to trash' : 'Move entry to trash'}
                   title={confirmingEntryDeleteId === entry._id ? getEntryTrashConfirmationMessage(entry) : 'Move to trash'}
                 >
                   {confirmingEntryDeleteId === entry._id ? 'Confirm' : '🗑️'}
@@ -478,15 +639,23 @@ export default function MainPage() {
               </div>
             </article>
           ))}
+
+        <SecondarySection summary="Recent activity" hint="Changes across your space">
+          <RecentActivityWidget />
+        </SecondarySection>
       </section>
 
       {/* Modal */}
       <Suspense fallback={null}>
         {showModal && (
           <EntryModal
-            onClose={() => setShowModal(false)}
+            initialEntry={editingEntry}
+            onClose={() => {
+              setShowModal(false);
+              setEditingEntry(null);
+            }}
             onSaved={handleSaved}
-            defaultCluster={clusterFilter !== 'all' ? clusterFilter : ''}
+            defaultCluster={!editingEntry && clusterFilter !== 'all' ? clusterFilter : ''}
             defaultTags={[]}
           />
         )}

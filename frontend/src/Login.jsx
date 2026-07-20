@@ -21,13 +21,20 @@ export default function LoginPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    if (!username.trim() || !password) {
+      setError('Enter your username or email and password.');
+      return;
+    }
     setLoading(true);
     try {
-      const { data } = await axios.post('/api/login', { username, password });
-      login(data.token);
+      const { data } = await axios.post('/api/login', {
+        identifier: username.trim(),
+        password,
+      });
+      login(data);
       navigate('/');
     } catch (err) {
-      setError(err.message || 'Login failed');
+      setError(err?.response?.data?.error || err.message || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -37,7 +44,7 @@ export default function LoginPage() {
     <main className="auth-page">
       <section className="auth-card" role="dialog" aria-labelledby="auth-title">
         <header className="auth-header" style={{ marginBottom: 12 }}>
-          <h1 id="auth-title" className="auth-title font-echo">Stream of Conshushness</h1>
+          <h1 id="auth-title" className="auth-title font-echo">StreamofConshushness</h1>
           <p className="auth-hint font-glow">Welcome back, traveler. Sign in to continue your thread.</p>
         </header>
 
@@ -49,12 +56,12 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="auth-form" noValidate aria-busy={loading || undefined}>
           <div className="field">
-            <label htmlFor="username">Username</label>
+            <label htmlFor="username">Username or email</label>
             <input
               id="username"
               className="input"
               type="text"
-              placeholder="Username"
+              placeholder="Username or email"
               ref={usernameRef}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -82,7 +89,7 @@ export default function LoginPage() {
           <div className="auth-actions">
             <div className="left" />
             <div className="right">
-              <button type="submit" className="button" disabled={loading}>
+              <button type="submit" className="button" disabled={loading || !username.trim() || !password}>
                 {loading ? 'Logging in…' : 'Log In'}
               </button>
             </div>

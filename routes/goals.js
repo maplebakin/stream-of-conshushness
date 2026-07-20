@@ -1,7 +1,10 @@
 import express from 'express';
 import auth from '../middleware/auth.js';
 import Goal from '../models/Goal.js';
-import { normalizeClusterIds, resolveClusterIdForOwner } from '../utils/clusterIds.js';
+import Task from '../models/Task.js';
+import Entry from '../models/Entry.js';
+import { resolveClusterIdForOwner, resolveClusterIdsForOwner } from '../utils/clusterIds.js';
+import { logSafeError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -47,7 +50,7 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ error: 'Goal title is required' });
     }
 
-    let clusterIds = normalizeClusterIds(req.body?.clusters);
+    let clusterIds = await resolveClusterIdsForOwner(req.user.userId, req.body?.clusters);
     if (!clusterIds.length && req.body?.clusterId) {
       const resolved = await resolveClusterIdForOwner(req.user.userId, req.body.clusterId);
       if (resolved) clusterIds = [resolved];
@@ -73,14 +76,17 @@ router.post('/', auth, async (req, res) => {
 // PATCH goal (update title, description, cluster, or steps)
 router.patch('/:id', auth, async (req, res) => {
   try {
-    const updates = { ...req.body };
-    if (Object.prototype.hasOwnProperty.call(updates, 'clusters')) {
-      updates.clusters = normalizeClusterIds(updates.clusters);
-    } else if (Object.prototype.hasOwnProperty.call(updates, 'clusterId')) {
-      const resolved = await resolveClusterIdForOwner(req.user.userId, updates.clusterId);
+    const updates = {};
+    for (const key of ['title', 'description', 'cluster', 'steps']) {
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, key)) updates[key] = req.body[key];
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'clusters')) {
+      updates.clusters = await resolveClusterIdsForOwner(req.user.userId, req.body.clusters);
+    } else if (Object.prototype.hasOwnProperty.call(req.body || {}, 'clusterId')) {
+      const resolved = await resolveClusterIdForOwner(req.user.userId, req.body.clusterId);
       updates.clusters = resolved ? [resolved] : [];
     }
-    delete updates.clusterId;
+    if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid updates provided' });
 
     const updated = await Goal.findOneAndUpdate(
       { _id: req.params.id, userId: req.user.userId },
@@ -120,10 +126,33 @@ router.patch('/:id/step/:index', auth, async (req, res) => {
 // DELETE goal
 router.delete('/:id', auth, async (req, res) => {
   try {
+    const ownedGoal = await Goal.findOne({ _id: req.params.id, userId: req.user.userId });
+    if (!ownedGoal) return res.status(404).json({ error: 'Goal not found' });
+
+    // A goal is an organizer, not the owner of journal or task content. Remove
+    // owned relationships before deleting it so retained content never points
+    // at a missing goal.
+    await Promise.all([
+      Task.updateMany(
+        { userId: req.user.userId, goalId: req.params.id },
+        { $set: { goalId: null } }
+      ),
+      Entry.updateMany(
+        { userId: req.user.userId, linkedGoal: req.params.id },
+        { $set: { linkedGoal: null } }
+      ),
+    ]);
     const deleted = await Goal.findOneAndDelete({ _id: req.params.id, userId: req.user.userId });
-    if (!deleted) return res.status(404).json({ error: 'Goal not found' });
+    if (!deleted) {
+      // The owned goal existed before cleanup; reaching this branch means a
+      // concurrent delete won the race. The relationships were already safely
+      // detached from this user's content, so report a conflict rather than a
+      // misleading not-found success.
+      return res.status(409).json({ error: 'Goal changed while it was being deleted' });
+    }
     res.json({ success: true });
-  } catch {
+  } catch (error) {
+    logSafeError('goals delete failed', error);
     res.status(500).json({ error: 'Failed to delete goal' });
   }
 });

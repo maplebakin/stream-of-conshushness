@@ -14,7 +14,12 @@ import cors from "cors";
 import helmet from "helmet";
 import auth from "./middleware/auth.js";
 import { generalLimiter, writeLimiter } from "./middleware/rateLimiter.js";
-import { globalErrorHandler } from "./utils/errorHandler.js";
+import { globalErrorHandler, logSafeError } from "./utils/errorHandler.js";
+import { parseTrustedProxyHops } from "./utils/trustProxy.js";
+import { assertRuntimeConfig } from "./utils/runtimeConfig.js";
+import { closeServerAndDatabase } from "./utils/serverLifecycle.js";
+import { ensurePrivateUploadDir } from "./utils/privateUploadStorage.js";
+import { initializeDeclaredIndexes } from "./utils/integrityIndexes.js";
 
 /* ───────────── Route Handlers (ESM) ───────────── */
 import authRoutes from "./routes/auth.js";
@@ -46,6 +51,7 @@ import exportRoutes from "./routes/export.js";
 import searchRoutes from "./routes/search.js";
 import researchRoutes from "./routes/research.js";
 import reviewRoutes from "./routes/review.js";
+import suggestedScheduleRoutes from "./routes/suggestedSchedules.js";
 import Ripple from "./models/Ripple.js";
 
 /* ───────────── Compat (ESM) ───────────── */
@@ -61,7 +67,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || "development";
 
-app.set("trust proxy", true);
+// Fail before listening or accepting account/data writes when production
+// privacy, authentication, or persistence settings are incomplete.
+assertRuntimeConfig({ ...process.env, NODE_ENV });
+if (NODE_ENV === 'production') ensurePrivateUploadDir();
+
+app.set("trust proxy", parseTrustedProxyHops(process.env.TRUST_PROXY_HOPS));
 app.disable("x-powered-by");
 
 /* ───────────── Global Middleware ───────────── */
@@ -75,6 +86,11 @@ app.use(
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: {
+      directives: {
+        imgSrc: ["'self'", 'data:', 'blob:'],
+      },
+    },
   })
 );
 
@@ -108,8 +124,8 @@ app.get('/api/note/:date(\\d{4}-\\d{2}-\\d{2})', auth, async (req, res) => {
     const item = await Note.findOne(unclusteredDateNoteQuery(userId, date)).lean();
     return res.json({ ok: true, item: item || null, content: item?.content || '' });
   } catch (e) {
-    console.error('[note-by-date shim] failed:', e);
-    return res.status(500).json({ error: 'note lookup failed', detail: e.message });
+    logSafeError('note by date shim failed', e);
+    return res.status(500).json({ error: 'note lookup failed' });
   }
 });
 
@@ -121,49 +137,28 @@ app.get('/api/note', auth, async (req, res) => {
     const item = await Note.findOne(unclusteredDateNoteQuery(userId, date)).lean();
     return res.json({ ok: true, item: item || null, content: item?.content || '' });
   } catch (e) {
-    console.error('[note-by-query shim] failed:', e);
-    return res.status(500).json({ error: 'note lookup failed', detail: e.message });
+    logSafeError('note by query shim failed', e);
+    return res.status(500).json({ error: 'note lookup failed' });
   }
 });
 
 
 /* ───────────── Health Check ───────────── */
 function getMongoHealth() {
-  const mongoState = mongoose.connection.readyState;
-  return {
-    mongo: mongoState === 1,
-    mongoReady: mongoState === 1,
-    mongoState,
-    mongoStateLabel:
-      mongoState === 0 ? 'disconnected' :
-      mongoState === 1 ? 'connected' :
-      mongoState === 2 ? 'connecting' :
-      mongoState === 3 ? 'disconnecting' :
-      'unknown',
-  };
+  return { mongoReady: mongoose.connection.readyState === 1 };
 }
 
 app.get("/health", (_req, res) => {
-  res.json({
-    ok: true,
-    env: NODE_ENV,
-    ...getMongoHealth(),
+  const health = getMongoHealth();
+  res.status(health.mongoReady ? 200 : 503).json({
+    ok: health.mongoReady,
+    ...health,
   });
 });
 
-/* ───────────── Static: uploads ───────────── */
-app.use(
-  "/uploads",
-  express.static(path.join(__dirname, "uploads"), {
-    setHeaders: (res, filePath) => {
-      res.setHeader("X-Content-Type-Options", "nosniff");
-      if (/\.(pdf|txt|md)$/i.test(filePath)) {
-        res.setHeader("Content-Disposition", "attachment");
-      }
-    },
-  })
-);
-
+app.get('/health/live', (_req, res) => {
+  res.json({ ok: true });
+});
 
 /* ───────────── REST Routes ───────────── */
 /**
@@ -208,6 +203,7 @@ app.use("/api/gather-items", auth, gatherItemRoutes);
 app.use("/api/suggested-gather-items", auth, suggestedGatherItemRoutes);
 app.use("/api/interests", auth, interestRoutes);
 app.use("/api/suggested-interests", auth, suggestedInterestRoutes);
+app.use("/api/suggested-schedules", auth, suggestedScheduleRoutes);
 app.use("/api/clusters", auth, clustersRouter);
 app.use("/api/upload", auth, uploadRouter);
 app.use("/api/admin", auth, adminRoutes);
@@ -217,8 +213,13 @@ app.use("/api/research", auth, researchRoutes);
 app.use("/api/review", auth, reviewRoutes);
 
 
-// ── Dev route inspector (shows full mount paths, supports arrays) ─────────────
-if (process.env.NODE_ENV !== "production") {
+// ── Opt-in local route inspector (shows full mount paths) ──────────────
+// Do not expose the internal route inventory merely because a server was
+// started without NODE_ENV=production (for example on a shared LAN).
+if (
+  process.env.NODE_ENV !== "production"
+  && process.env.EXPOSE_ROUTE_INSPECTOR === "true"
+) {
   const patternToPrefix = (layer) => {
     if (!layer?.regexp || layer.regexp.fast_slash) return "";
     const src = String(layer.regexp); // "/^\\/api\\/entries\\/?(?=\\/|$)/i"
@@ -264,7 +265,7 @@ app.get("/api/ripples/:date(\\d{4}-\\d{2}-\\d{2})", auth, async (req, res) => {
     const rows = await Ripple.find(q).sort({ createdAt: 1 }).lean();
     res.json(rows);
   } catch (e) {
-    console.error("alias /api/ripples/:date failed", e);
+    logSafeError('ripples date alias failed', e);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -312,33 +313,69 @@ export default app;
 
 /* ───────────── MongoDB Connection ───────────── */
 if (NODE_ENV !== "test") {
+  let httpServer = null;
+  let shutdownStarted = false;
+
+  const startListening = () => {
+    httpServer = app.listen(PORT, () => {
+      console.log(`🌿 Listening on http://localhost:${PORT}`);
+    });
+  };
+
+  const shutDown = async (signal) => {
+    if (shutdownStarted) {
+      httpServer?.closeAllConnections?.();
+      process.exit(1);
+      return;
+    }
+    shutdownStarted = true;
+    console.log(`Received ${signal}; finishing active requests before shutdown.`);
+
+    const forceTimer = setTimeout(() => {
+      httpServer?.closeAllConnections?.();
+      process.exit(1);
+    }, 10_000);
+    forceTimer.unref();
+
+    try {
+      await closeServerAndDatabase({
+        server: httpServer,
+        disconnect: () => mongoose.disconnect(),
+      });
+      clearTimeout(forceTimer);
+      process.exitCode = 0;
+    } catch (error) {
+      clearTimeout(forceTimer);
+      logSafeError('Graceful shutdown failed', error);
+      process.exitCode = 1;
+    }
+  };
+
+  process.once('SIGTERM', () => void shutDown('SIGTERM'));
+  process.once('SIGINT', () => void shutDown('SIGINT'));
+
   (async () => {
     try {
       if (NODE_ENV === "production") {
         await mongoose.connect(process.env.MONGODB_URI);
+        await initializeDeclaredIndexes(mongoose);
         console.log("✅ Connected to MongoDB");
-        app.listen(PORT, () => {
-          console.log(`🌿 Listening on http://localhost:${PORT}`);
-        });
+        startListening();
         return;
       }
 
-      app.listen(PORT, () => {
-        console.log(`🌿 Listening on http://localhost:${PORT}`);
-      });
+      startListening();
       mongoose.connect(process.env.MONGODB_URI)
         .then(() => console.log("✅ Connected to MongoDB"))
         .catch((err) => {
-          console.error("❌ MongoDB connection error:", err);
+          logSafeError('MongoDB connection failed', err);
         });
     } catch (err) {
-      console.error("❌ MongoDB connection error:", err);
+      logSafeError('MongoDB connection failed', err);
       if (NODE_ENV === "production") {
         process.exit(1);
       }
-      app.listen(PORT, () => {
-        console.log(`🌿 Listening on http://localhost:${PORT}`);
-      });
+      if (!httpServer) startListening();
     }
   })();
 }

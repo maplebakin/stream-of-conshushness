@@ -5,9 +5,16 @@ import bcrypt from 'bcrypt';
 import User from '../models/User.js';
 import auth from '../middleware/auth.js';
 import { passwordResetLimiter as adminGrantLimiter } from '../middleware/rateLimiter.js';
+import { logSafeError } from '../utils/errorHandler.js';
 
 const { ObjectId } = mongoose.Types;
 const BCRYPT_ROUNDS = 12;
+
+function incrementAuthVersion(user) {
+  const numeric = Number(user.authVersion ?? 0);
+  const current = Number.isSafeInteger(numeric) && numeric >= 0 ? numeric : 0;
+  user.authVersion = current + 1;
+}
 
 const router = express.Router();
 
@@ -20,7 +27,7 @@ async function requireAdmin(req, res, next) {
     req.adminUser = me;
     next();
   } catch (e) {
-    console.error('[admin] requireAdmin check failed:', e);
+    logSafeError('admin permission check failed', e);
     res.status(500).json({ error: 'admin check failed' });
   }
 }
@@ -37,7 +44,7 @@ async function requireGrantPermissions(req, res, next) {
 
     return next();
   } catch (e) {
-    console.error(e);
+    logSafeError('admin grant permission check failed', e);
     res.status(500).json({ error: 'admin check failed' });
   }
 }
@@ -56,7 +63,7 @@ router.post('/grant', auth, adminGrantLimiter, requireGrantPermissions, async (r
     await user.save();
     res.json({ ok: true, user: { id: user._id, username: user.username, isAdmin: user.isAdmin } });
   } catch (e) {
-    console.error('[admin] grant failed:', e);
+    logSafeError('admin grant failed', e);
     res.status(500).json({ error: 'grant failed' });
   }
 });
@@ -84,7 +91,7 @@ router.get('/users', auth, requireAdmin, async (req, res) => {
     const nextCursor = docs.length ? String(docs[docs.length - 1]._id) : null;
     res.json({ ok: true, users: docs, nextCursor });
   } catch (e) {
-    console.error('[admin] list users failed:', e);
+    logSafeError('admin user list failed', e);
     res.status(500).json({ error: 'list users failed' });
   }
 });
@@ -101,6 +108,7 @@ router.put('/users/:id/password', auth, requireAdmin, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'user not found' });
 
     user.passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    incrementAuthVersion(user);
     user.resetTokenHash = null;
     user.resetTokenExpiry = null;
     user.resetCodeHash = null;
@@ -109,7 +117,7 @@ router.put('/users/:id/password', auth, requireAdmin, async (req, res) => {
 
     res.json({ ok: true, user: { id: user._id, username: user.username } });
   } catch (e) {
-    console.error('[admin] id reset failed:', e);
+    logSafeError('admin password reset by id failed', e);
     res.status(500).json({ error: 'admin id reset failed' });
   }
 });
@@ -126,6 +134,7 @@ router.post('/reset-username', auth, requireAdmin, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'user not found' });
 
     user.passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    incrementAuthVersion(user);
     user.resetTokenHash = null;
     user.resetTokenExpiry = null;
     user.resetCodeHash = null;
@@ -134,7 +143,7 @@ router.post('/reset-username', auth, requireAdmin, async (req, res) => {
 
     res.json({ ok: true, user: { id: user._id, username: user.username } });
   } catch (e) {
-    console.error('[admin] username reset failed:', e);
+    logSafeError('admin password reset by username failed', e);
     res.status(500).json({ error: 'admin username reset failed' });
   }
 });

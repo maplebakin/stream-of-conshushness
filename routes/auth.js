@@ -1,5 +1,5 @@
 // /routes/auth.js
-// Unified auth router for Stream of Conshushness
+// Unified auth router for StreamofConshushness
 // Flows: register, login (username OR email), forgot (link+code), reset, change-password, admin reset, email verify, profile
 
 import 'dotenv/config';
@@ -9,8 +9,12 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import User from '../models/User.js';
+import Upload from '../models/Upload.js';
 import auth from '../middleware/auth.js';
 import { authLimiter, passwordResetLimiter } from '../middleware/rateLimiter.js';
+import { logSafeError } from '../utils/errorHandler.js';
+import { retireOwnedUpload } from '../utils/upload.js';
+import { fileIdFromPrivateUploadUrl, privateUploadUrl } from '../utils/privateUploadStorage.js';
 
 const router = express.Router();
 
@@ -44,17 +48,60 @@ const transporter =
 /* ─────────────────────────── Helpers ─────────────────────────── */
 function makeJWT(user) {
   return jwt.sign(
-    { id: user._id, userId: user._id, username: user.username },
+    {
+      id: user._id,
+      userId: user._id,
+      username: user.username,
+      authVersion: normalizedAuthVersion(user.authVersion),
+    },
     JWT_SECRET,
     { expiresIn: '7d' }
   );
 }
 const nowPlus = (mins) => new Date(Date.now() + mins * 60 * 1000);
-const isProd = NODE_ENV === 'production';
-const devLog = (...args) => (!isProd ? console.log('[DEV]', ...args) : null);
 const ok = (res, payload = {}) => res.json({ ok: true, ...payload });
 const fail = (res, code, message) => res.status(code).json({ error: message });
 const escapeRegex = (s = '') => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function normalizeEmail(value = '') {
+  return String(value).trim().toLowerCase();
+}
+
+function emailIdentityQuery(value, excludeUserId = null) {
+  const email = normalizeEmail(value);
+  const query = {
+    $or: [
+      { emailNormalized: email },
+      { email: { $regex: new RegExp(`^${escapeRegex(email)}$`, 'i') } },
+    ],
+  };
+  if (excludeUserId) query._id = { $ne: excludeUserId };
+  return query;
+}
+
+function duplicateKeyFields(error) {
+  if (Number(error?.code) !== 11000) return [];
+  return [...new Set([
+    ...Object.keys(error?.keyPattern || {}),
+    ...Object.keys(error?.keyValue || {}),
+  ])];
+}
+
+function normalizedAuthVersion(value) {
+  const numeric = Number(value ?? 0);
+  return Number.isSafeInteger(numeric) && numeric >= 0 ? numeric : 0;
+}
+
+function incrementAuthVersion(user) {
+  user.authVersion = normalizedAuthVersion(user.authVersion) + 1;
+}
+
+function shouldExposeAuthTestCredentials() {
+  return (
+    process.env.NODE_ENV !== 'production' &&
+    process.env.EXPOSE_AUTH_TEST_CREDENTIALS === 'true'
+  );
+}
 
 function serializeUser(user) {
   if (!user) return null;
@@ -115,7 +162,9 @@ router.post('/register', authLimiter, async (req, res) => {
     } = req.body || {};
 
     const loginId = (identifier || rawUsername || rawEmail || '').trim();
-    const email = rawEmail?.trim() || (isEmail(loginId) ? loginId : '');
+    const email = normalizeEmail(rawEmail || (isEmail(loginId) ? loginId : ''));
+
+    if (email && !isEmail(email)) return fail(res, 400, 'valid email required');
 
     if (!password || password.length < 6) {
       return fail(res, 400, 'password must be at least 6 chars');
@@ -136,13 +185,15 @@ router.post('/register', authLimiter, async (req, res) => {
     if (nameTaken) return fail(res, 409, 'username already taken');
 
     if (email) {
-      const emailClash = await User.findOne({
-        email: { $regex: new RegExp(`^${escapeRegex(email)}$`, 'i') },
-      });
+      const emailClash = await User.findOne(emailIdentityQuery(email));
       if (emailClash) return fail(res, 409, 'email already in use');
     }
 
-    const user = new User({ username, email: email || '' });
+    const user = new User({
+      username,
+      email: email || '',
+      emailNormalized: email || null,
+    });
     user.passwordHash = await bcrypt.hash(password, 10);
     await user.save();
 
@@ -152,7 +203,15 @@ router.post('/register', authLimiter, async (req, res) => {
       user: { id: user._id, username: user.username, email: user.email },
     });
   } catch (e) {
-    console.error(e);
+    const duplicateFields = duplicateKeyFields(e);
+    if (duplicateFields.includes('emailNormalized') || duplicateFields.includes('email')) {
+      return fail(res, 409, 'email already in use');
+    }
+    if (duplicateFields.includes('username')) {
+      return fail(res, 409, 'username already taken');
+    }
+    if (Number(e?.code) === 11000) return fail(res, 409, 'account already exists');
+    logSafeError('auth register failed', e);
     return fail(res, 500, 'register failed');
   }
 });
@@ -172,7 +231,7 @@ router.post('/login', authLimiter, async (req, res) => {
 
     const byEmail = isEmail(loginId);
     const query = byEmail
-      ? { email: { $regex: new RegExp(`^${escapeRegex(loginId)}$`, 'i') } }
+      ? emailIdentityQuery(loginId)
       : { username: loginId };
 
     const user = await User.findOne(query);
@@ -184,7 +243,7 @@ router.post('/login', authLimiter, async (req, res) => {
     const token = makeJWT(user);
     return ok(res, { token, user: { id: user._id, username: user.username, email: user.email } });
   } catch (e) {
-    console.error(e);
+    logSafeError('auth login failed', e);
     return fail(res, 500, 'login failed');
   }
 });
@@ -195,18 +254,23 @@ router.post('/login', authLimiter, async (req, res) => {
 router.post('/forgot', passwordResetLimiter, async (req, res) => {
   try {
     const { identifier } = req.body || {};
-    if (!identifier) return fail(res, 400, 'identifier required');
+    const loginId = String(identifier || '').trim();
+    if (!loginId) return fail(res, 400, 'identifier required');
 
+    const identityClauses = [{ username: loginId }];
+    if (isEmail(loginId)) {
+      const normalizedEmail = normalizeEmail(loginId);
+      identityClauses.push(
+        { emailNormalized: normalizedEmail },
+        { email: new RegExp(`^${escapeRegex(normalizedEmail)}$`, 'i') }
+      );
+    }
     const user = await User.findOne({
-      $or: [
-        { username: identifier },
-        { email: new RegExp(`^${escapeRegex(identifier)}$`, 'i') },
-      ],
+      $or: identityClauses,
     });
 
     // Always 200 to avoid enumeration.
     if (!user) {
-      devLog('Forgot requested for non-existent identifier:', identifier);
       return ok(res);
     }
 
@@ -214,7 +278,7 @@ router.post('/forgot', passwordResetLimiter, async (req, res) => {
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
 
-    const rawCode = String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0');
+    const rawCode = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
     const codeHash = await bcrypt.hash(rawCode, 10);
 
     user.resetTokenHash = tokenHash;
@@ -235,20 +299,19 @@ router.post('/forgot', passwordResetLimiter, async (req, res) => {
           html: `<p>Reset link:</p><p><a href="${resetLink}">${resetLink}</a></p><p>Or use this code: <b>${rawCode}</b> (valid 30 minutes).</p>`,
         });
       } catch (mailErr) {
-        console.error('[auth] email send failed:', mailErr?.message || mailErr);
+        logSafeError('auth password reset email failed', mailErr);
       }
     } else {
-      devLog(`Password reset for @${user.username}`);
-      devLog(`  Link: ${resetLink}`);
-      devLog(`  Code: ${rawCode} (valid 30m)`);
     }
 
     const payload = {};
-    if (!isProd) payload.dev = { username: user.username, resetLink, resetCode: rawCode };
+    if (shouldExposeAuthTestCredentials()) {
+      payload.dev = { username: user.username, resetLink, resetCode: rawCode };
+    }
 
     return ok(res, payload);
   } catch (e) {
-    console.error(e);
+    logSafeError('auth forgot password failed', e);
     return fail(res, 500, 'forgot failed');
   }
 });
@@ -266,35 +329,54 @@ router.post('/reset', passwordResetLimiter, async (req, res) => {
     }
 
     let user = null;
+    const now = new Date();
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordUpdate = {
+      $set: {
+        passwordHash,
+        resetTokenHash: null,
+        resetTokenExpiry: null,
+        resetCodeHash: null,
+        resetCodeExpiry: null,
+      },
+      $inc: { authVersion: 1 },
+    };
 
     if (token) {
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-      user = await User.findOne({
-        resetTokenHash: tokenHash,
-        resetTokenExpiry: { $gt: new Date() },
-      });
+      user = await User.findOneAndUpdate(
+        {
+          resetTokenHash: tokenHash,
+          resetTokenExpiry: { $gt: now },
+        },
+        passwordUpdate,
+        { new: true, runValidators: true }
+      );
       if (!user) return fail(res, 400, 'invalid or expired token');
     } else {
       if (!username || !code) return fail(res, 400, 'username and code required');
-      user = await User.findOne({ username });
-      if (!user || !user.resetCodeHash || !user.resetCodeExpiry || user.resetCodeExpiry < new Date()) {
+      const candidate = await User.findOne({ username });
+      if (!candidate || !candidate.resetCodeHash || !candidate.resetCodeExpiry || candidate.resetCodeExpiry < now) {
         return fail(res, 400, 'invalid or expired code');
       }
-      const okCode = await bcrypt.compare(code, user.resetCodeHash);
+      const okCode = await bcrypt.compare(code, candidate.resetCodeHash);
       if (!okCode) return fail(res, 400, 'invalid or expired code');
+      user = await User.findOneAndUpdate(
+        {
+          _id: candidate._id,
+          resetCodeHash: candidate.resetCodeHash,
+          resetCodeExpiry: { $gt: now },
+        },
+        passwordUpdate,
+        { new: true, runValidators: true }
+      );
+      if (!user) return fail(res, 400, 'invalid or expired code');
     }
-
-    user.passwordHash = await bcrypt.hash(newPassword, 10);
-    user.resetTokenHash = null;
-    user.resetTokenExpiry = null;
-    user.resetCodeHash = null;
-    user.resetCodeExpiry = null;
-    await user.save();
 
     const jwtToken = makeJWT(user);
     return ok(res, { token: jwtToken, user: { id: user._id, username: user.username, email: user.email } });
   } catch (e) {
-    console.error(e);
+    logSafeError('auth reset password failed', e);
     return fail(res, 500, 'reset failed');
   }
 });
@@ -317,10 +399,11 @@ router.post('/change-password', auth, async (req, res) => {
     if (!okOld) return fail(res, 400, 'old password is incorrect');
 
     user.passwordHash = await bcrypt.hash(newPassword, 10);
+    incrementAuthVersion(user);
     await user.save();
-    return ok(res);
+    return ok(res, { token: makeJWT(user) });
   } catch (e) {
-    console.error(e);
+    logSafeError('auth change password failed', e);
     return fail(res, 500, 'change-password failed');
   }
 });
@@ -348,6 +431,7 @@ router.post('/admin/reset-password', auth, passwordResetLimiter, async (req, res
     if (!user) return fail(res, 404, 'user not found');
 
     user.passwordHash = await bcrypt.hash(newPassword, 10);
+    incrementAuthVersion(user);
     user.resetTokenHash = null;
     user.resetTokenExpiry = null;
     user.resetCodeHash = null;
@@ -359,7 +443,7 @@ router.post('/admin/reset-password', auth, passwordResetLimiter, async (req, res
 
     return ok(res, { user: { id: user._id, username: user.username } });
   } catch (e) {
-    console.error(e);
+    logSafeError('auth admin reset password failed', e);
     return fail(res, 500, 'admin reset failed');
   }
 });
@@ -375,7 +459,7 @@ router.get('/me', auth, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'user not found' });
     res.json({ ok: true, user: serializeUser(user) });
   } catch (e) {
-    console.error(e);
+    logSafeError('auth profile lookup failed', e);
     res.status(500).json({ error: 'me failed' });
   }
 });
@@ -387,13 +471,10 @@ router.patch('/me', auth, async (req, res) => {
     const user = await User.findById(req.user.userId);
     if (!user) return res.status(404).json({ error: 'user not found' });
 
-    if (typeof email === 'string' && email.trim()) {
-      const clash = await User.findOne({
-        _id: { $ne: user._id },
-        email: { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, 'i') },
+    if (typeof email === 'string' && normalizeEmail(email) !== normalizeEmail(user.email)) {
+      return res.status(400).json({
+        error: 'Email changes require verification. Use /api/email/start-verify.',
       });
-      if (clash) return res.status(409).json({ error: 'email already in use' });
-      user.email = email.trim();
     }
 
     if (typeof username === 'string' && username.trim() && username.trim() !== user.username) {
@@ -402,17 +483,46 @@ router.patch('/me', auth, async (req, res) => {
       user.username = username.trim();
     }
 
+    let previousProfilePictureId = null;
     if (typeof profilePicture === 'string') {
-      user.profilePicture = profilePicture.trim();
+      previousProfilePictureId = fileIdFromPrivateUploadUrl(user.profilePicture);
+      const nextProfilePictureId = fileIdFromPrivateUploadUrl(profilePicture);
+      if (profilePicture.trim() && !nextProfilePictureId) {
+        return res.status(400).json({ error: 'profilePicture must be a private upload URL' });
+      }
+
+      if (nextProfilePictureId) {
+        const nextUpload = await Upload.findOne({
+          fileId: nextProfilePictureId,
+          ownerId: user._id,
+          deletedAt: null,
+        });
+        if (!nextUpload || !String(nextUpload.mimeType || '').startsWith('image/')) {
+          return res.status(400).json({ error: 'profilePicture must reference one of your image uploads' });
+        }
+        nextUpload.resourceType = 'profile-picture';
+        nextUpload.resourceId = user._id;
+        await nextUpload.save();
+        user.profilePicture = privateUploadUrl(nextProfilePictureId);
+      } else {
+        user.profilePicture = '';
+      }
     }
 
     await user.save();
+    if (previousProfilePictureId && previousProfilePictureId !== fileIdFromPrivateUploadUrl(user.profilePicture)) {
+      try {
+        await retireOwnedUpload(previousProfilePictureId, user._id);
+      } catch (cleanupError) {
+        logSafeError('auth profile picture replacement cleanup failed', cleanupError);
+      }
+    }
     res.json({
       ok: true,
       user: serializeUser(user),
     });
   } catch (e) {
-    console.error(e);
+    logSafeError('auth profile update failed', e);
     res.status(500).json({ error: 'update profile failed' });
   }
 });
@@ -423,21 +533,19 @@ router.patch('/me', auth, async (req, res) => {
 router.post('/email/start-verify', auth, async (req, res) => {
   try {
     const { email } = req.body || {};
-    if (!email || !isEmail(email)) return fail(res, 400, 'valid email required');
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail || !isEmail(normalizedEmail)) return fail(res, 400, 'valid email required');
 
     const user = await User.findById(req.user.userId);
     if (!user) return fail(res, 401, 'not authorized');
 
-    const clash = await User.findOne({
-      _id: { $ne: user._id },
-      email: { $regex: new RegExp(`^${escapeRegex(email)}$`, 'i') },
-    });
+    const clash = await User.findOne(emailIdentityQuery(normalizedEmail, user._id));
     if (clash) return fail(res, 409, 'email already in use');
 
-    const rawCode = String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0');
+    const rawCode = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
     const codeHash = await bcrypt.hash(rawCode, 10);
 
-    user.pendingEmail = email;
+    user.pendingEmail = normalizedEmail;
     user.emailVerifyCodeHash = codeHash;
     user.emailVerifyCodeExpiry = nowPlus(30);
     await user.save();
@@ -446,24 +554,22 @@ router.post('/email/start-verify', auth, async (req, res) => {
       try {
         await transporter.sendMail({
           from: SMTP_FROM || 'no-reply@stream.app',
-          to: email,
+          to: normalizedEmail,
           subject: 'Verify your email',
           text: `Your verification code is: ${rawCode}\n\nThis code expires in 30 minutes.`,
           html: `<p>Your verification code is:</p><p style="font-size:20px"><b>${rawCode}</b></p><p>This code expires in 30 minutes.</p>`,
         });
       } catch (mailErr) {
-        console.error('[auth] email send failed:', mailErr?.message || mailErr);
+        logSafeError('auth verification email failed', mailErr);
       }
     } else {
-      devLog(`Email verify requested for @${user.username} → ${email}`);
-      devLog(`  Code: ${rawCode} (valid 30m)`);
     }
 
     const payload = {};
-    if (!isProd) payload.dev = { code: rawCode, email };
+    if (shouldExposeAuthTestCredentials()) payload.dev = { code: rawCode, email: normalizedEmail };
     return ok(res, payload);
   } catch (e) {
-    console.error(e);
+    logSafeError('auth email verification start failed', e);
     return fail(res, 500, 'email start-verify failed');
   }
 });
@@ -487,7 +593,16 @@ router.post('/email/verify', auth, async (req, res) => {
     const okCode = await bcrypt.compare(String(code), user.emailVerifyCodeHash || '');
     if (!okCode) return fail(res, 400, 'invalid code');
 
-    user.email = user.pendingEmail;
+    const verifiedEmail = normalizeEmail(user.pendingEmail);
+    if (!isEmail(verifiedEmail)) return fail(res, 400, 'pending email is invalid');
+
+    // Recheck at confirmation time so a legacy email record cannot be claimed after
+    // the code was issued. The unique normalized key closes the concurrent race.
+    const clash = await User.findOne(emailIdentityQuery(verifiedEmail, user._id));
+    if (clash) return fail(res, 409, 'email already in use');
+
+    user.email = verifiedEmail;
+    user.emailNormalized = verifiedEmail;
     user.emailVerifiedAt = new Date();
     user.pendingEmail = '';
     user.emailVerifyCodeHash = null;
@@ -496,7 +611,8 @@ router.post('/email/verify', auth, async (req, res) => {
 
     return ok(res, { user: serializeUser(user) });
   } catch (e) {
-    console.error(e);
+    if (Number(e?.code) === 11000) return fail(res, 409, 'email already in use');
+    logSafeError('auth email verification failed', e);
     return fail(res, 500, 'email verify failed');
   }
 });

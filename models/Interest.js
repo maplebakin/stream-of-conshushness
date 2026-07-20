@@ -16,6 +16,7 @@ const InterestSchema = new Schema(
       index: true,
     },
     sourceEntryId: { type: Schema.Types.ObjectId, ref: 'Entry', default: null, index: true },
+    sourceSuggestionId: { type: Schema.Types.ObjectId, ref: 'SuggestedInterest', default: null },
     sourceText: { type: String, default: '' },
     clusters: { type: [Schema.Types.ObjectId], ref: 'Cluster', default: [] },
     cluster: { type: String, default: '', trim: true },
@@ -30,5 +31,9 @@ InterestSchema.index({ userId: 1, category: 1, normalizedTitle: 1, status: 1 });
 InterestSchema.index({ userId: 1, status: 1, createdAt: -1 });
 InterestSchema.index({ userId: 1, sourceEntryId: 1, status: 1 });
 InterestSchema.index({ userId: 1, clusters: 1, status: 1 });
+InterestSchema.index(
+  { userId: 1, sourceSuggestionId: 1 },
+  { unique: true, partialFilterExpression: { sourceSuggestionId: { $type: 'objectId' } } }
+);
 
 export default mongoose.model('Interest', InterestSchema);

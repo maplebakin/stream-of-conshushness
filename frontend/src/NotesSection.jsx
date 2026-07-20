@@ -3,9 +3,18 @@ import React, { useState, useEffect, useContext, useRef, useMemo, useCallback } 
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import toast from 'react-hot-toast';
+import {
+  clearLocalNoteDraft,
+  createSerialTaskQueue,
+  loadLocalNoteDraft,
+  noteNeedsSave,
+  saveLocalNoteDraft,
+} from './utils/noteDraft.js';
+import { requestErrorSummary } from './utils/requestError.js';
 
 export default function NotesSection({ date }) {
-  const { token } = useContext(AuthContext);
+  const { token, user } = useContext(AuthContext);
+  const ownerId = String(user?.userId || user?._id || user?.id || '');
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
   const [note, setNote] = useState('');
@@ -17,13 +26,47 @@ export default function NotesSection({ date }) {
   const lastSavedContentRef = useRef('');    // what the server last accepted
   const debounceRef = useRef(null);
   const activeDateRef = useRef(date);        // guards date-race on saves
+  const noteRef = useRef('');
+  const saveQueueRef = useRef(null);
+  if (saveQueueRef.current === null) saveQueueRef.current = createSerialTaskQueue();
+
+  const queueSave = useCallback((targetDate, content, { updateUI = true } = {}) => {
+    if (!targetDate) return Promise.resolve();
+    if (updateUI && activeDateRef.current === targetDate) setStatus('saving');
+
+    return saveQueueRef.current(() => (
+      axios.post(`/api/note/${targetDate}`, { content }, { headers })
+    )).then(() => {
+      if (!updateUI || activeDateRef.current !== targetDate) return;
+      lastSavedContentRef.current = content;
+      if (noteRef.current === content) {
+        clearLocalNoteDraft(window.localStorage, ownerId, targetDate);
+        setStatus('saved');
+        setLastSavedAt(new Date());
+      } else {
+        setStatus('idle');
+      }
+    }).catch((err) => {
+      console.error('Error saving note:', requestErrorSummary(err));
+      if (updateUI && activeDateRef.current === targetDate) {
+        setStatus('error');
+        toast.error('Error saving note');
+      }
+      throw err;
+    });
+  }, [headers, ownerId]);
 
   // --- Load note for the given date ---
   useEffect(() => {
     if (!date) return;
     activeDateRef.current = date;
+    loadedRef.current = false;
+    noteRef.current = '';
+    lastSavedContentRef.current = '';
+    setNote('');
     setLoading(true);
     setStatus('idle');
+    setLastSavedAt(null);
 
     let cancelled = false;
 
@@ -32,21 +75,25 @@ export default function NotesSection({ date }) {
         const res = await axios.get(`/api/note/${date}`, { headers });
         if (cancelled) return;
         const content = res?.data?.content ?? '';
-        setNote(content);
+        const draft = loadLocalNoteDraft(window.localStorage, ownerId, date);
+        const visibleContent = draft && draft.content !== content ? draft.content : content;
+        setNote(visibleContent);
+        noteRef.current = visibleContent;
         lastSavedContentRef.current = content;
         loadedRef.current = true;
-        setStatus('saved');
+        setStatus(visibleContent === content ? 'saved' : 'idle');
         setLastSavedAt(new Date());
       } catch (err) {
         if (cancelled) return;
         if (err?.response?.status === 404) {
           // No note yet; treat as empty
           setNote('');
+          noteRef.current = '';
           lastSavedContentRef.current = '';
           loadedRef.current = true;
           setStatus('idle');
         } else {
-          console.error('Error fetching note:', err);
+          console.error('Error fetching note:', requestErrorSummary(err));
           toast.error('Error fetching note');
           setStatus('error');
         }
@@ -55,31 +102,36 @@ export default function NotesSection({ date }) {
       }
     })();
 
-    return () => { cancelled = true; };
-  }, [date, headers]);
+    return () => {
+      cancelled = true;
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      const pendingContent = noteRef.current;
+      const lastSavedContent = lastSavedContentRef.current;
+      if (loadedRef.current && noteNeedsSave(pendingContent, lastSavedContent)) {
+        void queueSave(date, pendingContent, { updateUI: false }).catch(() => {});
+      }
+      loadedRef.current = false;
+    };
+  }, [date, headers, ownerId, queueSave]);
 
   // --- Save helper (used by debounce + Cmd/Ctrl+S) ---
   const saveNow = useCallback(async () => {
     if (!loadedRef.current) return;
     if (!date || activeDateRef.current !== date) return; // date changed mid-flight
-    const content = note;
+    const content = noteRef.current;
 
     // nothing changed?
-    if (content === lastSavedContentRef.current) return;
-    if (!content.trim() && !lastSavedContentRef.current.trim()) return;
+    if (!noteNeedsSave(content, lastSavedContentRef.current)) return;
 
     try {
-      setStatus('saving');
-      await axios.post(`/api/note/${date}`, { content }, { headers });
-      lastSavedContentRef.current = content;
-      setStatus('saved');
-      setLastSavedAt(new Date());
-    } catch (err) {
-      console.error('Error saving note:', err);
-      setStatus('error');
-      toast.error('Error saving note');
+      await queueSave(date, content);
+    } catch {
+      // queueSave owns the visible error state and toast.
     }
-  }, [date, note, headers]);
+  }, [date, queueSave]);
 
   // --- Debounced autosave on note change ---
   useEffect(() => {
@@ -106,6 +158,17 @@ export default function NotesSection({ date }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [saveNow]);
 
+  useEffect(() => {
+    function warnBeforeUnload(event) {
+      if (!loadedRef.current || !noteNeedsSave(noteRef.current, lastSavedContentRef.current)) return;
+      saveLocalNoteDraft(window.localStorage, ownerId, date, noteRef.current);
+      event.preventDefault();
+      event.returnValue = '';
+    }
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [date, ownerId]);
+
   function statusLabel() {
     if (loading) return 'Loading…';
     if (status === 'saving') return 'Saving…';
@@ -118,8 +181,7 @@ export default function NotesSection({ date }) {
     }
 
   const canSave =
-    note !== lastSavedContentRef.current &&
-    Boolean(note.trim() || lastSavedContentRef.current.trim());
+    noteNeedsSave(note, lastSavedContentRef.current);
 
   return (
     <section className="panel today-notes-panel">
@@ -153,7 +215,11 @@ export default function NotesSection({ date }) {
           <textarea
             className="input today-notes-textarea"
             value={note}
-            onChange={(e) => setNote(e.target.value)}
+            onChange={(e) => {
+              noteRef.current = e.target.value;
+              setNote(e.target.value);
+              saveLocalNoteDraft(window.localStorage, ownerId, date, e.target.value);
+            }}
             placeholder={`Cottage packing:\n- blanket\n- pillows\n- 4 shirts\n- shorts\n- underwear\n- socks\n- bathing suit`}
             rows={8}
             disabled={status === 'saving' && !note && !lastSavedContentRef.current}

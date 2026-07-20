@@ -13,6 +13,13 @@ const ImportantEventSchema = new Schema(
     cluster: { type: String },
     entryId: { type: Schema.Types.ObjectId, ref: "Entry" },
     source: { type: String, default: "" },
+    automationRevision: { type: Number, default: 0, min: 0 },
+    automationReviewStatus: {
+      type: String,
+      enum: ["pending", "kept", "dismissed"],
+      default: null,
+      index: true,
+    },
     pinned: { type: Boolean, default: false },   // 🔥 new
   },
   { timestamps: true }
@@ -22,6 +29,8 @@ const ImportantEventSchema = new Schema(
 ImportantEventSchema.index({ userId: 1, date: 1 });
 ImportantEventSchema.index({ userId: 1, pinned: 1, date: 1 });
 ImportantEventSchema.index({ userId: 1, source: 1, date: 1 });
+ImportantEventSchema.index({ userId: 1, source: 1, automationReviewStatus: 1, date: 1 });
+ImportantEventSchema.index({ userId: 1, entryId: 1, source: 1, automationReviewStatus: 1, automationRevision: 1 });
 
 export default mongoose.models?.ImportantEvent ||
   mongoose.model("ImportantEvent", ImportantEventSchema);

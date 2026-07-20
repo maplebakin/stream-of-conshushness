@@ -3,6 +3,7 @@ import React, { lazy, Suspense, useContext, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import CommandPalette from './components/CommandPalette.jsx';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts.js';
+import ErrorBoundary from './ErrorBoundary.jsx';
 
 import './variables.css';
 import './DesignSystem.css'
@@ -26,7 +27,9 @@ const RegisterPage = lazy(() => import('./RegisterPage.jsx'));
 const GameList = lazy(() => import('./GameList.jsx'));
 const GamePage = lazy(() => import('./GamePage.jsx'));
 const RippleReviewUI = lazy(() => import('./RippleReviewUI.jsx'));
-const AdapterHarness = lazy(() => import('./adapters/AdapterHarness.jsx'));
+const AdapterHarness = import.meta.env.DEV
+  ? lazy(() => import('./adapters/AdapterHarness.jsx'))
+  : null;
 const SectionsIndex = lazy(() => import('./pages/SectionsIndex.jsx'));
 const SectionPage = lazy(() => import('./pages/SectionPage.jsx'));
 const SectionPageRoom = lazy(() => import('./pages/SectionPageRoom.jsx'));
@@ -40,7 +43,6 @@ const UserSettings = lazy(() => import('./pages/UserSettings.jsx'));
 const AdminPanel = lazy(() => import('./pages/AdminPanel.jsx'));
 const ExportData = lazy(() => import('./pages/ExportData.jsx'));
 const GlobalSearch = lazy(() => import('./pages/GlobalSearch.jsx'));
-const HabitAnalytics = lazy(() => import('./pages/HabitAnalytics.jsx'));
 const ReviewInbox = lazy(() => import('./pages/ReviewInbox.jsx'));
 const TrashPage = lazy(() => import('./pages/TrashPage.jsx'));
 const ResearchSectionPage = lazy(() => import('./pages/ResearchSectionPage.jsx'));
@@ -72,7 +74,7 @@ function AppRoutes() {
         isOpen={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
       />
-      <Suspense fallback={<div className="page">Loading...</div>}>
+      <Suspense fallback={<div className="page" role="status" aria-live="polite">Loading…</div>}>
       <Routes>
       {/* Public routes */}
       <Route path="/login" element={<Login />} />
@@ -88,7 +90,7 @@ function AppRoutes() {
           <Route path="/goals" element={<GoalPage />} />
           <Route path="/today" element={<TodayRedirect />} />
           <Route path="/day/:date" element={<DailyPage />} />
-          <Route path="/_adapters" element={<AdapterHarness />} />
+          {AdapterHarness && <Route path="/_adapters" element={<AdapterHarness />} />}
 
           {/* Sections */}
           <Route path="/sections" element={<SectionsIndex />} />               {/* landing */}
@@ -121,7 +123,8 @@ function AppRoutes() {
           <Route path="/settings" element={<UserSettings />} />
           <Route path="/export" element={<ExportData />} />
           <Route path="/search" element={<GlobalSearch />} />
-          <Route path="/habits/analytics" element={<HabitAnalytics />} />
+          {/* Keep old bookmarks safe while the unfinished habit UI remains private. */}
+          <Route path="/habits/analytics" element={<Navigate to="/today" replace />} />
           <Route path="/trash" element={<TrashPage />} />
 
           {/* 404 inside authed shell */}
@@ -143,7 +146,9 @@ export default function App() {
         <ToastProvider>
           <SearchProvider>
             <BrowserRouter>
-              <AppRoutes />
+              <ErrorBoundary>
+                <AppRoutes />
+              </ErrorBoundary>
             </BrowserRouter>
           </SearchProvider>
         </ToastProvider>

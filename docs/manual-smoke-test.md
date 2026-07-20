@@ -1,4 +1,4 @@
-# Stream of Conshushness Manual Smoke Test
+# StreamofConshushness Manual Smoke Test
 
 This checklist covers the current functional MVP path after the Phase 2 backend stabilization and early Phase 3 Daily Page UI work.
 
@@ -18,7 +18,8 @@ This checklist covers the current functional MVP path after the Phase 2 backend 
 | Appointment/event creation from automation | Usable now | Entry automation can create source-marked appointments/events linked to the entry. Update behavior is covered by backend tests. |
 | Manual appointment/event creation | Usable now | Daily Page has `+ Add appointment`; Calendar has appointment and important-event modals. |
 | Notes/schedule on Daily Page | Partially usable | `NotesSection` and `HourlySchedule` are mounted on Daily Page; this pass did not deeply test their workflows. |
-| Search/export/settings/admin | Broken/unknown | Routes are wired, but they were not audited in this smoke pass. Admin likely requires appropriate privileges. |
+| Search/export | Usable under automated contract tests | Search is owner-scoped, race-guarded, and links to exact destinations where the current UI supports them; export remains authenticated. Manual browser recovery checks are still recommended. |
+| Settings/admin | Needs manual smoke | Routes are wired; admin requires appropriate privileges. |
 
 ## Local Smoke Setup
 

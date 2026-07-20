@@ -172,7 +172,7 @@ describe('search excludes trashed entries', () => {
         dueDate: new Date('2026-07-09T00:00:00.000Z'),
         sourceRippleId: {
           _id: 'ripple-1',
-          entryId: 'entry-1',
+          entryId: 'entry-active-1',
           dateKey: '2026-07-08',
           text: 'I need to handle the alpha review task tomorrow.',
         },
@@ -203,12 +203,63 @@ describe('search excludes trashed entries', () => {
         type: 'suggestedTask',
         dueDate: '2026-07-09',
         sourceRippleId: 'ripple-1',
-        sourceEntryId: 'entry-1',
-        sourceDate: '2026-07-08',
+        sourceEntryId: 'entry-active-1',
+        sourceDate: '2026-06-29',
         sourceText: 'I need to handle the alpha review task tomorrow.',
       });
     } finally {
       fixtures.suggestedTaskDocs = [];
+    }
+  });
+
+  it('keeps results interactive while marking trashed and missing sources unavailable', async () => {
+    fixtures.suggestedTaskDocs = [
+      { _id: 'trashed-task', title: 'Alpha trashed task', sourceRippleId: { _id: 'r1', entryId: 'entry-trash-1', dateKey: '2026-06-28', text: 'Private source text' } },
+      { _id: 'missing-task', title: 'Alpha missing task', sourceRippleId: { _id: 'r2', entryId: 'entry-missing', dateKey: '2026-06-27', text: 'Missing source text' } },
+    ];
+    const handler = findHandler('/');
+    const req = { user: { userId: 'user123' }, query: { q: 'Alpha', type: 'suggestedTasks', limit: 10 } };
+    const res = { statusCode: 200, body: null, status(code) { this.statusCode = code; return this; }, json(data) { this.body = data; return this; } };
+
+    try {
+      await handler(req, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.suggestedTasks).toEqual(expect.arrayContaining([
+        expect.objectContaining({ _id: 'trashed-task', sourceState: 'trashed', sourceAvailable: false, sourceText: '' }),
+        expect.objectContaining({ _id: 'missing-task', sourceState: 'missing', sourceAvailable: false, sourceText: '' }),
+      ]));
+    } finally {
+      fixtures.suggestedTaskDocs = [];
+    }
+  });
+
+  it('returns an owner-scoped section slug for exact research destinations', async () => {
+    fixtures.researchSubjectDocs = [{
+      _id: 'subject-1',
+      name: 'Alpha Person',
+      slug: 'alpha-person',
+      sectionId: 'section-1',
+      notes: 'Alpha research notes',
+    }];
+    fixtures.sectionDocs = [{ _id: 'section-1', slug: 'family-history' }];
+    const handler = findHandler('/');
+    const req = { user: { userId: 'user123' }, query: { q: 'Alpha', type: 'researchSubjects', limit: 10 } };
+    const res = { statusCode: 200, body: null, status(code) { this.statusCode = code; return this; }, json(data) { this.body = data; return this; } };
+
+    try {
+      await handler(req, res);
+
+      expect(sectionFindMock).toHaveBeenCalledWith({
+        ownerId: 'user123',
+        _id: { $in: ['section-1'] },
+      });
+      expect(res.body.researchSubjects[0]).toMatchObject({
+        _id: 'subject-1',
+        sectionSlug: 'family-history',
+      });
+    } finally {
+      fixtures.researchSubjectDocs = [];
+      fixtures.sectionDocs = [];
     }
   });
 });

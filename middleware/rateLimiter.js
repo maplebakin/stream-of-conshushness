@@ -15,8 +15,7 @@ export const generalLimiter = rateLimit({
   validate: false, // Avoid proxy/env false positives crashing requests in mixed dev setups
   // Skip rate limiting for health checks and static files
   skip: (req) => {
-    return req.path === '/health' ||
-           req.path.startsWith('/uploads/') ||
+    return req.path.startsWith('/health') ||
            req.path.startsWith('/public/');
   }
 });

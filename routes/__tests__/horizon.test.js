@@ -202,4 +202,24 @@ describe('horizon routes', () => {
       },
     ]);
   });
+
+  it('marks trashed and missing horizon sources without returning their journal text', async () => {
+    appointmentFind.mockResolvedValueOnce([
+      { _id: 'trashed-appt', title: 'Private source', date: '2024-04-03', entryId: 'trashed-entry' },
+    ]).mockResolvedValueOnce([]);
+    eventFind.mockReturnValue(eventQuery([
+      { _id: 'missing-event', title: 'Missing source', date: '2024-04-04', entryId: 'missing-entry' },
+    ]));
+    entryFind.mockReturnValue(entryQuery([
+      { _id: 'trashed-entry', date: '2024-04-01', text: 'Private entry text', deletedAt: new Date('2024-04-02') },
+    ]));
+
+    const res = await request(app).get('/api/horizon?from=2024-04-01&days=7');
+
+    expect(res.status).toBe(200);
+    expect(res.body.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'trashed-appt', sourceState: 'trashed', sourceAvailable: false, sourceText: '' }),
+      expect.objectContaining({ id: 'missing-event', sourceState: 'missing', sourceAvailable: false, sourceText: '' }),
+    ]));
+  });
 });

@@ -2,6 +2,7 @@
 import Task from '../models/Task.js';
 import { resolveClusterIdForOwner } from '../utils/clusterIds.js';
 import { torontoYmd } from '../utils/date.js';
+import { isValidISODate } from '../utils/recurrence.js';
 
 /* ---------------------- helpers ---------------------- */
 function parseBool(v, def = false) {
@@ -36,6 +37,7 @@ export async function getTasks(userId, query) {
   const predicates = [];
 
   const dayISO = dueDate || date || torontoYmd();
+  if (!isValidISODate(dayISO)) return parseBool(countOnly, false) ? { count: 0 } : [];
   const normalizedView = String(view || '').toLowerCase();
 
   if (normalizedView === 'inbox') {
@@ -44,7 +46,7 @@ export async function getTasks(userId, query) {
     const includeOver = parseBool(includeOverdue, false);
     predicates.push(
       includeOver
-        ? { $or: [{ dueDate: dayISO }, { dueDate: { $lt: dayISO, $ne: null } }] }
+        ? { $or: [{ dueDate: dayISO }, { dueDate: { $lt: dayISO, $nin: [null, ''] } }] }
         : { dueDate: dayISO }
     );
   } else if (dueDate || date) {
@@ -92,8 +94,16 @@ export async function getTasks(userId, query) {
     .sort(sort)
     .skip(off)
     .limit(lim)
-    .populate('clusters', 'name slug icon color')
-    .populate('entryId', 'date title')
+    .populate({
+      path: 'clusters',
+      select: 'name slug icon color',
+      match: { ownerId: userId },
+    })
+    .populate({
+      path: 'entryId',
+      select: 'date title',
+      match: { userId },
+    })
     .lean();
 
   return items;

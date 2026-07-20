@@ -18,7 +18,7 @@ vi.mock('../../models/Task.js', () => ({
   },
 }));
 
-const { mockFindOneAndUpdate, mockUpdateMany } = taskMocks;
+const { mockFindOneAndUpdate, mockUpdateMany, mockFindOne, mockCreate } = taskMocks;
 
 import taskRouter from '../tasks.js';
 
@@ -56,5 +56,45 @@ describe('tasks router id validation', () => {
     await handler(req, res);
     expect(res.statusCode).toBe(400);
     expect(mockUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsupported recurrence on create before writing', async () => {
+    const handler = findRoute(taskRouter, '/', 'post');
+    const req = {
+      body: { title: 'Annual task', dueDate: '2026-07-19', rrule: 'FREQ=YEARLY' },
+      user: { userId: 'u1' },
+      params: {},
+      query: {},
+    };
+    const res = mockRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toContain('frequency');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('validates recurrence against the effective due date on update', async () => {
+    const handler = findRoute(taskRouter, '/:id', 'patch');
+    const doc = {
+      dueDate: '2026-07-19',
+      rrule: '',
+      save: vi.fn(),
+    };
+    mockFindOne.mockResolvedValue(doc);
+    const req = {
+      body: { rrule: 'FREQ=DAILY;UNTIL=2026-07-18' },
+      user: { userId: 'u1' },
+      params: { id: '507f1f77bcf86cd799439011' },
+      query: {},
+    };
+    const res = mockRes();
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toContain('until');
+    expect(doc.save).not.toHaveBeenCalled();
   });
 });

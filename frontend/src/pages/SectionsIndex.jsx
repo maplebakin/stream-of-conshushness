@@ -34,6 +34,7 @@ function normalizeSection(raw) {
     icon,
     description: raw.description || raw.summary || '',
     public: Boolean(raw.public),
+    type: raw.type || 'journal',
     updatedAt,
   };
 }
@@ -281,6 +282,7 @@ export default function SectionsIndex() {
       title: trimmed,
       slug,
       icon: '📚',
+      type: 'journal',
       updatedAt: new Date().toISOString(),
     };
 
@@ -309,7 +311,10 @@ export default function SectionsIndex() {
 
   function handleOpen(section) {
     if (!section?.slug) return;
-    navigate(`/sections/${encodeURIComponent(section.slug)}`);
+    const path = section.type === 'research'
+      ? `/research/${encodeURIComponent(section.slug)}`
+      : `/sections/${encodeURIComponent(section.slug)}`;
+    navigate(path);
   }
 
   function startRename(section) {

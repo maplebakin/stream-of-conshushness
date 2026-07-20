@@ -5,6 +5,11 @@ const RippleSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true, required: true },
     entryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Entry' },
+    automationRevision: { type: Number, default: 0, min: 0 },
+    // Stable receipt for direct /ripples/analyze requests. Legacy and
+    // entry-automation ripples omit it, so the index remains compatible with
+    // existing data while making direct analysis retries concurrency-safe.
+    analysisKey: { type: String, trim: true, maxlength: 64, default: undefined },
     dateKey: { type: String, index: true }, // 'YYYY-MM-DD' for easy daily querying
     text: { type: String, required: true },
     section: { type: String, default: '' },
@@ -24,5 +29,13 @@ const RippleSchema = new mongoose.Schema(
 
 // quick daily indexing
 RippleSchema.index({ userId: 1, dateKey: 1, status: 1, createdAt: -1 });
+RippleSchema.index({ userId: 1, entryId: 1, status: 1, automationRevision: 1 });
+RippleSchema.index(
+  { userId: 1, analysisKey: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { analysisKey: { $type: 'string' } },
+  }
+);
 
 export default mongoose.model('Ripple', RippleSchema);

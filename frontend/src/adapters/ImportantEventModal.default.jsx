@@ -16,9 +16,10 @@ export default function ImportantEventModal({ defaultDate = '', onClose, onSaved
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  async function handleSave() {
+  async function handleSave(event) {
+    event?.preventDefault?.();
     const t = title.trim();
-    if (!t) return;
+    if (!t || !date || saving) return;
     setSaving(true);
     try {
       await axios.post('/api/important-events', { title: t, date, details }, { headers });
@@ -39,7 +40,7 @@ export default function ImportantEventModal({ defaultDate = '', onClose, onSaved
 
   return (
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && !saving && onClose?.()}>
-      <div className="modal-card" role="dialog" aria-modal="true" onKeyDown={onKeyDown}>
+      <form className="modal-card" role="dialog" aria-modal="true" onKeyDown={onKeyDown} onSubmit={handleSave}>
         <div className="modal-header">
           <h3>Add important event</h3>
         </div>
@@ -80,12 +81,12 @@ export default function ImportantEventModal({ defaultDate = '', onClose, onSaved
         </div>
 
         <div className="modal-actions">
-          <button className="button" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="button" onClick={handleSave} disabled={saving || !title.trim()}>
+          <button type="button" className="button" onClick={onClose} disabled={saving}>Cancel</button>
+          <button type="submit" className="button" disabled={saving || !title.trim() || !date}>
             {saving ? 'Saving…' : 'Add'}
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

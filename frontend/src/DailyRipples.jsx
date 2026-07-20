@@ -131,7 +131,7 @@ export default function DailyRipples(props) {
         // Support both /api/ripples?date= and /api/ripples/:date
         let res = await axios.get('/api/ripples', {
           headers: authHeaders,
-          params: { date: day, status: 'pending' },
+          params: { date: day, status: 'pending', standalone: 1 },
         }).catch(() => axios.get(`/api/ripples/${day}`, {
           headers: authHeaders,
           params: { status: 'pending' },

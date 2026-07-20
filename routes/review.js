@@ -5,6 +5,9 @@ import Ripple from '../models/Ripple.js';
 import SuggestedGatherItem from '../models/SuggestedGatherItem.js';
 import SuggestedInterest from '../models/SuggestedInterest.js';
 import SuggestedTask from '../models/SuggestedTask.js';
+import SuggestedSchedule from '../models/SuggestedSchedule.js';
+import { logSafeError } from '../utils/errorHandler.js';
+import { resolveSourceEntries, sourceEntryMeta, sourceIdsFrom } from '../utils/sourceEntryState.js';
 
 const router = express.Router();
 
@@ -36,31 +39,6 @@ function isoDate(value) {
   return '';
 }
 
-function plainText(value) {
-  if (!value || typeof value !== 'string') return '';
-  return value
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function sourceExcerpt(entry) {
-  if (!entry || typeof entry !== 'object') return '';
-  const text = plainText(entry.text || entry.content || entry.html || '');
-  if (!text) return '';
-  return text.length > 220 ? `${text.slice(0, 217).trimEnd()}...` : text;
-}
-
-function sourceEntryMeta(entry) {
-  if (!entry || typeof entry !== 'object') return {};
-  return {
-    sourceEntryId: idOf(entry),
-    sourceDate: isoDate(entry.date),
-    sourceTitle: entry.title || '',
-    sourceEntryExcerpt: sourceExcerpt(entry),
-  };
-}
-
 function sourceRippleMeta(ripple) {
   if (!ripple || typeof ripple !== 'object') return {};
   return {
@@ -89,8 +67,14 @@ function sortReviewItems(a, b) {
   return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
 }
 
-function taskSuggestionItem(item) {
+async function countDocuments(Model, query, fallback) {
+  if (typeof Model.countDocuments !== 'function') return fallback;
+  return Model.countDocuments(query);
+}
+
+function taskSuggestionItem(item, sourceMap) {
   const source = sourceRippleMeta(item.sourceRippleId);
+  const sourceEntry = sourceEntryMeta(sourceMap, source.sourceEntryId);
   return {
     id: idOf(item),
     kind: 'suggestedTask',
@@ -107,11 +91,13 @@ function taskSuggestionItem(item) {
       item.repeat || item.rrule ? 'Repeats' : '',
     ].filter(Boolean),
     ...source,
+    ...sourceEntry,
+    sourceText: sourceEntry.sourceState && !sourceEntry.sourceAvailable ? '' : source.sourceText,
   };
 }
 
-function gatherSuggestionItem(item) {
-  const source = sourceEntryMeta(item.sourceEntryId);
+function gatherSuggestionItem(item, sourceMap) {
+  const source = sourceEntryMeta(sourceMap, item.sourceEntryId, { includeExcerpt: true });
   const clusters = clusterNames(item.clusters);
   return {
     id: idOf(item),
@@ -120,7 +106,7 @@ function gatherSuggestionItem(item) {
     title: item.title || 'Untitled gather suggestion',
     status: item.status || 'pending',
     list: item.list || 'Things to Buy',
-    sourceText: item.sourceText || '',
+    sourceText: source.sourceState && !source.sourceAvailable ? '' : item.sourceText || '',
     createdAt: item.createdAt || '',
     meta: [
       item.list || 'Things to Buy',
@@ -131,8 +117,8 @@ function gatherSuggestionItem(item) {
   };
 }
 
-function interestSuggestionItem(item) {
-  const source = sourceEntryMeta(item.sourceEntryId);
+function interestSuggestionItem(item, sourceMap) {
+  const source = sourceEntryMeta(sourceMap, item.sourceEntryId, { includeExcerpt: true });
   const clusters = clusterNames(item.clusters);
   return {
     id: idOf(item),
@@ -141,7 +127,7 @@ function interestSuggestionItem(item) {
     title: item.title || 'Untitled interest suggestion',
     status: item.status || 'pending',
     category: item.category || 'Learning Curiosities',
-    sourceText: item.sourceText || '',
+    sourceText: source.sourceState && !source.sourceAvailable ? '' : item.sourceText || '',
     createdAt: item.createdAt || '',
     meta: [
       item.category || 'Learning Curiosities',
@@ -152,27 +138,29 @@ function interestSuggestionItem(item) {
   };
 }
 
-function rippleItem(item) {
+function rippleItem(item, sourceMap) {
+  const source = sourceEntryMeta(sourceMap, item.entryId);
   return {
     id: idOf(item),
     kind: 'ripple',
     group: 'ripples',
     title: item.text || item.extractedText || 'Untitled ripple',
     status: item.status || 'pending',
-    sourceDate: isoDate(item.dateKey),
-    sourceEntryId: idOf(item.entryId),
-    sourceText: item.originalContext || item.context || '',
+    sourceDate: source.sourceState ? source.sourceDate : isoDate(item.dateKey),
+    sourceEntryId: source.sourceEntryId || idOf(item.entryId),
+    sourceText: source.sourceState && !source.sourceAvailable ? '' : item.originalContext || item.context || '',
     createdAt: item.createdAt || '',
     meta: [
       item.type || 'ripple',
       Number.isFinite(Number(item.score)) ? `Score ${item.score}` : '',
       item.section || '',
     ].filter(Boolean),
+    ...source,
   };
 }
 
-function appointmentItem(item) {
-  const source = sourceEntryMeta(item.entryId);
+function appointmentItem(item, sourceMap) {
+  const source = sourceEntryMeta(sourceMap, item.entryId, { includeExcerpt: true });
   const date = isoDate(item.date || item.startDate);
   const time = item.timeStart || item.time || '';
   return {
@@ -182,7 +170,7 @@ function appointmentItem(item) {
     title: item.title || 'Untitled appointment',
     status: 'entry-automation',
     date,
-    sourceDate: source.sourceDate || date,
+    sourceDate: source.sourceState ? source.sourceDate : source.sourceDate || date,
     sourceEntryId: source.sourceEntryId,
     sourceTitle: source.sourceTitle,
     sourceEntryExcerpt: source.sourceEntryExcerpt,
@@ -195,11 +183,12 @@ function appointmentItem(item) {
       item.location || '',
       item.rrule ? 'Repeats' : '',
     ].filter(Boolean),
+    ...source,
   };
 }
 
-function eventItem(item) {
-  const source = sourceEntryMeta(item.entryId);
+function eventItem(item, sourceMap) {
+  const source = sourceEntryMeta(sourceMap, item.entryId, { includeExcerpt: true });
   return {
     id: idOf(item),
     kind: 'calendarEvent',
@@ -207,7 +196,7 @@ function eventItem(item) {
     title: item.title || 'Untitled event',
     status: 'entry-automation',
     date: isoDate(item.date),
-    sourceDate: source.sourceDate || isoDate(item.date),
+    sourceDate: source.sourceState ? source.sourceDate : source.sourceDate || isoDate(item.date),
     sourceEntryId: source.sourceEntryId,
     sourceTitle: source.sourceTitle,
     sourceEntryExcerpt: source.sourceEntryExcerpt,
@@ -220,6 +209,48 @@ function eventItem(item) {
       item.cluster || '',
       item.pinned ? 'Pinned' : '',
     ].filter(Boolean),
+    ...source,
+  };
+}
+
+function scheduleSuggestionItem(item, sourceMap) {
+  const source = sourceEntryMeta(sourceMap, item.sourceEntryId, { includeExcerpt: true });
+  const changes = (item.changes || []).map((change) => ({
+    ...change,
+    targetAppointmentId: idOf(change.targetAppointmentId),
+    candidateAppointmentIds: (change.candidateAppointmentIds || []).map(idOf),
+    candidateAppointments: (change.candidateAppointments || []).map((candidate) => ({
+      ...candidate,
+      id: idOf(candidate.id),
+    })),
+  }));
+  const counts = changes.reduce((result, change) => {
+    result[change.action] = (result[change.action] || 0) + 1;
+    return result;
+  }, {});
+  return {
+    id: idOf(item),
+    kind: 'scheduleSuggestion',
+    group: 'calendar',
+    title: `${item.label || 'Work'} schedule`,
+    status: item.status || 'pending',
+    label: item.label || 'Work',
+    mode: item.mode || 'capture',
+    date: item.periodStart,
+    periodStart: item.periodStart,
+    periodEnd: item.periodEnd,
+    scheduleGroupId: item.scheduleGroupId || '',
+    changes,
+    sourceText: source.sourceState && !source.sourceAvailable ? '' : item.sourceText || '',
+    createdAt: item.createdAt || '',
+    meta: [
+      `${changes.length} proposed ${changes.length === 1 ? 'change' : 'changes'}`,
+      counts.add ? `${counts.add} add` : '',
+      counts.remove ? `${counts.remove} remove` : '',
+      counts.change ? `${counts.change} time ${counts.change === 1 ? 'change' : 'changes'}` : '',
+      counts.move ? `${counts.move} move` : '',
+    ].filter(Boolean),
+    ...source,
   };
 }
 
@@ -229,38 +260,74 @@ router.get('/', async (req, res) => {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
     const limit = clampLimit(req.query.limit);
+    // In-flight accept/reject states remain review-visible so a browser or
+    // server interruption can be retried instead of stranding the inference.
+    const pendingStatus = { $in: ['pending', 'accepting', 'rejecting'] };
+    const pendingAcceptanceStatus = { $in: ['pending', 'accepting'] };
+    const pendingTaskQuery = { userId, status: pendingStatus };
+    const allRepresentedRippleIds = typeof SuggestedTask.distinct === 'function'
+      ? (await SuggestedTask.distinct('sourceRippleId', pendingTaskQuery)).filter(Boolean)
+      : [];
+    const pendingRippleQuery = {
+      userId,
+      status: 'pending',
+      ...(allRepresentedRippleIds.length ? { _id: { $nin: allRepresentedRippleIds } } : {}),
+    };
     const [
       suggestedTasks,
       suggestedGatherItems,
       suggestedInterests,
+      suggestedSchedules,
       ripples,
       appointments,
       events,
     ] = await Promise.all([
-      SuggestedTask.find({ userId, status: 'pending' })
-        .populate('sourceRippleId', 'entryId dateKey text')
+      SuggestedTask.find(pendingTaskQuery)
+        .populate({
+          path: 'sourceRippleId',
+          select: 'entryId dateKey text',
+          match: { userId },
+        })
         .sort({ createdAt: -1 })
+        .limit(limit)
         .lean(),
-      SuggestedGatherItem.find({ userId, status: 'pending' })
-        .populate('clusters', 'name slug icon color')
-        .populate('sourceEntryId', 'date title text content html')
+      SuggestedGatherItem.find({ userId, status: pendingAcceptanceStatus })
+        .populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } })
+        .populate({ path: 'sourceEntryId', select: '_id', match: { userId } })
         .sort({ createdAt: -1 })
+        .limit(limit)
         .lean(),
-      SuggestedInterest.find({ userId, status: 'pending' })
-        .populate('clusters', 'name slug icon color')
-        .populate('sourceEntryId', 'date title text content html')
+      SuggestedInterest.find({ userId, status: pendingAcceptanceStatus })
+        .populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } })
+        .populate({ path: 'sourceEntryId', select: '_id', match: { userId } })
         .sort({ createdAt: -1 })
+        .limit(limit)
         .lean(),
-      Ripple.find({ userId, status: 'pending' })
+      SuggestedSchedule.find({ userId, status: pendingAcceptanceStatus })
         .sort({ createdAt: -1 })
+        .limit(limit)
         .lean(),
-      Appointment.find({ userId, source: 'entry-automation' })
-        .populate('entryId', 'date title text content html')
+      Ripple.find(pendingRippleQuery)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean(),
+      Appointment.find({
+        userId,
+        source: 'entry-automation',
+        automationReviewStatus: { $nin: ['kept', 'dismissed'] },
+      })
+        .populate({ path: 'entryId', select: '_id', match: { userId } })
         .sort({ date: 1, startDate: 1, createdAt: -1 })
+        .limit(limit)
         .lean(),
-      ImportantEvent.find({ userId, source: 'entry-automation' })
-        .populate('entryId', 'date title text content html')
+      ImportantEvent.find({
+        userId,
+        source: 'entry-automation',
+        automationReviewStatus: { $nin: ['kept', 'dismissed'] },
+      })
+        .populate({ path: 'entryId', select: '_id', match: { userId } })
         .sort({ date: 1, createdAt: -1 })
+        .limit(limit)
         .lean(),
     ]);
 
@@ -270,22 +337,52 @@ router.get('/', async (req, res) => {
         .filter(Boolean)
     );
     const standaloneRipples = ripples.filter((item) => !representedRippleIds.has(idOf(item)));
+    const sourceMap = await resolveSourceEntries({
+      userId,
+      sourceIds: [
+        ...sourceIdsFrom(suggestedTasks, (item) => item?.sourceRippleId?.entryId),
+        ...sourceIdsFrom(suggestedGatherItems, (item) => item?.sourceEntryId),
+        ...sourceIdsFrom(suggestedInterests, (item) => item?.sourceEntryId),
+        ...sourceIdsFrom(suggestedSchedules, (item) => item?.sourceEntryId),
+        ...sourceIdsFrom(standaloneRipples, (item) => item?.entryId),
+        ...sourceIdsFrom(appointments, (item) => item?.entryId),
+        ...sourceIdsFrom(events, (item) => item?.entryId),
+      ],
+    });
 
     const items = [
-      ...suggestedTasks.map(taskSuggestionItem),
-      ...suggestedGatherItems.map(gatherSuggestionItem),
-      ...suggestedInterests.map(interestSuggestionItem),
-      ...standaloneRipples.map(rippleItem),
-      ...appointments.map(appointmentItem),
-      ...events.map(eventItem),
+      ...suggestedTasks.map((item) => taskSuggestionItem(item, sourceMap)),
+      ...suggestedGatherItems.map((item) => gatherSuggestionItem(item, sourceMap)),
+      ...suggestedInterests.map((item) => interestSuggestionItem(item, sourceMap)),
+      ...suggestedSchedules.map((item) => scheduleSuggestionItem(item, sourceMap)),
+      ...standaloneRipples.map((item) => rippleItem(item, sourceMap)),
+      ...appointments.map((item) => appointmentItem(item, sourceMap)),
+      ...events.map((item) => eventItem(item, sourceMap)),
     ].sort(sortReviewItems).slice(0, limit);
 
+    const [taskCount, gatherCount, interestCount, scheduleCount, rippleCount, appointmentCount, eventCount] = await Promise.all([
+      countDocuments(SuggestedTask, pendingTaskQuery, suggestedTasks.length),
+      countDocuments(SuggestedGatherItem, { userId, status: pendingAcceptanceStatus }, suggestedGatherItems.length),
+      countDocuments(SuggestedInterest, { userId, status: pendingAcceptanceStatus }, suggestedInterests.length),
+      countDocuments(SuggestedSchedule, { userId, status: pendingAcceptanceStatus }, suggestedSchedules.length),
+      countDocuments(Ripple, pendingRippleQuery, standaloneRipples.length),
+      countDocuments(Appointment, {
+        userId,
+        source: 'entry-automation',
+        automationReviewStatus: { $nin: ['kept', 'dismissed'] },
+      }, appointments.length),
+      countDocuments(ImportantEvent, {
+        userId,
+        source: 'entry-automation',
+        automationReviewStatus: { $nin: ['kept', 'dismissed'] },
+      }, events.length),
+    ]);
     const counts = {
-      tasks: suggestedTasks.length,
-      gather: suggestedGatherItems.length,
-      interests: suggestedInterests.length,
-      ripples: standaloneRipples.length,
-      calendar: appointments.length + events.length,
+      tasks: taskCount,
+      gather: gatherCount,
+      interests: interestCount,
+      ripples: rippleCount,
+      calendar: appointmentCount + eventCount + scheduleCount,
     };
 
     res.json({
@@ -296,7 +393,7 @@ router.get('/', async (req, res) => {
       items,
     });
   } catch (err) {
-    console.error('[review] inbox load failed:', err);
+    logSafeError('review inbox load failed', err);
     res.status(500).json({ error: 'Failed to load review inbox' });
   }
 });

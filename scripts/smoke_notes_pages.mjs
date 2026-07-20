@@ -1,6 +1,7 @@
 // scripts/smoke_notes_pages.mjs
 // Usage:
 // EMAIL="you@example.com" PASSWORD="pass" API_BASE=http://127.0.0.1:3000 node scripts/smoke_notes_pages.mjs
+import { authenticationFailedDiagnostic } from './safeDiagnostics.mjs';
 
 const API_BASE = process.env.API_BASE || 'http://127.0.0.1:3000';
 const EMAIL = process.env.EMAIL;
@@ -46,7 +47,7 @@ function log(step, ok, detail = '') {
   const loginBody = JSON.stringify({ email: EMAIL, password: PASSWORD });
   const login = await tryFirst(loginPaths, loginBody);
   if (login.status !== 200 || !login.data?.token) {
-    console.error('Auth failed:', login);
+    console.error(authenticationFailedDiagnostic(login));
     process.exit(1);
   }
   const TOKEN = login.data.token;

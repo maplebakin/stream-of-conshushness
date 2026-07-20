@@ -1,8 +1,10 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import GatherItem from '../models/GatherItem.js';
-import { normalizeClusterIds, resolveClusterIdForOwner } from '../utils/clusterIds.js';
+import { resolveClusterIdForOwner, resolveClusterIdsForOwner } from '../utils/clusterIds.js';
 import { normalizeGatherTitleKey } from '../utils/gatherExtractor.js';
+import { logSafeError } from '../utils/errorHandler.js';
+import { resolveOwnedEntryId } from '../utils/ownedReferences.js';
 
 const router = express.Router();
 const { ObjectId } = mongoose.Types;
@@ -21,7 +23,7 @@ function normalizeStatus(value, fallback = 'needed') {
 }
 
 async function resolveClusters(userId, body = {}) {
-  let clusters = normalizeClusterIds(body.clusters);
+  let clusters = await resolveClusterIdsForOwner(userId, body.clusters);
   if (!clusters.length && body.clusterId) {
     const resolved = await resolveClusterIdForOwner(userId, body.clusterId);
     if (resolved) clusters = [resolved];
@@ -51,11 +53,11 @@ router.get('/', async (req, res) => {
 
     const items = await GatherItem.find(q)
       .sort({ status: 1, updatedAt: -1, createdAt: -1 })
-      .populate('clusters', 'name slug icon color')
+      .populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } })
       .lean();
     res.json(items);
   } catch (err) {
-    console.error('[gather-items] list failed:', err);
+    logSafeError('gather items list failed', err);
     res.status(500).json({ error: 'Failed to load gather items' });
   }
 });
@@ -69,7 +71,12 @@ router.post('/', async (req, res) => {
     if (!title) return res.status(400).json({ error: 'title is required' });
 
     const clusters = await resolveClusters(userId, req.body || {});
-    const sourceEntryId = ObjectId.isValid(req.body?.sourceEntryId) ? new ObjectId(req.body.sourceEntryId) : null;
+    const sourceEntryId = req.body?.sourceEntryId
+      ? await resolveOwnedEntryId(userId, req.body.sourceEntryId)
+      : null;
+    if (req.body?.sourceEntryId && !sourceEntryId) {
+      return res.status(400).json({ error: 'sourceEntryId must reference one of your entries' });
+    }
 
     const item = await GatherItem.create({
       userId,
@@ -84,10 +91,10 @@ router.post('/', async (req, res) => {
       tags: Array.isArray(req.body?.tags) ? req.body.tags.filter((tag) => typeof tag === 'string' && tag.trim()) : [],
     });
 
-    await item.populate('clusters', 'name slug icon color');
+    await item.populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } });
     res.status(201).json(item);
   } catch (err) {
-    console.error('[gather-items] create failed:', err);
+    logSafeError('gather items create failed', err);
     res.status(500).json({ error: 'Failed to create gather item' });
   }
 });
@@ -119,10 +126,10 @@ router.patch('/:id', async (req, res) => {
     }
 
     const saved = await item.save();
-    await saved.populate('clusters', 'name slug icon color');
+    await saved.populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } });
     res.json(saved);
   } catch (err) {
-    console.error('[gather-items] update failed:', err);
+    logSafeError('gather items update failed', err);
     res.status(500).json({ error: 'Failed to update gather item' });
   }
 });
@@ -137,7 +144,7 @@ router.delete('/:id', async (req, res) => {
     if (!result.deletedCount) return res.status(404).json({ error: 'Gather item not found' });
     res.json({ ok: true });
   } catch (err) {
-    console.error('[gather-items] delete failed:', err);
+    logSafeError('gather items delete failed', err);
     res.status(500).json({ error: 'Failed to delete gather item' });
   }
 });

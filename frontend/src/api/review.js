@@ -25,17 +25,25 @@ export function rejectSuggestedTask(suggestionId) {
 }
 
 export function keepCalendarAppointment(appointmentId) {
-  return api.patch(`/api/appointments/${appointmentId}`, {});
+  return api.patch(`/api/appointments/${appointmentId}/review`, { action: 'keep' });
 }
 
 export function dismissCalendarAppointment(appointmentId) {
-  return api.delete(`/api/appointments/${appointmentId}`);
+  return api.patch(`/api/appointments/${appointmentId}/review`, { action: 'dismiss' });
 }
 
-export function keepCalendarEvent(eventId, pinned) {
-  return api.patch(`/api/important-events/${eventId}`, { pinned: !!pinned });
+export function keepCalendarEvent(eventId) {
+  return api.patch(`/api/important-events/${eventId}/review`, { action: 'keep' });
 }
 
 export function dismissCalendarEvent(eventId) {
-  return api.delete(`/api/important-events/${eventId}`);
+  return api.patch(`/api/important-events/${eventId}/review`, { action: 'dismiss' });
+}
+
+export function acceptScheduleSuggestion(suggestionId, changes) {
+  return api.put(`/api/suggested-schedules/${suggestionId}/accept`, { changes });
+}
+
+export function rejectScheduleSuggestion(suggestionId) {
+  return api.put(`/api/suggested-schedules/${suggestionId}/reject`, {});
 }

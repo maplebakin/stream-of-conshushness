@@ -50,6 +50,16 @@ describe('taskService', () => {
       expect(mockQuery.sort).toHaveBeenCalledWith({ completed: 1, dueDate: 1, createdAt: -1 });
       expect(mockQuery.limit).toHaveBeenCalledWith(200); // Default limit
       expect(mockQuery.skip).toHaveBeenCalledWith(0); // Default offset
+      expect(mockQuery.populate).toHaveBeenNthCalledWith(1, {
+        path: 'clusters',
+        select: 'name slug icon color',
+        match: { ownerId: userId },
+      });
+      expect(mockQuery.populate).toHaveBeenNthCalledWith(2, {
+        path: 'entryId',
+        select: 'date title',
+        match: { userId },
+      });
     });
 
     it('should handle date filtering', async () => {
@@ -62,6 +72,22 @@ describe('taskService', () => {
       expect(calledWith.$and).toEqual(expect.arrayContaining([
         expect.objectContaining({ dueDate: '2025-12-02' }),
       ]));
+    });
+
+    it('does not treat empty due dates as overdue in the Today view', async () => {
+      await getTasks('user123', {
+        view: 'today',
+        date: '2026-06-08',
+        includeOverdue: '1',
+      });
+
+      const query = Task.find.mock.calls[0][0];
+      expect(query.$and).toContainEqual({
+        $or: [
+          { dueDate: '2026-06-08' },
+          { dueDate: { $lt: '2026-06-08', $nin: [null, ''] } },
+        ],
+      });
     });
 
     it('should handle completed filter', async () => {

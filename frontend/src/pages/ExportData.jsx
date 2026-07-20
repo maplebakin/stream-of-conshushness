@@ -124,7 +124,7 @@ export default function ExportData() {
       <div style={{ maxWidth: 800, margin: '0 auto' }}>
         <h1 style={{ marginBottom: '1rem' }}>Export Your Data</h1>
         <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
-          Download your Stream of Conshushness data for backup or migration purposes.
+          Download your StreamofConshushness data for backup or migration purposes.
         </p>
 
         {/* Statistics Card */}

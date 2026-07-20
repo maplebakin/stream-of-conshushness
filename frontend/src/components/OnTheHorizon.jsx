@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from '../api/axiosInstance.js';
 import { getAppointmentDetailParts, getStoredAppointmentId } from '../utils/appointmentIds.js';
+import { sourceStateLabel } from '../utils/sourceEntryState.js';
 
 function itemIcon(type) {
   return type === 'appointment' ? '🗓️' : '⭐';
@@ -20,6 +21,7 @@ export default function OnTheHorizon({
   onDeleteAppointment,
   confirmingAppointmentDeleteId = '',
   confirmingAppointmentDeleteMessage = '',
+  deletingAppointmentId = '',
   onCancelAppointmentDelete,
 }) {
   const [items, setItems] = useState([]);
@@ -85,6 +87,8 @@ export default function OnTheHorizon({
             const detailParts = isAppointment ? getAppointmentDetailParts(item) : [];
             const appointmentDeleteId = isAppointment ? getStoredAppointmentId(item) : '';
             const confirmingDelete = appointmentDeleteId && confirmingAppointmentDeleteId === appointmentDeleteId;
+            const deleting = appointmentDeleteId && deletingAppointmentId === appointmentDeleteId;
+            const sourceState = sourceStateLabel(item);
             return (
               <li
                 key={`${item.type}-${item.id}`}
@@ -107,6 +111,9 @@ export default function OnTheHorizon({
                     Source: "{item.sourceText}"
                   </div>
                 )}
+                {sourceState && (
+                  <div className="muted" style={{ fontSize: 13 }}>{sourceState}</div>
+                )}
                 {isAppointment && item.details && (
                   <div className="muted" style={{ fontSize: 13 }}>{item.details}</div>
                 )}
@@ -114,7 +121,7 @@ export default function OnTheHorizon({
                 {isAppointment && (onEditAppointment || onDeleteAppointment) && (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     {onEditAppointment && (
-                      <button type="button" className="button chip" onClick={() => onEditAppointment(item)} title="Edit appointment">
+                      <button type="button" className="button chip" onClick={() => onEditAppointment(item)} title="Edit appointment" disabled={Boolean(deletingAppointmentId)}>
                         Edit
                       </button>
                     )}
@@ -124,12 +131,13 @@ export default function OnTheHorizon({
                         className="button chip"
                         onClick={() => onDeleteAppointment(item)}
                         title={confirmingDelete ? confirmingAppointmentDeleteMessage || 'Confirm delete appointment' : 'Delete appointment'}
+                        disabled={Boolean(deletingAppointmentId)}
                       >
-                        {confirmingDelete ? 'Confirm Delete' : 'Delete'}
+                        {deleting ? 'Deleting…' : confirmingDelete ? 'Confirm Delete' : 'Delete'}
                       </button>
                     )}
                     {confirmingDelete && onCancelAppointmentDelete && (
-                      <button type="button" className="button chip" onClick={onCancelAppointmentDelete}>
+                      <button type="button" className="button chip" onClick={onCancelAppointmentDelete} disabled={Boolean(deletingAppointmentId)}>
                         Cancel
                       </button>
                     )}

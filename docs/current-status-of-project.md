@@ -1,14 +1,14 @@
 # Current Status of Project
 
-Last updated: 2026-07-09
+Last updated: 2026-07-13
 Branch observed: `codex/review-inbox-maintenance`
-Latest observed commit: `6f1e3ff Show calendar artifact source context`
+Latest observed commit: `4028e58 Polish Review Inbox mobile bulk controls`
 
 This document is written as a handoff for another LLM or collaborator to brainstorm product and engineering improvements from the current codebase. It summarizes the live architecture, known usable surfaces, recent improvements, open risks, and high-value next directions. It is based on source inspection, existing docs, and the current test/build tooling; it is not a substitute for a fresh manual smoke test with real data.
 
 ## One-Sentence Product Shape
 
-Stream of Conshushness is a personal operating system for journal-first productivity: users capture natural-language entries, automation extracts reviewable tasks/gather items/interests/ripples/calendar artifacts, and the app helps them plan and act through Today, Review Inbox, Calendar, Sections, Clusters, and supporting management pages.
+StreamofConshushness is a personal operating system for journal-first productivity: users capture natural-language entries, automation extracts reviewable tasks/gather items/interests/ripples/calendar artifacts, and the app helps them plan and act through Today, Review Inbox, Calendar, Sections, Clusters, and supporting management pages.
 
 ## Current Technical Shape
 
@@ -41,7 +41,8 @@ Primary app routes:
 - `/ripples` ripple review.
 - `/sections`, `/sections/:key`, `/sections/:sectionSlug/:pageSlug`, `/sections/:sectionSlug/:pageSlug/:tab`.
 - `/clusters`, `/clusters/:clusterSlug`.
-- `/goals`, `/habits/analytics`, `/search`, `/trash`, `/export`, `/account`, `/settings`, `/admin`.
+- `/goals`, `/search`, `/trash`, `/export`, `/account`, `/settings`, `/admin`.
+- The unfinished Habit Analytics/streak surface is intentionally absent from navigation; the legacy URL redirects to Today while owner-scoped stored habit records remain searchable/exportable.
 - Public auth routes: `/login`, `/register`, `/forgot`, `/reset`.
 
 Major backend route groups:
@@ -84,7 +85,7 @@ This loop is the highest-value area to keep improving. The app has many feature 
 - Task soft-delete undo restores original records instead of recreating duplicate tasks.
 - `react-hot-toast` is the consolidated notification path.
 - Unreachable legacy `ManageSections` was removed.
-- An opt-in Playwright browser smoke now covers Stream capture -> Review Inbox acceptance -> the accepted task on its Daily Page, plus ordinal-date calendar extraction with visible source context. It intentionally skips unless `RUN_BROWSER_SMOKE=1`; it can start isolated local servers with `BROWSER_SMOKE_START_SERVER=1` and requires a live disposable MongoDB database.
+- An opt-in Playwright browser smoke now covers Stream capture -> edited Review Inbox acceptance -> the accepted task on its Daily Page, ordinal-date calendar extraction with visible source context, and two-user isolation for the primary private resources/uploads. It intentionally skips unless `RUN_BROWSER_SMOKE=1`; it can start isolated local servers with `BROWSER_SMOKE_START_SERVER=1` and requires a live disposable MongoDB database.
 
 ## Current Strengths
 
@@ -132,21 +133,24 @@ But many pages still use dense inline styles. This makes responsive polish, visu
 
 Search spans many models and now exposes some actions, but actions are uneven. It can open most things, complete tasks, and send suggestions to review. It does not yet consistently support edit, restore, delete, pin, schedule, or jump-to-source actions where those would be safe.
 
-### 5. Review Inbox Has the Right Shape But Needs Workflow Depth
+### 5. Review Inbox Has the Right Shape But Needs Scale And Explainability
 
-Review Inbox is now useful, but its next usability frontier is confidence and speed:
+Review Inbox now has source links, edit-before-accept, bulk actions, neighboring-item
+focus recovery, and documented keyboard controls. Its next usability frontier is
+confidence and high-volume use:
 
 - batch editing before accept,
-- keyboard shortcuts,
-- better source navigation,
 - confidence/reason display,
 - "accept all like this" rules,
 - source entry editing from the review context,
-- clearer calendar keep/dismiss semantics.
+- server pagination or virtualization beyond the current bounded result set.
 
-### 6. Browser Smoke Is Opt-In and Narrow
+### 6. Browser Smoke Is Narrow
 
-The backend/unit/contract suite is strong, and `e2e/daily-loop.spec.js` now proves the core UI path through Playwright when explicitly enabled: Stream capture -> Review Inbox -> accepted task on the correct Daily Page. It also verifies ordinal-date calendar extraction, the Automation source label, and the source-entry link. The smoke is intentionally gated behind `RUN_BROWSER_SMOKE=1`, requires a live MongoDB-backed app, and therefore is not part of the default local test path.
+The backend/unit/contract suite is strong, and `e2e/daily-loop.spec.js` now proves the core UI path through Playwright when explicitly enabled: Stream capture -> edited Review Inbox suggestion -> accepted task on the correct Daily Page. It also verifies ordinal-date calendar extraction, the Automation source label, the source-entry link, and two-user owner isolation. The smoke is intentionally gated behind `RUN_BROWSER_SMOKE=1`, requires a live MongoDB-backed app, and therefore is not part of the default local test path.
+
+CI supplies a disposable MongoDB service and enables this smoke automatically.
+Local runs still skip honestly unless the opt-in database environment is present.
 
 ### 7. API Wrappers Are Incomplete
 
@@ -155,6 +159,10 @@ The backend/unit/contract suite is strong, and `e2e/daily-loop.spec.js` now prov
 ### 8. Automation Quality Is Product-Critical
 
 The app depends heavily on extractors in `utils/entryAutomation.js`, `utils/rippleExtractor.js`, `utils/gatherExtractor.js`, `utils/interestExtractor.js`, and date utilities. False positives, duplicate artifacts, unclear source context, and date mistakes will directly affect trust.
+
+Automation is revision-aware, retryable, and protected by provenance indexes, but
+it still runs in the entry request lifecycle. A durable outbox/worker remains the
+largest reliability step for recovery from process interruption.
 
 ## Engineering Inventory
 
@@ -166,7 +174,7 @@ Observed rough scale:
 - Models: about 96 KB.
 - Frontend files under `frontend/src`: about 136 JS/JSX/CSS files at shallow levels.
 - Backend JS/MJS files under routes/models/utils/middleware/services: about 120.
-- Tests: 49 test files with about 292 `describe`/`it`/`test` declarations.
+- Tests: 91 Vitest files with 497 passing tests in the current local gate, plus three Playwright journey tests that require the disposable MongoDB environment.
 
 This is large enough that future work should avoid broad rewrites. Prefer narrow vertical slices around the daily loop.
 
@@ -179,8 +187,7 @@ This is large enough that future work should avoid broad rewrites. Prefer narrow
    - Reduce duplicate panels and make the first screen answer "what should I do now?"
 
 2. Make Review Inbox faster.
-   - Add keyboard shortcuts for next item, accept, reject, select, bulk action.
-   - Add source-entry jump links.
+   - Add server pagination or virtualization for large review histories.
    - Add richer explanations: why was this suggested, which phrase triggered it, what date base was used.
 
 3. Improve accepted-object follow-through.
@@ -240,13 +247,13 @@ Use these prompts to generate grounded ideas:
 
 ## Suggested Implementation Order
 
-1. Expand the existing opt-in Playwright browser smoke for the daily loop.
-2. Add source-entry links and keyboard shortcuts to Review Inbox.
-3. Improve `/day/:date` prioritization and reduce first-screen clutter.
-4. Extend Search actions for restore/edit/delete where APIs already exist.
-5. Move direct endpoint calls into API wrappers for review/tasks/entries/search.
-6. Extract inline styles from isolated utility pages.
-7. Audit and prune compatibility aliases.
+1. Run the deployment migrations and read-only integrity audit against a backed-up staging copy.
+2. Add a durable automation outbox/worker around the existing revision-aware engine.
+3. Add Review Inbox pagination or virtualization and richer extraction reasons.
+4. Expand the Mongo-backed Playwright journey with metadata-only entry edits and concurrent acceptance retry.
+5. Extend Search actions for restore/edit/delete where APIs already exist.
+6. Move remaining direct endpoint calls into API wrappers for review/tasks/entries/search.
+7. Audit and prune compatibility aliases only after caller evidence and contract tests permit it.
 
 ## Guardrails For Future Agents
 

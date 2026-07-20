@@ -17,7 +17,6 @@ const commands = [
   { id: 'nav-ripples', label: 'Go to Ripples', icon: '💡', action: 'navigate', target: '/ripples', keywords: ['ripples', 'actions'] },
   { id: 'nav-interests', label: 'Go to Sparks & Interests', icon: '✨', action: 'navigate', target: '/interests', keywords: ['interests', 'sparks', 'curiosities', 'learning'] },
   { id: 'nav-gather-lists', label: 'Go to Gather Lists', icon: '🧺', action: 'navigate', target: '/gather-lists', keywords: ['gather', 'lists', 'groceries', 'supplies', 'containers', 'needs'] },
-  { id: 'nav-habits', label: 'Go to Habit Analytics', icon: '📊', action: 'navigate', target: '/habits/analytics', keywords: ['habits', 'analytics', 'stats'] },
   { id: 'nav-search', label: 'Go to Search', icon: '🔍', action: 'navigate', target: '/search', keywords: ['search', 'find'] },
   { id: 'nav-export', label: 'Go to Export', icon: '📦', action: 'navigate', target: '/export', keywords: ['export', 'backup', 'download'] },
   { id: 'nav-trash', label: 'Go to Trash', icon: '🗑️', action: 'navigate', target: '/trash', keywords: ['trash', 'deleted', 'archive', 'recycle'] },
@@ -35,6 +34,8 @@ export default function CommandPalette({ isOpen, onClose }) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef(null);
+  const dialogRef = useRef(null);
+  const previousFocusRef = useRef(null);
   const navigate = useNavigate();
   const { toggleTheme } = useTheme();
 
@@ -46,11 +47,18 @@ export default function CommandPalette({ isOpen, onClose }) {
     : commands;
 
   useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus();
-      setQuery('');
-      setSelectedIndex(0);
-    }
+    if (!isOpen) return undefined;
+
+    previousFocusRef.current = document.activeElement;
+    setQuery('');
+    setSelectedIndex(0);
+    inputRef.current?.focus();
+
+    return () => {
+      if (previousFocusRef.current instanceof HTMLElement) {
+        previousFocusRef.current.focus();
+      }
+    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -68,16 +76,35 @@ export default function CommandPalette({ isOpen, onClose }) {
 
   const handleKeyDown = (e) => {
     if (e.key === 'Escape') {
+      e.preventDefault();
       onClose();
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex(prev => (prev + 1) % filteredCommands.length);
+      if (filteredCommands.length) {
+        setSelectedIndex(prev => (prev + 1) % filteredCommands.length);
+      }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex(prev => prev === 0 ? filteredCommands.length - 1 : prev - 1);
+      if (filteredCommands.length) {
+        setSelectedIndex(prev => prev === 0 ? filteredCommands.length - 1 : prev - 1);
+      }
     } else if (e.key === 'Enter' && filteredCommands[selectedIndex]) {
       e.preventDefault();
       executeCommand(filteredCommands[selectedIndex]);
+    } else if (e.key === 'Tab') {
+      const focusable = Array.from(dialogRef.current?.querySelectorAll(
+        'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+      ) || []);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
   };
 
@@ -87,6 +114,7 @@ export default function CommandPalette({ isOpen, onClose }) {
     <>
       {/* Backdrop */}
       <div
+        aria-hidden="true"
         style={{
           position: 'fixed',
           top: 0,
@@ -102,6 +130,12 @@ export default function CommandPalette({ isOpen, onClose }) {
 
       {/* Command Palette */}
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="command-palette-title"
+        aria-describedby="command-palette-help"
+        onKeyDown={handleKeyDown}
         style={{
           position: 'fixed',
           top: '20%',
@@ -117,14 +151,17 @@ export default function CommandPalette({ isOpen, onClose }) {
           overflow: 'hidden'
         }}
       >
+        <h2 id="command-palette-title" className="visually-hidden">Command palette</h2>
+
         {/* Search Input */}
         <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-primary)' }}>
+          <label htmlFor="command-palette-query" className="visually-hidden">Find a command</label>
           <input
+            id="command-palette-query"
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
             placeholder="Type a command or search..."
             style={{
               width: '100%',
@@ -137,7 +174,7 @@ export default function CommandPalette({ isOpen, onClose }) {
               outline: 'none'
             }}
           />
-          <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+          <div id="command-palette-help" style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
             ↑↓ Navigate • ↵ Select • Esc Close
           </div>
         </div>
@@ -151,7 +188,7 @@ export default function CommandPalette({ isOpen, onClose }) {
           }}
         >
           {filteredCommands.length === 0 ? (
-            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            <div role="status" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
               No commands found
             </div>
           ) : (
@@ -176,7 +213,7 @@ export default function CommandPalette({ isOpen, onClose }) {
                 }}
                 onMouseEnter={() => setSelectedIndex(index)}
               >
-                <span style={{ fontSize: '1.5rem' }}>{command.icon}</span>
+                <span aria-hidden="true" style={{ fontSize: '1.5rem' }}>{command.icon}</span>
                 <span>{command.label}</span>
               </button>
             ))

@@ -118,8 +118,9 @@ describe('entry automation gather suggestions', () => {
         lean: () => Promise.resolve(
           mocks.existingSuggestions.filter((item) => (
             item.userId === query.userId &&
-            item.list === query.list &&
-            item.status === query.status
+            (!query.list || item.list === query.list) &&
+            (!query.sourceEntryId || item.sourceEntryId === query.sourceEntryId) &&
+            (query.status?.$in ? query.status.$in.includes(item.status) : item.status === query.status)
           ))
         ),
       }),
@@ -257,6 +258,21 @@ describe('entry automation gather suggestions', () => {
     const entry = await createGatherEntry('I need to get milk');
 
     expect(entry).toMatchObject({ _id: 'entry-1' });
+    expect(mocks.suggestedGatherItemInsertMany).not.toHaveBeenCalled();
+  });
+
+  it('does not revive a rejected suggestion from the same source entry', async () => {
+    mocks.existingSuggestions = [{
+      userId: 'user-1',
+      sourceEntryId: 'entry-1',
+      title: 'Milk',
+      normalizedTitle: 'milk',
+      list: 'Grocery List',
+      status: 'rejected',
+    }];
+
+    await createGatherEntry('I need to get milk');
+
     expect(mocks.suggestedGatherItemInsertMany).not.toHaveBeenCalled();
   });
 

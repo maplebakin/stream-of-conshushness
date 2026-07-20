@@ -14,6 +14,7 @@ import TaskList from '../adapters/TaskList.default.jsx';
 import '../Main.css';
 import SafeHTML from '../components/SafeHTML.jsx';
 import { useToast } from '../hooks/useToast.js';
+import { entryPath } from '../utils/sourceEntryState.js';
 import './SectionPage.css';
 
 const VIEW_TABS = [
@@ -197,6 +198,7 @@ export default function SectionPage() {
         order: Number.isFinite(s.order) ? s.order : 0,
         summary: s.summary || s.description || '',
         tagline: s.tagline || s.subtitle || '',
+        type: s.type || 'journal',
       }))
       .filter((s) => s.key)
       .sort((a, b) => {
@@ -475,7 +477,9 @@ export default function SectionPage() {
 
   async function copyEntryLink(entry) {
     if (!entry?._id) return;
-    const url = `${window.location.origin}/entries/${entry._id}`;
+    const path = entryPath(entry);
+    if (!path) return;
+    const url = `${window.location.origin}${path}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopiedEntryId(entry._id);
@@ -524,7 +528,7 @@ export default function SectionPage() {
     if (!task?._id) return;
     markTaskBusy(task._id, true);
     try {
-      const res = await axios.patch(`/api/tasks/${task._id}/toggle`);
+      const res = await axios.patch(`/api/tasks/${task._id}/toggle`, { completed: !task.completed });
       const updated = res.data?.task || null;
       const nextTask = res.data?.next || null;
       setTasks((prev) => {
@@ -573,7 +577,10 @@ export default function SectionPage() {
   function handleSelect(section) {
     if (!section?.key) return;
     setActiveKey(section.key);
-    navigate(`/sections/${encodeURIComponent(section.key)}`);
+    const path = section.type === 'research'
+      ? `/research/${encodeURIComponent(section.key)}`
+      : `/sections/${encodeURIComponent(section.key)}`;
+    navigate(path);
   }
 
   useEffect(() => {

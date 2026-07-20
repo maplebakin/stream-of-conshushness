@@ -12,8 +12,10 @@ let bad = 0;
 for (const f of files) {
   const p = path.join(dir, f);
   const src = fs.readFileSync(p, 'utf8');
-  const hasDefault = /export\s+default\s+/.test(src);
-  const hasReact = /from\s+['"]react['"]/.test(src);
+  const reExportsDefault = /export\s*\{\s*default\s*\}\s*from\s*['"][^'"]+['"]/.test(src);
+  const hasDefault = /export\s+default\s+/.test(src) || reExportsDefault;
+  // A pure default re-export contains no JSX and does not need its own React import.
+  const hasReact = reExportsDefault || /from\s+['"]react['"]/.test(src);
 
   if (!hasDefault || !hasReact) {
     bad++;

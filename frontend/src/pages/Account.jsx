@@ -1,5 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import axios from '../api/axiosInstance';
+import PrivateUploadImage from '../components/PrivateUploadImage';
+import { AuthContext } from '../AuthContext.jsx';
+import { CompactPageHeader } from '../components/UXPrimitives.jsx';
+import './Account.css';
 
 function useCooldown(initial = 0) {
   const [cooldown, setCooldown] = useState(initial);
@@ -12,6 +17,7 @@ function useCooldown(initial = 0) {
 }
 
 export default function Account() {
+  const { logout } = useContext(AuthContext);
   const [profile, setProfile] = useState(null);
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -21,12 +27,15 @@ export default function Account() {
   const [msg, setMsg] = useState('');
   const [uploading, setUploading] = useState(false);
   const [confirmingRemovePicture, setConfirmingRemovePicture] = useState(false);
+  const [verificationStarted, setVerificationStarted] = useState(false);
+  const pictureInputRef = useRef(null);
 
   async function load() {
     try {
       const { data } = await axios.get('/api/me');
       setProfile(data.user);
       setEmail(data.user.pendingEmail || data.user.email || '');
+      setVerificationStarted(Boolean(data.user.pendingEmail));
     } catch (e) {
       setMsg(e?.response?.data?.error || e.message);
     }
@@ -47,6 +56,7 @@ export default function Account() {
         setMsg('Verification code sent. Check your inbox.');
       }
       setCooldown(60);
+      setVerificationStarted(true);
       await load();
     } catch (e) {
       setMsg(e?.response?.data?.error || e.message);
@@ -130,162 +140,142 @@ export default function Account() {
   }
 
   return (
-    <main className="app-main" style={{ padding: 24 }}>
-      <section className="section">
-        <header className="section-header">
-          <h2 className="font-glow">Account</h2>
-          <div className="muted">Add an email so you can recover your account via code/link.</div>
-        </header>
+    <main className="page account-page">
+      <CompactPageHeader
+        eyebrow="Your space"
+        title="Account"
+        description="Keep your profile recognizable and make sure you can get back in."
+      />
 
-        {msg && (
-          <div style={{ marginTop: 10, padding: 10, border: '1px solid var(--color-border)', borderRadius: 8 }}>
-            {msg}
-          </div>
-        )}
+      {msg && <div className="alert" role="status">{msg}</div>}
 
-        <div className="panel" style={{ marginTop: 12 }}>
-          <div className="row">
-            <div className="muted">Username</div>
-            <div>{profile?.username || '—'}</div>
-          </div>
-          <div className="row" style={{ marginTop: 8 }}>
-            <div className="muted">Current email</div>
-            <div>{profile?.email || '—'}</div>
-            {profile?.email && (
-              <div className="muted" style={{ marginLeft: 8 }}>
-                {profile?.emailVerified ? '✔ verified' : 'unverified'}
-              </div>
-            )}
-          </div>
-
-          {profile?.pendingEmail && (
-            <div className="row" style={{ marginTop: 8 }}>
-              <div className="muted">Pending email</div>
-              <div>{profile.pendingEmail}</div>
-            </div>
-          )}
+      <section className="card account-section" aria-labelledby="account-profile-title">
+        <div>
+          <p className="account-section__eyebrow">Profile</p>
+          <h2 id="account-profile-title">{profile?.username || 'Your profile'}</h2>
         </div>
-
-        <div className="panel" style={{ marginTop: 16 }}>
-          <h3 className="font-thread">Profile Picture</h3>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginTop: 12 }}>
+        <div className="account-profile">
+          <div className="account-profile__avatar">
             {profile?.profilePicture ? (
-              <img
-                src={profile.profilePicture}
-                alt="Profile"
-                style={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: '50%',
-                  objectFit: 'cover',
-                  border: '2px solid var(--border-primary)',
-                }}
+              <PrivateUploadImage
+                url={profile.profilePicture}
+                alt={`${profile?.username || 'Your'} profile`}
+                className="account-profile__image"
+                fallback={<span>{profile?.username?.[0]?.toUpperCase() || '?'}</span>}
               />
             ) : (
-              <div
-                style={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: '50%',
-                  background: 'var(--bg-secondary)',
-                  border: '2px solid var(--border-primary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '2rem',
-                  color: 'var(--text-secondary)',
-                }}
-              >
-                {profile?.username?.[0]?.toUpperCase() || '?'}
-              </div>
+              <span>{profile?.username?.[0]?.toUpperCase() || '?'}</span>
             )}
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <label style={{ position: 'relative' }}>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleProfilePictureUpload}
-                  disabled={uploading}
-                  style={{ display: 'none' }}
-                />
-                <button
-                  className="btn"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.currentTarget.previousElementSibling.click();
-                  }}
-                  disabled={uploading}
-                >
-                  {uploading ? 'Uploading...' : profile?.profilePicture ? 'Change Picture' : 'Upload Picture'}
-                </button>
-              </label>
-
-              {profile?.profilePicture && (
-                <button
-                  className="btn"
-                  onClick={removeProfilePicture}
-                  disabled={uploading}
-                  style={{ background: 'var(--status-error, #dc2626)', color: 'white' }}
-                >
-                  {confirmingRemovePicture ? 'Confirm Remove' : 'Remove Picture'}
-                </button>
-              )}
-              {profile?.profilePicture && confirmingRemovePicture && (
+          </div>
+          <div className="account-profile__actions">
+            <input
+              ref={pictureInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleProfilePictureUpload}
+              disabled={uploading}
+              className="visually-hidden"
+              tabIndex={-1}
+            />
+            <button
+              type="button"
+              className="button"
+              onClick={() => pictureInputRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? 'Uploading…' : profile?.profilePicture ? 'Change picture' : 'Add a picture'}
+            </button>
+            {profile?.profilePicture && (
+              <>
                 <button
                   type="button"
-                  className="btn"
-                  onClick={() => setConfirmingRemovePicture(false)}
+                  className="button quiet"
+                  onClick={removeProfilePicture}
                   disabled={uploading}
                 >
-                  Cancel
+                  {confirmingRemovePicture ? 'Confirm removal' : 'Remove picture'}
                 </button>
-              )}
-            </div>
-          </div>
-          <div style={{ marginTop: 8, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-            Supported: JPG, PNG, WebP, GIF. Max size: 5MB
+                {confirmingRemovePicture && (
+                  <button
+                    type="button"
+                    className="button quiet"
+                    onClick={() => setConfirmingRemovePicture(false)}
+                    disabled={uploading}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </>
+            )}
+            <small>JPG, PNG, WebP, or GIF · up to 5 MB</small>
           </div>
         </div>
+      </section>
 
-        <div className="panel" style={{ marginTop: 16 }}>
-          <h3 className="font-thread">Add / Change email</h3>
+      <section className="card account-section" aria-labelledby="account-recovery-title">
+        <div>
+          <p className="account-section__eyebrow">Account recovery</p>
+          <h2 id="account-recovery-title">Recovery email</h2>
+          <p className="muted">
+            {profile?.email
+              ? `${profile.email}${profile.emailVerified ? ' · Verified' : ' · Not verified yet'}`
+              : 'No recovery email added.'}
+          </p>
+        </div>
 
-          <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+        <div className="account-form-row">
+          <label>
+            <span>Email address</span>
             <input
               type="email"
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="auth-input"
-              style={{ minWidth: 260 }}
             />
-            <button
-              className="btn"
-              onClick={startVerify}
-              disabled={sending || cooldown > 0 || !email.trim()}
-              title={cooldown > 0 ? `Resend in ${cooldown}s` : 'Send verification code'}
-            >
-              {cooldown > 0 ? `Resend (${cooldown}s)` : (sending ? 'Sending…' : 'Send code')}
-            </button>
-          </div>
+          </label>
+          <button
+            type="button"
+            className="button"
+            onClick={startVerify}
+            disabled={sending || cooldown > 0 || !email.trim()}
+          >
+            {cooldown > 0 ? `Resend in ${cooldown}s` : sending ? 'Sending…' : profile?.email ? 'Change recovery email' : 'Add recovery email'}
+          </button>
+        </div>
 
-          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="\\d{6}"
-              title="6 digits"
-              placeholder="enter 6-digit code"
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\\D+/g, '').slice(0, 6))}
-              className="auth-input"
-              style={{ maxWidth: 150 }}
-            />
-            <button className="btn" onClick={confirmEmailCode} disabled={verifying || code.length !== 6}>
-              {verifying ? 'Verifying…' : 'Verify & Save'}
-            </button>
+        {verificationStarted && (
+          <div className="account-verification" aria-label="Verify recovery email">
+            <p>Enter the six-digit code sent to {profile?.pendingEmail || email}.</p>
+            <div className="account-form-row">
+              <label>
+                <span>Verification code</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\\d{6}"
+                  autoComplete="one-time-code"
+                  placeholder="123456"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\\D+/g, '').slice(0, 6))}
+                />
+              </label>
+              <button type="button" className="button" onClick={confirmEmailCode} disabled={verifying || code.length !== 6}>
+                {verifying ? 'Verifying…' : 'Verify email'}
+              </button>
+            </div>
           </div>
+        )}
+      </section>
+
+      <section className="card account-section" aria-labelledby="account-security-title">
+        <div>
+          <p className="account-section__eyebrow">Security</p>
+          <h2 id="account-security-title">Session and password</h2>
+          <p className="muted">Password changes and other preferences live in Settings.</p>
+        </div>
+        <div className="account-security-actions">
+          <Link className="button secondary" to="/settings">Open settings</Link>
+          <button type="button" className="button danger" onClick={logout}>Sign out</button>
         </div>
       </section>
     </main>

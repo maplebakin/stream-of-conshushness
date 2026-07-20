@@ -1,6 +1,8 @@
 // Backend-focused Toronto date helpers.
 // Keep frontend date helpers in frontend/src/utils/date.js separate.
 
+import { isValidISODate } from './recurrence.js';
+
 export const TORONTO_TZ = 'America/Toronto';
 export const TZ = TORONTO_TZ;
 
@@ -31,9 +33,12 @@ export function todayISO(base = new Date()) {
 export function normalizeDate(value, timeZone = TORONTO_TZ) {
   if (!value) return todayISOInTZ(timeZone);
   const str = String(value).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    if (!isValidISODate(str)) throw new RangeError('Invalid calendar date');
+    return str;
+  }
   const dt = new Date(str);
-  if (Number.isNaN(dt.getTime())) return todayISOInTZ(timeZone);
+  if (Number.isNaN(dt.getTime())) throw new RangeError('Invalid calendar date');
   return todayISOInTZ(timeZone, dt);
 }
 

@@ -278,6 +278,13 @@
   line-height: 1.35;
 }
 
+.review-inbox-item__outcome {
+  margin: 0;
+  color: var(--color-vein);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
 .review-edit-grid {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(160px, 0.45fr);
@@ -376,6 +383,110 @@
   font-size: 0.82rem;
 }
 
+.schedule-review {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.schedule-review__changes {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.schedule-change {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--color-surface-soft) 24%, var(--color-surface) 76%);
+}
+
+.schedule-change--remove {
+  border-color: color-mix(in srgb, var(--color-danger) 38%, var(--color-border) 62%);
+  background: color-mix(in srgb, var(--color-danger) 7%, var(--color-surface) 93%);
+}
+
+.schedule-change--change,
+.schedule-change--move {
+  border-color: color-mix(in srgb, var(--color-warning) 44%, var(--color-border) 56%);
+}
+
+.schedule-change > legend {
+  padding-inline: 0.25rem;
+  color: var(--color-text-strong);
+  font-family: var(--font-thread);
+  font-weight: 800;
+}
+
+.schedule-change > legend label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+}
+
+.schedule-change__fields {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) repeat(2, minmax(120px, 0.6fr));
+  gap: var(--space-2);
+}
+
+.schedule-change__fields label,
+.schedule-change__candidate {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.schedule-change__fields input,
+.schedule-change__candidate select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
+  border-radius: var(--radius-input);
+  background: var(--color-surface);
+  color: var(--color-text-strong);
+  font: inherit;
+}
+
+.schedule-change__previous {
+  display: grid;
+  gap: 0.15rem;
+  color: var(--color-muted);
+  font-size: 0.82rem;
+}
+
+.schedule-change__previous strong {
+  color: var(--color-text-strong);
+  font-size: 0.92rem;
+}
+
+.schedule-change__resolved,
+.schedule-change__warning {
+  margin: 0;
+  font-size: 0.84rem;
+}
+
+.schedule-change__resolved {
+  color: var(--color-vein);
+  font-weight: 750;
+}
+
+.schedule-change__warning {
+  color: var(--color-warning);
+}
+
+.schedule-review__actions {
+  grid-column: 2;
+  justify-content: flex-start;
+  padding-top: var(--space-2);
+}
+
 @media (max-width: 760px) {
   .review-inbox-item {
     grid-template-columns: auto minmax(0, 1fr);
@@ -438,6 +549,14 @@
   .review-inbox__bulk-actions .review-button {
     flex: 1 1 10rem;
     min-height: 44px;
+  }
+
+  .schedule-change__fields {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-review__actions {
+    grid-column: 2;
   }
 }
 
@@ -528,5 +647,10 @@
   .review-inbox__toolbar,
   .review-inbox-item {
     padding: var(--space-3);
+  }
+
+  .review-inbox-item .review-button,
+  .review-edit-field input {
+    min-height: 44px;
   }
 }

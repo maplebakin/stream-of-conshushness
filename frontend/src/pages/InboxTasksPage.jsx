@@ -1,10 +1,11 @@
-import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
 import { todayISOInToronto } from '../utils/date.js';
-const isISO = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
-const cmpDate = (a, b) => new Date(a).setHours(0,0,0,0) - new Date(b).setHours(0,0,0,0);
+import { isISODate, taskCreatePayload, taskMatchesScope } from '../utils/taskInbox.js';
+import { taskRecurrenceLabel } from '../utils/taskRecurrence.js';
+import { clearRequestId, stableRequestId } from '../utils/idempotency.js';
 
 function useAuthHeaders() {
   const { token } = useContext(AuthContext) || {};
@@ -22,24 +23,40 @@ function normalizeTasks(payload) {
     section: t.section || t.cluster || '',
     priority: t.priority ?? null,
     entryId: t.entryId || null,
+    rrule: typeof t.rrule === 'string' ? t.rrule : '',
+    repeat: t.repeat || null,
     createdAt: t.createdAt, updatedAt: t.updatedAt,
   })).filter(t => t._id);
 }
 
+function taskActionError(error, fallback) {
+  return error?.response?.data?.error || error?.message || fallback;
+}
+
 export default function InboxTasksPage() {
+  const { date: routeDateParam = '' } = useParams();
+  const routeDate = isISODate(routeDateParam) ? routeDateParam : '';
   const headers = useAuthHeaders();
   const [allTasks, setAllTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [q, setQ] = useState('');
-  const [scope, setScope] = useState('active'); // active | today | overdue | upcoming | nodate | fromEntries | completed | all
+  const [scope, setScope] = useState(() => (routeDate ? 'date' : 'active'));
   const [selected, setSelected] = useState(() => new Set());
   const [busyIds, setBusyIds] = useState(() => new Set());
   const [newTitle, setNewTitle] = useState('');
+  const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
+  const createRequestIdRef = useRef(null);
   const [bulkDate, setBulkDate] = useState('');
   const [editId, setEditId] = useState(null);
   const [editTitle, setEditTitle] = useState('');
+  const editCancelledRef = useRef(false);
   const today = todayISOInToronto();
+
+  useEffect(() => {
+    setScope(routeDate ? 'date' : 'active');
+  }, [routeDate]);
 
   const load = useCallback(async () => {
     setLoading(true); setErr('');
@@ -63,25 +80,17 @@ export default function InboxTasksPage() {
     return allTasks.filter(t => {
       const matchQ = !text || t.title.toLowerCase().includes(text);
       if (!matchQ) return false;
-      if (scope === 'all') return true;
-      if (scope === 'active' && t.completed) return false;
-      if (scope === 'overdue') return !t.completed && isISO(t.dueDate) && cmpDate(t.dueDate, today) < 0;
-      if (scope === 'today') return !t.completed && t.dueDate === today;
-      if (scope === 'upcoming') return !t.completed && isISO(t.dueDate) && cmpDate(t.dueDate, today) > 0;
-      if (scope === 'nodate') return !t.completed && !t.dueDate;
-      if (scope === 'fromEntries') return !t.completed && t.entryId;
-      if (scope === 'completed') return t.completed;
-      return true;
+      return taskMatchesScope(t, scope, { today, routeDate });
     }).sort((a,b) => {
       // prioritize active + date asc + createdAt
       const ac = (a.completed?1:0) - (b.completed?1:0);
       if (ac !== 0) return ac;
-      const ad = isISO(a.dueDate) ? a.dueDate : '9999-12-31';
-      const bd = isISO(b.dueDate) ? b.dueDate : '9999-12-31';
+      const ad = isISODate(a.dueDate) ? a.dueDate : '9999-12-31';
+      const bd = isISODate(b.dueDate) ? b.dueDate : '9999-12-31';
       if (ad !== bd) return ad < bd ? -1 : 1;
       return (a.createdAt || '').localeCompare(b.createdAt || '');
     });
-  }, [allTasks, q, scope, today]);
+  }, [allTasks, q, routeDate, scope, today]);
 
   const allSelected = selected.size > 0 && filtered.length > 0 && filtered.every(t => selected.has(t._id));
   const anySelected = selected.size > 0;
@@ -98,24 +107,51 @@ export default function InboxTasksPage() {
   }
 
   async function createTask() {
+    if (creatingRef.current) return;
     const title = newTitle.trim();
     if (!title) return;
+    creatingRef.current = true;
+    setCreating(true);
+    setErr('');
     try {
-      const { data } = await axios.post('/api/tasks', { title }, { headers });
-      setAllTasks(ts => [{ _id: data._id || data.id, title: data.title || title, completed: !!data.completed, dueDate: data.dueDate || null, section: data.section || '', entryId: data.entryId || null }, ...ts]);
+      const payload = taskCreatePayload(title, routeDate);
+      const requestId = stableRequestId(createRequestIdRef, JSON.stringify(payload), 'task');
+      const { data } = await axios.post('/api/tasks', payload, {
+        headers: { ...headers, 'Idempotency-Key': requestId },
+      });
+      clearRequestId(createRequestIdRef);
+      const created = normalizeTasks([data])[0] || {
+        _id: data._id || data.id,
+        title: data.title || title,
+        completed: Boolean(data.completed),
+        dueDate: data.dueDate || null,
+        section: data.section || '',
+        entryId: data.entryId || null,
+        rrule: typeof data.rrule === 'string' ? data.rrule : '',
+        repeat: data.repeat || null,
+      };
+      setAllTasks(ts => [created, ...ts]);
       setNewTitle('');
     } catch (e) {
       console.warn('[InboxTasks] create failed', e?.response?.data || e);
+      setErr(taskActionError(e, 'Could not create the task.'));
+    } finally {
+      creatingRef.current = false;
+      setCreating(false);
     }
   }
 
   async function patch(id, body) {
     setBusyIds(s => new Set(s).add(id));
+    setErr('');
     try {
       const { data } = await axios.patch(`/api/tasks/${id}`, body, { headers });
       setAllTasks(ts => ts.map(t => t._id === id ? { ...t, ...normalizeTasks([data])[0] } : t));
+      return true;
     } catch (e) {
       console.warn('[InboxTasks] patch failed', e?.response?.data || e);
+      setErr(taskActionError(e, 'Could not update the task.'));
+      return false;
     } finally {
       setBusyIds(s => { const n = new Set(s); n.delete(id); return n; });
     }
@@ -123,28 +159,35 @@ export default function InboxTasksPage() {
 
   async function deleteTask(id) {
     setBusyIds(s => new Set(s).add(id));
+    setErr('');
     try {
       await axios.delete(`/api/tasks/${id}`, { headers });
       setAllTasks(ts => ts.filter(t => t._id !== id));
     } catch (e) {
       console.warn('[InboxTasks] delete failed', e?.response?.data || e);
+      setErr(taskActionError(e, 'Could not move the task to Trash.'));
     } finally {
       setBusyIds(s => { const n = new Set(s); n.delete(id); return n; });
     }
   }
 
   async function toggleDone(id) {
+    const currentTask = allTasks.find((task) => task._id === id);
+    if (!currentTask) return;
+    const desiredCompleted = !currentTask.completed;
     setBusyIds(s => new Set(s).add(id));
+    setErr('');
     try {
-      const { data } = await axios.patch(`/api/tasks/${id}/toggle`, null, { headers });
+      const { data } = await axios.patch(`/api/tasks/${id}/toggle`, { completed: desiredCompleted }, { headers });
       setAllTasks(ts => ts.map(t => {
         if (t._id !== id) return t;
         const normalized = data?.task ? normalizeTasks([data.task])[0] : null;
         if (normalized) return { ...t, ...normalized };
-        return { ...t, completed: !t.completed };
+        return { ...t, completed: desiredCompleted };
       }));
     } catch (e) {
       console.warn('[InboxTasks] toggle failed', e?.response?.data || e);
+      setErr(taskActionError(e, 'Could not update the task status.'));
     } finally {
       setBusyIds(s => { const n = new Set(s); n.delete(id); return n; });
     }
@@ -152,34 +195,58 @@ export default function InboxTasksPage() {
 
   async function bulkComplete(ids) {
     const idArr = [...ids];
+    setErr('');
     try {
       await axios.post('/api/tasks/bulk/complete', { ids: idArr }, { headers });
-      setAllTasks(ts => ts.map(t => idArr.includes(t._id) ? { ...t, completed: true } : t));
+      // Reload so recurring successors and any partial server reconciliation
+      // are represented exactly once.
+      await load();
     } catch (e) {
       console.warn('[InboxTasks] bulk complete failed', e?.response?.data || e);
+      const partial = e?.response?.data;
+      const partialMessage = Number(partial?.modified) > 0 || Number(partial?.successors) > 0
+        ? `Some tasks changed (${partial.modified || 0} completed, ${partial.successors || 0} follow-ups). Review the refreshed list.`
+        : '';
+      await load();
+      setErr(partialMessage || taskActionError(e, 'Could not complete the selected tasks.'));
     }
-    setSelected(new Set());
   }
 
   async function bulkDelete(ids) {
     const idArr = [...ids];
+    setErr('');
     try {
       await axios.post('/api/tasks/bulk/delete', { ids: idArr }, { headers });
       setAllTasks(ts => ts.filter(t => !idArr.includes(t._id)));
+      setSelected(new Set());
     } catch (e) {
       console.warn('[InboxTasks] bulk delete failed', e?.response?.data || e);
+      setErr(taskActionError(e, 'Could not move the selected tasks to Trash.'));
     }
-    setSelected(new Set());
   }
 
   async function bulkSetDate(ids, dateISO) {
-    for (const id of ids) await patch(id, { dueDate: dateISO || null });
-    setSelected(new Set());
-    setBulkDate('');
+    const results = await Promise.all([...ids].map(id => patch(id, { dueDate: dateISO || null })));
+    if (results.every(Boolean)) {
+      setSelected(new Set());
+      setBulkDate('');
+    }
   }
 
-  function startEdit(t) { setEditId(t._id); setEditTitle(t.title); }
+  function startEdit(t) {
+    editCancelledRef.current = false;
+    setEditId(t._id);
+    setEditTitle(t.title);
+  }
+  function cancelEdit() {
+    editCancelledRef.current = true;
+    setEditId(null);
+  }
   async function commitEdit() {
+    if (editCancelledRef.current) {
+      editCancelledRef.current = false;
+      return;
+    }
     const id = editId; const title = editTitle.trim();
     setEditId(null);
     if (!id || !title) return;
@@ -190,8 +257,12 @@ export default function InboxTasksPage() {
     <div className="inbox-page review-page">
       <header className="bar review-page__header">
         <div>
-          <h1 className="review-page__title">Tasks</h1>
-          <p className="review-page__subtitle">Review active tasks, due dates, and work captured from entries.</p>
+          <h1 className="review-page__title">{routeDate ? `Tasks for ${routeDate}` : 'Tasks'}</h1>
+          <p className="review-page__subtitle">
+            {routeDate
+              ? `Review and add tasks scheduled for ${routeDate}.`
+              : 'Review active tasks, due dates, and work captured from entries.'}
+          </p>
         </div>
         <div className="review-page__summary">
           <span>{filtered.length} shown</span>
@@ -200,9 +271,12 @@ export default function InboxTasksPage() {
         <div className="filters">
           <input className="search" value={q} onChange={e=>setQ(e.target.value)} placeholder="Search…" />
           <div className="chips">
-            {['active','today','overdue','upcoming','nodate','fromEntries','completed','all'].map(k => (
-              <button key={k} className={`chip ${scope===k?'on':''}`} onClick={()=>setScope(k)}>
-                {k === 'fromEntries' ? 'From entries' : k === 'nodate' ? 'No date' : k.charAt(0).toUpperCase() + k.slice(1)}
+            {[
+              ...(routeDate ? ['date'] : []),
+              'active','today','overdue','upcoming','nodate','fromEntries','completed','all'
+            ].map(k => (
+              <button type="button" key={k} className={`chip ${scope===k?'on':''}`} onClick={()=>setScope(k)}>
+                {k === 'date' ? routeDate : k === 'fromEntries' ? 'From entries' : k === 'nodate' ? 'No date' : k.charAt(0).toUpperCase() + k.slice(1)}
               </button>
             ))}
           </div>
@@ -212,37 +286,46 @@ export default function InboxTasksPage() {
             <input type="checkbox" checked={allSelected} onChange={e => setSelectAll(e.target.checked)} />
             <span>Select all</span>
           </label>
-          <button className="review-button review-button--primary" disabled={!anySelected} onClick={()=>bulkComplete(selected)}>Complete</button>
-          <button className="review-button review-button--danger" disabled={!anySelected} onClick={()=>bulkDelete(selected)}>Move selected to Trash</button>
+          <button type="button" className="review-button review-button--primary" disabled={!anySelected} onClick={()=>bulkComplete(selected)}>Complete</button>
+          <button type="button" className="review-button review-button--danger" disabled={!anySelected} onClick={()=>bulkDelete(selected)}>Move selected to Trash</button>
           <input className="date" type="date" value={bulkDate} onChange={e=>setBulkDate(e.target.value)} />
-          <button className="review-button review-button--secondary" disabled={!anySelected} onClick={()=>bulkSetDate(selected, bulkDate || null)}>
+          <button type="button" className="review-button review-button--secondary" disabled={!anySelected} onClick={()=>bulkSetDate(selected, bulkDate || null)}>
             {bulkDate ? 'Set date' : 'Clear date'}
           </button>
-          <button className="review-button review-button--ghost" onClick={()=>{ setSelected(new Set()); load(); }}>Refresh</button>
+          <button type="button" className="review-button review-button--ghost" onClick={()=>{ setSelected(new Set()); load(); }}>Refresh</button>
         </div>
       </header>
 
       <section className="quickadd">
         <input
           className="new"
-          placeholder="Quick add a task…"
+          placeholder={routeDate ? `Add a task for ${routeDate}…` : 'Quick add a task…'}
           value={newTitle}
           onChange={e=>setNewTitle(e.target.value)}
-          onKeyDown={e=>{ if(e.key==='Enter') createTask(); }}
+          onKeyDown={e=>{ if(e.key==='Enter') { e.preventDefault(); createTask(); } }}
+          disabled={creating}
         />
-        <button className="review-button review-button--primary" onClick={createTask}>Add</button>
+        <button
+          type="button"
+          className="review-button review-button--primary"
+          onClick={createTask}
+          disabled={creating || !newTitle.trim()}
+        >
+          {creating ? 'Adding…' : 'Add'}
+        </button>
       </section>
 
       {loading && <div className="hint">Loading tasks…</div>}
-      {!loading && err && <div className="error">{err}</div>}
-      {!loading && !err && filtered.length === 0 && <div className="review-empty">No tasks match this view. Captured tasks will appear here after you create or accept them.</div>}
+      {!loading && err && <div className="alert error" role="alert">{err}</div>}
+      {!loading && filtered.length === 0 && <div className="review-empty">No tasks match this view. Captured tasks will appear here after you create or accept them.</div>}
 
-      {!loading && !err && filtered.length > 0 && (
+      {!loading && filtered.length > 0 && (
         <ul className="grid">
           {filtered.map(t => {
             const busy = busyIds.has(t._id);
             const sel = selected.has(t._id);
-            const overdue = !t.completed && isISO(t.dueDate) && cmpDate(t.dueDate, today) < 0;
+            const overdue = !t.completed && isISODate(t.dueDate) && t.dueDate < today;
+            const recurrence = taskRecurrenceLabel(t);
             return (
               <li key={t._id} className={`card review-card task-card ${t.completed?'done':''} ${overdue?'overdue':''}`}>
                 <div className="task-card__top">
@@ -253,7 +336,16 @@ export default function InboxTasksPage() {
                         value={editTitle}
                         onChange={e=>setEditTitle(e.target.value)}
                         onBlur={commitEdit}
-                        onKeyDown={e=>{ if(e.key==='Enter') commitEdit(); if(e.key==='Escape') setEditId(null); }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            e.currentTarget.blur();
+                          }
+                          if (e.key === 'Escape') {
+                            e.preventDefault();
+                            cancelEdit();
+                          }
+                        }}
                         autoFocus
                       />
                     ) : (
@@ -279,6 +371,7 @@ export default function InboxTasksPage() {
                     />
                   </label>
                   {t.section ? <span className="review-pill">§ {t.section}</span> : null}
+                  {recurrence ? <span className="review-pill">Repeats: {recurrence}</span> : null}
                   {overdue ? <span className="review-pill tag red">overdue</span> : null}
                   {t.completed ? <span className="review-pill tag green">done</span> : null}
                   {t.entryId ? (
@@ -293,13 +386,13 @@ export default function InboxTasksPage() {
                 </div>
 
                 <div className="review-card__actions task-card__actions">
-                  <button className="review-button review-button--primary" disabled={busy} onClick={()=>toggleDone(t._id)}>
+                  <button type="button" className="review-button review-button--primary" disabled={busy} onClick={()=>toggleDone(t._id)}>
                     {t.completed ? 'Reopen' : 'Complete'}
                   </button>
-                  <button className="review-button review-button--ghost" disabled={busy} onClick={()=>startEdit(t)}>
+                  <button type="button" className="review-button review-button--ghost" disabled={busy} onClick={()=>startEdit(t)}>
                     Edit
                   </button>
-                  <button className="review-button review-button--ghost task-card__trash" disabled={busy} onClick={()=>deleteTask(t._id)}>
+                  <button type="button" className="review-button review-button--ghost task-card__trash" disabled={busy} onClick={()=>deleteTask(t._id)}>
                     Move to Trash
                   </button>
                 </div>

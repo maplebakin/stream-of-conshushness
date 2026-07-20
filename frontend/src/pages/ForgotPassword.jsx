@@ -38,6 +38,11 @@ export default function ForgotPassword() {
   const emailPortal = EMAIL_LINKS[domain];
 
   async function requestReset() {
+    const normalizedIdentifier = identifier.trim();
+    if (!normalizedIdentifier) {
+      setStatus({ ok: false, msg: 'Please enter your username or email.' });
+      return;
+    }
     setStatus({ ok: false, msg: '' });
     setDevInfo(null);
     setLoading(true);
@@ -45,7 +50,7 @@ export default function ForgotPassword() {
       const res = await fetch('/api/forgot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier }),
+        body: JSON.stringify({ identifier: normalizedIdentifier }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not start reset');
@@ -125,7 +130,7 @@ export default function ForgotPassword() {
           </label>
 
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-            <button type="submit" className="auth-button" disabled={loading}>
+            <button type="submit" className="auth-button" disabled={loading || !identifier.trim()}>
               {loading ? 'Sending…' : 'Send reset'}
             </button>
 
@@ -133,7 +138,7 @@ export default function ForgotPassword() {
               type="button"
               className="auth-button"
               onClick={requestReset}
-              disabled={loading || cooldown > 0}
+              disabled={loading || cooldown > 0 || !identifier.trim()}
               title={cooldown > 0 ? `Resend available in ${cooldown}s` : 'Resend reset email/code'}
             >
               {cooldown > 0 ? `Resend (${cooldown}s)` : 'Resend'}

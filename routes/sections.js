@@ -4,7 +4,10 @@ import mongoose from 'mongoose';
 import Entry from '../models/Entry.js';
 import Section from '../models/Section.js';
 import Task from '../models/Task.js';
+import SectionPage from '../models/SectionPage.js';
+import ResearchSubject from '../models/ResearchSubject.js';
 import { activeEntryQuery } from '../utils/entryQueries.js';
+import { logSafeError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -145,7 +148,7 @@ router.post('/', async (req, res) => {
     if (err?.code === 11000) {
       return res.status(409).json({ error: 'Section slug already exists for this owner' });
     }
-    console.error('POST /api/sections error:', err);
+    logSafeError('sections create failed', err);
     res.status(500).json({ error: 'Failed to create section' });
   }
 });
@@ -167,7 +170,7 @@ router.get('/', async (req, res) => {
 
     res.json(list.map(shapeSection));
   } catch (err) {
-    console.error('GET /api/sections error:', err);
+    logSafeError('sections list failed', err);
     res.status(500).json({ error: 'Failed to fetch sections' });
   }
 });
@@ -251,6 +254,7 @@ router.get('/activity', async (req, res) => {
       {
         $match: {
           userId: ownerObjectId,
+          deletedAt: null,
           updatedAt: { $gte: since },
           sections: { $exists: true, $ne: [] },
         },
@@ -288,7 +292,7 @@ router.get('/activity', async (req, res) => {
       activity: activityMap,
     });
   } catch (err) {
-    console.error('GET /api/sections/activity error:', err);
+    logSafeError('sections activity failed', err);
     res.status(500).json({ error: 'Failed to fetch section activity' });
   }
 });
@@ -304,7 +308,7 @@ router.get('/:id', async (req, res) => {
 
     res.json(shapeSection(doc));
   } catch (err) {
-    console.error('GET /api/sections/:id error:', err);
+    logSafeError('sections get failed', err);
     res.status(500).json({ error: 'Failed to fetch section' });
   }
 });
@@ -388,7 +392,7 @@ async function handleSectionUpdate(req, res) {
     if (err?.code === 11000) {
       return res.status(409).json({ error: 'Section slug already exists for this owner' });
     }
-    console.error('PUT/PATCH /api/sections/:id error:', err);
+    logSafeError('sections update failed', err);
     res.status(500).json({ error: 'Failed to update section' });
   }
 }
@@ -401,12 +405,31 @@ router.delete('/:id', async (req, res) => {
     const ownerId = getUserId(req);
     if (!ownerId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const result = await Section.deleteOne({ _id: req.params.id, ownerId });
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Section not found' });
+    const section = await Section.findOne({ _id: req.params.id, ownerId }).lean();
+    if (!section) return res.status(404).json({ error: 'Section not found' });
+
+    const [entries, tasks, pages, researchSubjects] = await Promise.all([
+      Entry.countDocuments({
+        userId: ownerId,
+        $or: [{ sectionId: section._id }, { section: section.slug }],
+      }),
+      Task.countDocuments({ userId: ownerId, sections: section.slug }),
+      SectionPage.countDocuments({ userId: ownerId, sectionKey: section.slug }),
+      ResearchSubject.countDocuments({ userId: ownerId, sectionId: section._id }),
+    ]);
+    const dependencies = { entries, tasks, pages, researchSubjects };
+    if (Object.values(dependencies).some((count) => count > 0)) {
+      return res.status(409).json({
+        error: 'Section still contains data. Move or remove its contents before deleting it.',
+        dependencies,
+      });
+    }
+
+    await Section.deleteOne({ _id: section._id, ownerId });
 
     res.sendStatus(204);
   } catch (err) {
-    console.error('DELETE /api/sections/:id error:', err);
+    logSafeError('sections delete failed', err);
     res.status(500).json({ error: 'Failed to delete section' });
   }
 });

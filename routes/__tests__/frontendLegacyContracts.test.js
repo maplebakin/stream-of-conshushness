@@ -84,10 +84,7 @@ describe('frontend legacy reference contracts', () => {
     expect(commandPalette).toContain('export default function CommandPalette');
 
     expect(importedBy('frontend/src/Layout.jsx')).toEqual(['frontend/src/App.jsx']);
-    expect(importedBy('frontend/src/Header.jsx')).toEqual([
-      'frontend/src/GamePage.jsx',
-      'frontend/src/Layout.jsx',
-    ]);
+    expect(importedBy('frontend/src/Header.jsx')).toEqual(['frontend/src/Layout.jsx']);
     expect(importedBy('frontend/src/components/CommandPalette.jsx')).toEqual(['frontend/src/App.jsx']);
     expect(importedBy('frontend/src/Sidebar.jsx')).toEqual([]);
     expect(app).not.toContain("from './Sidebar");

@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main, develop]
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: Verify (${{ matrix.node-version }})
@@ -33,3 +36,115 @@ jobs:
 
       - name: Run project verification
         run: npm run verify
+
+  deployment-artifact:
+    name: Production artifact and startup
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Assemble deployment artifact
+        run: npm run build:artifact
+
+      - name: Verify production-only install and startup
+        run: |
+          verification_dir="$(mktemp -d)"
+          cp -r deploy/. "$verification_dir/"
+          npm ci --omit=dev --ignore-scripts --prefix "$verification_dir"
+          cd "$verification_dir"
+          node scripts/verifyDeploymentServer.mjs
+          node --input-type=module -e "await import('./scripts/migrations/backfillClusterLinks.mjs')"
+          node scripts/migrations/replaceAppointmentOneOffIndex.mjs --dry-run
+          node scripts/migrations/auditIntegrityConstraints.mjs --dry-run
+        env:
+          NODE_ENV: production
+          MONGODB_URI: mongodb://127.0.0.1:27017/streamofconshushness_artifact_verify
+          JWT_SECRET: artifact-verification-secret-with-more-than-32-characters
+          CLIENT_ORIGIN: https://stream.invalid
+          PRIVATE_UPLOAD_DIR: /tmp/streamofconshushness-artifact-uploads
+          TRUST_PROXY_HOPS: '0'
+
+  browser-smoke:
+    name: Mongo-backed browser smoke
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Install application dependencies
+        run: |
+          npm ci
+          npm --prefix frontend ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run disposable database-backed journey
+        run: npm run test:browser-smoke
+        env:
+          RUN_BROWSER_SMOKE: '1'
+          BROWSER_SMOKE_START_SERVER: '1'
+          MONGODB_URI: mongodb://127.0.0.1:27017/streamofconshushness_browser_smoke
+          JWT_SECRET: browser-smoke-only-secret-with-more-than-32-characters
+          NODE_ENV: development
+          PRIVATE_UPLOAD_DIR: /tmp/streamofconshushness-browser-uploads
+
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: browser-smoke-failure
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7

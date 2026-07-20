@@ -1,6 +1,6 @@
 // frontend/src/Calendar.jsx
-import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import {
@@ -27,14 +27,18 @@ function monthParam(y, mIdx) {
 }
 export default function Calendar() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { token } = useContext(AuthContext);
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
   const tzToday = useMemo(() => todayISOInTZ('America/Toronto'), []);
 
   // current viewed month
-  const now = new Date();
-  const [y, setY] = useState(now.getFullYear());
-  const [mIdx, setMIdx] = useState(now.getMonth()); // 0..11
+  const requestedDate = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.get('from') || '')
+    ? searchParams.get('from')
+    : tzToday;
+  const [initialYear, initialMonth] = requestedDate.split('-').map(Number);
+  const [y, setY] = useState(initialYear);
+  const [mIdx, setMIdx] = useState(initialMonth - 1); // 0..11
 
   // month grid
   const firstWeekday = new Date(y, mIdx, 1).getDay(); // 0..6 Sun..Sat
@@ -50,21 +54,33 @@ export default function Calendar() {
   // per-day counts for badges
   const [dayCounts, setDayCounts] = useState({});
   const [horizonRefreshKey, setHorizonRefreshKey] = useState(0);
+  const [loadingMonth, setLoadingMonth] = useState(false);
+  const [calendarError, setCalendarError] = useState('');
+  const monthRequestSequenceRef = useRef(0);
 
   // Modals
   const [showApptModal, setShowApptModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
+  const [showAddMenu, setShowAddMenu] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState(null);
   const [confirmingAppointmentDeleteId, setConfirmingAppointmentDeleteId] = useState('');
   const [confirmingAppointmentDeleteMessage, setConfirmingAppointmentDeleteMessage] = useState('');
+  const [deletingAppointmentId, setDeletingAppointmentId] = useState('');
 
   const loadMonth = useCallback(async () => {
-    // Assumes you’ve got an aggregator route; if not, this will just noop the badges.
+    const sequence = ++monthRequestSequenceRef.current;
+    setLoadingMonth(true);
+    setCalendarError('');
     try {
       const { data } = await axios.get(`/api/calendar/${monthParam(y, mIdx)}`, { headers });
+      if (sequence !== monthRequestSequenceRef.current) return;
       setDayCounts(data?.days || {});
-    } catch {
+    } catch (error) {
+      if (sequence !== monthRequestSequenceRef.current) return;
       setDayCounts({});
+      setCalendarError(error?.response?.data?.error || error?.message || 'Could not load this month.');
+    } finally {
+      if (sequence === monthRequestSequenceRef.current) setLoadingMonth(false);
     }
   }, [headers, y, mIdx]);
 
@@ -109,48 +125,74 @@ export default function Calendar() {
       setConfirmingAppointmentDeleteMessage(confirmationMessage);
       return;
     }
-    await axios.delete(`/api/appointments/${encodeURIComponent(id)}`, { headers });
-    setConfirmingAppointmentDeleteId('');
-    setConfirmingAppointmentDeleteMessage('');
-    await loadMonth();
-    refreshHorizon();
+    if (deletingAppointmentId) return;
+    setDeletingAppointmentId(id);
+    setCalendarError('');
+    try {
+      await axios.delete(`/api/appointments/${encodeURIComponent(id)}`, { headers });
+      setConfirmingAppointmentDeleteId('');
+      setConfirmingAppointmentDeleteMessage('');
+      await loadMonth();
+      refreshHorizon();
+    } catch (error) {
+      setCalendarError(error?.response?.data?.error || error?.message || 'Could not delete the appointment.');
+    } finally {
+      setDeletingAppointmentId('');
+    }
   }
 
   const weekLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const monthName = new Date(y, mIdx, 1).toLocaleString(undefined, { month: 'long' });
+  const humanToday = new Date(`${tzToday}T12:00:00Z`).toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
 
   return (
     <main className="calendar-page">
-      {/* Left sidebar — upcoming feed */}
-      <aside className="panel calendar-horizon-panel">
-        <OnTheHorizon
-          refreshKey={horizonRefreshKey}
-          onAddAppointment={openNewAppointment}
-          onAddEvent={() => setShowEventModal(true)}
-          onEditAppointment={openEditAppointment}
-          onDeleteAppointment={deleteAppointment}
-          confirmingAppointmentDeleteId={confirmingAppointmentDeleteId}
-          confirmingAppointmentDeleteMessage={confirmingAppointmentDeleteMessage}
-          onCancelAppointmentDelete={() => {
-            setConfirmingAppointmentDeleteId('');
-            setConfirmingAppointmentDeleteMessage('');
-          }}
-        />
-      </aside>
-
-      {/* Main month grid */}
       <section className="panel calendar-panel">
         <header className="calendar-header">
           <div className="title">
             <h2>{monthName} {y}</h2>
-            <span className="subtitle">{tzToday}</span>
+            <span className="subtitle">Today is {humanToday}</span>
           </div>
           <div className="calendar-nav">
-            <button className="button" onClick={prevMonth}>◀</button>
-            <button className="button" onClick={() => navigate(`/day/${tzToday}`)}>Today</button>
-            <button className="button" onClick={nextMonth}>▶</button>
+            <button type="button" className="button" onClick={prevMonth} aria-label="Previous month">◀</button>
+            <button type="button" className="button" onClick={() => navigate(`/day/${tzToday}`)}>Today</button>
+            <button type="button" className="button" onClick={nextMonth} aria-label="Next month">▶</button>
+            <div className="calendar-add">
+              <button
+                type="button"
+                className="button"
+                onClick={() => setShowAddMenu(open => !open)}
+                aria-expanded={showAddMenu}
+              >
+                + Add
+              </button>
+              {showAddMenu && (
+                <div className="calendar-add__menu" aria-label="Add to calendar">
+                  <button type="button" onClick={() => { setShowAddMenu(false); openNewAppointment(); }}>
+                    <strong>Appointment</strong>
+                    <span>A scheduled time or recurring commitment</span>
+                  </button>
+                  <button type="button" onClick={() => { setShowAddMenu(false); setShowEventModal(true); }}>
+                    <strong>Important date</strong>
+                    <span>An all-day event or date to remember</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
+
+        {loadingMonth && <div className="muted" role="status">Loading calendar…</div>}
+        {!loadingMonth && calendarError && (
+          <div className="alert error" role="alert">
+            {calendarError}{' '}
+            <button type="button" className="button chip" onClick={loadMonth}>Retry</button>
+          </div>
+        )}
 
         <div className="calendar-grid">
           {weekLabels.map((w) => (
@@ -168,7 +210,9 @@ export default function Calendar() {
                 className={`calendar-cell ${d ? '' : 'empty'} ${isTodayCell ? 'today' : ''}`}
                 disabled={!d}
                 onClick={() => d && navigate(`/day/${iso}`)}
-                aria-label={d ? `Open ${iso}` : 'Empty'}
+                aria-label={d
+                  ? `Open ${iso}: ${counts.tasks} tasks, ${counts.appointments} appointments, ${counts.events} important events`
+                  : 'Empty calendar cell'}
                 title={d ? iso : ''}
               >
                 {d ? (
@@ -190,7 +234,6 @@ export default function Calendar() {
                           <span key={`t${i}`} className="calendar-dot task" />
                         ))}
                         {counts.appointments > 0 && <span className="calendar-dot appt" title={`${counts.appointments} appointment(s)`} />}
-                        {counts.tasks > 0 && <span className="calendar-dot task" title={`${counts.tasks} task(s)`} />}
                       </div>
                     )}
                   </>
@@ -207,7 +250,21 @@ export default function Calendar() {
         </div>
       </section>
 
-      {/* Modals — pass defaultDate to match adapters */}
+      <aside className="panel calendar-horizon-panel" aria-label="Upcoming calendar items">
+        <OnTheHorizon
+          refreshKey={horizonRefreshKey}
+          onEditAppointment={openEditAppointment}
+          onDeleteAppointment={deleteAppointment}
+          confirmingAppointmentDeleteId={confirmingAppointmentDeleteId}
+          confirmingAppointmentDeleteMessage={confirmingAppointmentDeleteMessage}
+          deletingAppointmentId={deletingAppointmentId}
+          onCancelAppointmentDelete={() => {
+            setConfirmingAppointmentDeleteId('');
+            setConfirmingAppointmentDeleteMessage('');
+          }}
+        />
+      </aside>
+
       {showApptModal && (
         <AppointmentModal
           defaultDate={tzToday}

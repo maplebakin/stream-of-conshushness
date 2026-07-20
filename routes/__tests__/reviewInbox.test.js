@@ -8,13 +8,16 @@ const mocks = vi.hoisted(() => ({
   rippleFind: vi.fn(),
   suggestedGatherFind: vi.fn(),
   suggestedInterestFind: vi.fn(),
+  suggestedScheduleFind: vi.fn(),
   suggestedTaskFind: vi.fn(),
+  entryFind: vi.fn(),
 }));
 
 function makeQuery(rows) {
   return {
     populate: vi.fn(function populate() { return this; }),
     sort: vi.fn(function sort() { return this; }),
+    limit: vi.fn(function limit() { return this; }),
     lean: vi.fn(async () => rows),
   };
 }
@@ -43,6 +46,14 @@ vi.mock('../../models/SuggestedTask.js', () => ({
   default: { find: (...args) => mocks.suggestedTaskFind(...args) },
 }));
 
+vi.mock('../../models/SuggestedSchedule.js', () => ({
+  default: { find: (...args) => mocks.suggestedScheduleFind(...args) },
+}));
+
+vi.mock('../../models/Entry.js', () => ({
+  default: { find: (...args) => mocks.entryFind(...args) },
+}));
+
 const router = (await import('../review.js')).default;
 
 function makeApp(user = { userId: 'user123' }) {
@@ -59,10 +70,18 @@ function makeApp(user = { userId: 'user123' }) {
 describe('review inbox route', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.entryFind.mockReturnValue(makeQuery([
+      { _id: 'entry-1', date: '2026-06-08', text: 'Call the dentist', deletedAt: null },
+      { _id: 'entry-2', date: '2026-06-07', text: 'Remember printer ink before the next office day.', deletedAt: null },
+      { _id: 'entry-3', date: '2026-06-06', html: '<p>Look into tap dance classes this fall.</p>', deletedAt: null },
+      { _id: 'entry-4', date: '2026-06-08', content: 'Therapy is probably Thursday morning at 10.', deletedAt: null },
+      { _id: 'entry-5', date: '2026-06-08', text: 'Tax deadline is coming up in mid June.', deletedAt: null },
+    ]));
+    mocks.suggestedScheduleFind.mockReturnValue(makeQuery([]));
   });
 
   it('returns normalized pending review items and hides ripples represented by task suggestions', async () => {
-    mocks.suggestedTaskFind.mockReturnValue(makeQuery([
+    const suggestedTaskQuery = makeQuery([
       {
         _id: 'suggestion-task-1',
         title: 'Call the dentist',
@@ -75,7 +94,8 @@ describe('review inbox route', () => {
           text: 'Call the dentist',
         },
       },
-    ]));
+    ]);
+    mocks.suggestedTaskFind.mockReturnValue(suggestedTaskQuery);
     mocks.suggestedGatherFind.mockReturnValue(makeQuery([
       {
         _id: 'suggestion-gather-1',
@@ -141,8 +161,21 @@ describe('review inbox route', () => {
     const res = await request(makeApp()).get('/api/review');
 
     expect(res.status).toBe(200);
-    expect(mocks.suggestedTaskFind).toHaveBeenCalledWith({ userId: 'user123', status: 'pending' });
-    expect(mocks.appointmentFind).toHaveBeenCalledWith({ userId: 'user123', source: 'entry-automation' });
+    expect(mocks.suggestedTaskFind).toHaveBeenCalledWith({
+      userId: 'user123',
+      status: { $in: ['pending', 'accepting', 'rejecting'] },
+    });
+    expect(suggestedTaskQuery.populate).toHaveBeenCalledWith({
+      path: 'sourceRippleId',
+      select: 'entryId dateKey text',
+      match: { userId: 'user123' },
+    });
+    expect(suggestedTaskQuery.limit).toHaveBeenCalledWith(200);
+    expect(mocks.appointmentFind).toHaveBeenCalledWith({
+      userId: 'user123',
+      source: 'entry-automation',
+      automationReviewStatus: { $nin: ['kept', 'dismissed'] },
+    });
     expect(res.body.counts).toMatchObject({
       tasks: 1,
       gather: 1,
@@ -189,5 +222,92 @@ describe('review inbox route', () => {
 
     expect(res.status).toBe(401);
     expect(res.body).toEqual({ error: 'Unauthorized' });
+  });
+
+  it('keeps review actions available while marking trashed and missing sources unavailable', async () => {
+    mocks.suggestedTaskFind.mockReturnValue(makeQuery([]));
+    mocks.suggestedInterestFind.mockReturnValue(makeQuery([]));
+    mocks.rippleFind.mockReturnValue(makeQuery([]));
+    mocks.appointmentFind.mockReturnValue(makeQuery([]));
+    mocks.eventFind.mockReturnValue(makeQuery([]));
+    mocks.suggestedGatherFind.mockReturnValue(makeQuery([
+      { _id: 'trashed-suggestion', title: 'Private item', status: 'pending', sourceText: 'Private entry text', sourceEntryId: 'trashed-entry' },
+      { _id: 'missing-suggestion', title: 'Missing item', status: 'pending', sourceText: 'Missing entry text', sourceEntryId: 'missing-entry' },
+    ]));
+    mocks.entryFind.mockReturnValue(makeQuery([
+      { _id: 'trashed-entry', text: 'Private entry text', deletedAt: new Date('2026-06-08') },
+    ]));
+
+    const res = await request(makeApp()).get('/api/review');
+
+    expect(res.status).toBe(200);
+    expect(res.body.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'trashed-suggestion', sourceState: 'trashed', sourceAvailable: false, sourceText: '' }),
+      expect.objectContaining({ id: 'missing-suggestion', sourceState: 'missing', sourceAvailable: false, sourceText: '' }),
+    ]));
+  });
+
+  it('returns a grouped schedule with explicit additions and removals', async () => {
+    mocks.suggestedTaskFind.mockReturnValue(makeQuery([]));
+    mocks.suggestedGatherFind.mockReturnValue(makeQuery([]));
+    mocks.suggestedInterestFind.mockReturnValue(makeQuery([]));
+    mocks.rippleFind.mockReturnValue(makeQuery([]));
+    mocks.appointmentFind.mockReturnValue(makeQuery([]));
+    mocks.eventFind.mockReturnValue(makeQuery([]));
+    mocks.suggestedScheduleFind.mockReturnValue(makeQuery([
+      {
+        _id: 'schedule-1',
+        sourceEntryId: 'entry-schedule',
+        label: 'Work',
+        mode: 'update',
+        periodStart: '2026-07-20',
+        periodEnd: '2026-07-26',
+        sourceText: 'Schedule updated. I do not work Wednesday. Thursday 11–7:30 now.',
+        status: 'pending',
+        changes: [
+          {
+            key: 'remove-wednesday',
+            action: 'remove',
+            selected: true,
+            targetAppointmentId: 'appointment-wednesday',
+            previous: { date: '2026-07-22', start: '12:00', end: '20:00' },
+          },
+          {
+            key: 'add-thursday',
+            action: 'add',
+            selected: true,
+            date: '2026-07-23',
+            start: '11:00',
+            end: '19:30',
+          },
+        ],
+      },
+    ]));
+    mocks.entryFind.mockReturnValue(makeQuery([
+      {
+        _id: 'entry-schedule',
+        date: '2026-07-19',
+        text: 'Schedule updated. I do not work Wednesday. Thursday 11–7:30 now.',
+        deletedAt: null,
+      },
+    ]));
+
+    const res = await request(makeApp()).get('/api/review');
+
+    expect(res.status).toBe(200);
+    expect(res.body.counts.calendar).toBe(1);
+    expect(res.body.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'schedule-1',
+        kind: 'scheduleSuggestion',
+        group: 'calendar',
+        mode: 'update',
+        changes: expect.arrayContaining([
+          expect.objectContaining({ action: 'remove', targetAppointmentId: 'appointment-wednesday' }),
+          expect.objectContaining({ action: 'add', date: '2026-07-23' }),
+        ]),
+        sourceEntryExcerpt: 'Schedule updated. I do not work Wednesday. Thursday 11–7:30 now.',
+      }),
+    ]));
   });
 });

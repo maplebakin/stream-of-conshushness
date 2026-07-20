@@ -93,9 +93,11 @@ describe('frontend stability endpoint contracts', () => {
 
     expect(hook).toContain('listReviewItems({ limit: 1 })');
     expect(main).toContain('useReviewCount');
-    expect(main).toContain('Review Inbox{reviewCount.count > 0');
+    expect(main).toContain('reviewCount.count > 0');
+    expect(main).toContain('useful thread');
     expect(daily).toContain('useReviewCount');
-    expect(daily).toContain('Review Inbox{reviewCount.count > 0');
+    expect(daily).toContain('reviewCount.count > 0');
+    expect(daily).toContain('Ready to review');
   });
 
   it('keeps search results action-oriented', () => {
@@ -110,7 +112,6 @@ describe('frontend stability endpoint contracts', () => {
   it('keeps header, layout, and command palette navigation aligned with current routes', () => {
     const app = read('frontend/src/App.jsx');
     const header = read('frontend/src/Header.jsx');
-    const layout = read('frontend/src/Layout.jsx');
     const commandPalette = read('frontend/src/components/CommandPalette.jsx');
 
     for (const target of ['/', '/today', '/calendar']) {
@@ -118,10 +119,10 @@ describe('frontend stability endpoint contracts', () => {
     }
 
     for (const target of ['/sections', '/clusters', '/goals', '/review', '/ripples', '/interests', '/gather-lists', '/inbox/tasks', '/search', '/trash', '/export', '/account', '/settings']) {
-      expect(layout).toContain(`to="${target}"`);
+      expect(header).toContain(`to="${target}"`);
     }
 
-    for (const target of ['/', '/today', '/calendar', '/goals', '/review', '/sections', '/clusters', '/ripples', '/interests', '/gather-lists', '/habits/analytics', '/search', '/export', '/trash', '/account', '/settings']) {
+    for (const target of ['/', '/today', '/calendar', '/goals', '/review', '/sections', '/clusters', '/ripples', '/interests', '/gather-lists', '/search', '/export', '/trash', '/account', '/settings']) {
       expect(commandPalette).toContain(`target: '${target}'`);
       if (target === '/today') {
         expect(app).toContain('path="/today" element={<TodayRedirect />}');
@@ -129,15 +130,17 @@ describe('frontend stability endpoint contracts', () => {
         expect(app).toContain(`path="${target}"`);
       }
     }
+
+    expect(commandPalette).not.toContain("target: '/habits/analytics'");
+    expect(app).toContain('path="/habits/analytics" element={<Navigate to="/today" replace />}');
   });
 
-  it('hides the global right navigation on dense working pages', () => {
+  it('uses one focused content column instead of a duplicate command sidebar', () => {
     const layout = read('frontend/src/Layout.jsx');
 
-    expect(layout).toContain("pathname.startsWith('/calendar')");
-    expect(layout).toContain("pathname === '/today'");
-    expect(layout).toContain("pathname.startsWith('/day/')");
-    expect(layout).toContain('section-sidebar--right');
+    expect(layout).toContain('app-body--focused');
+    expect(layout).not.toContain('section-sidebar--right');
+    expect(layout).not.toContain('Secondary navigation');
   });
 
   it('deduplicates daily important event aliases before rendering the agenda', () => {
@@ -255,14 +258,14 @@ describe('frontend stability endpoint contracts', () => {
 
   it('routes and links to the existing goals page using real goal endpoints', () => {
     const app = read('frontend/src/App.jsx');
-    const layout = read('frontend/src/Layout.jsx');
+    const header = read('frontend/src/Header.jsx');
     const goals = read('frontend/src/GoalPage.jsx');
     const routes = read('routes/goals.js');
 
     expect(app).toContain("const GoalPage = lazy(() => import('./GoalPage.jsx'))");
     expect(app).toContain('path="/goals" element={<GoalPage />}');
-    expect(layout).toContain('to="/goals"');
-    expect(layout).toContain('Goals');
+    expect(header).toContain('to="/goals"');
+    expect(header).toContain('Goals');
     expect(goals).toContain("axios.get('/api/goals')");
     expect(goals).toContain("axios.post('/api/goals'");
     expect(goals).toContain('axios.patch(`/api/goals/${goalId}/step/${stepIndex}`');
@@ -321,7 +324,7 @@ describe('frontend stability endpoint contracts', () => {
     expect(daily).toContain("import NotesSection from './NotesSection.jsx'");
     expect(daily).toContain('<NotesSection date={dateISO} />');
     expect(notesSection).toContain('axios.get(`/api/note/${date}`');
-    expect(notesSection).toContain('axios.post(`/api/note/${date}`');
+    expect(notesSection).toContain('axios.post(`/api/note/${targetDate}`');
     expect(notesRoute).toContain("router.get('/:date(\\\\d{4}-\\\\d{2}-\\\\d{2})'");
     expect(notesRoute).toContain("router.post('/:date(\\\\d{4}-\\\\d{2}-\\\\d{2})'");
     expect(notesRoute).toContain('Note.findOneAndUpdate');

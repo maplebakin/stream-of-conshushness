@@ -19,9 +19,11 @@
     "@tiptap/starter-kit": "^3.0.7",
     "axios": "^1.11.0",
     "dompurify": "^3.2.6",
+    "jwt-decode": "^4.0.0",
     "lucide-react": "^0.536.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-hot-toast": "^2.6.0",
     "react-router-dom": "^7.6.3"
   },
   "devDependencies": {

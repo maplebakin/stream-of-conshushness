@@ -1,8 +1,8 @@
 import Appointment from '../models/Appointment.js';
-import { expandDatesInRange } from './recurrence.js';
+import { expandDatesInRange, isValidISODate } from './recurrence.js';
 
 export function isISODateString(value) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+  return isValidISODate(value);
 }
 
 function isoToUTCNoon(iso) {
@@ -68,14 +68,20 @@ export function recurringInstance(series, date, userId) {
 }
 
 export async function appointmentInstancesInRange(userId, from, to) {
+  if (!isISODateString(from) || !isISODateString(to) || from > to) return [];
+
   const oneOffs = await Appointment.find({
     userId,
+    automationReviewStatus: { $nin: ['pending', 'dismissed'] },
+    scheduleStatus: { $ne: 'cancelled' },
     date: { $gte: from, $lte: to },
     rrule: '',
   });
 
   const series = await Appointment.find({
     userId,
+    automationReviewStatus: { $nin: ['pending', 'dismissed'] },
+    scheduleStatus: { $ne: 'cancelled' },
     rrule: { $ne: '' },
     startDate: { $lte: to },
     $or: [{ until: null }, { until: { $gte: from } }, { until: '' }],

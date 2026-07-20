@@ -25,6 +25,7 @@ import SuggestedInterest from '../models/SuggestedInterest.js';
 import SuggestedTask from '../models/SuggestedTask.js';
 import auth from '../middleware/auth.js';
 import { activeEntryQuery } from '../utils/entryQueries.js';
+import { logSafeError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 router.use(auth);
@@ -188,7 +189,7 @@ router.get('/json', async (req, res) => {
 
     res.json(exportData);
   } catch (error) {
-    console.error('[export] JSON export failed:', error);
+    logSafeError('export JSON failed', error);
     if (res.headersSent) {
       return res.end();
     }
@@ -234,7 +235,7 @@ router.get('/csv/entries', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="entries-export-${Date.now()}.csv"`);
     res.send(csv);
   } catch (error) {
-    console.error('[export] CSV entries export failed:', error);
+    logSafeError('export CSV entries failed', error);
     res.status(500).json({ error: 'Export failed' });
   }
 });
@@ -275,7 +276,7 @@ router.get('/csv/tasks', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="tasks-export-${Date.now()}.csv"`);
     res.send(csv);
   } catch (error) {
-    console.error('[export] CSV tasks export failed:', error);
+    logSafeError('export CSV tasks failed', error);
     res.status(500).json({ error: 'Export failed' });
   }
 });
@@ -316,7 +317,7 @@ router.get('/csv/goals', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="goals-export-${Date.now()}.csv"`);
     res.send(csv);
   } catch (error) {
-    console.error('[export] CSV goals export failed:', error);
+    logSafeError('export CSV goals failed', error);
     res.status(500).json({ error: 'Export failed' });
   }
 });
@@ -333,7 +334,7 @@ router.get('/statistics', async (req, res) => {
     const counts = await countExportDatasets(userId);
     res.json(buildDisplayStatistics(counts));
   } catch (error) {
-    console.error('[export] Statistics failed:', error);
+    logSafeError('export statistics failed', error);
     res.status(500).json({ error: 'Failed to fetch statistics' });
   }
 });

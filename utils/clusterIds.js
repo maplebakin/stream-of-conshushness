@@ -43,14 +43,14 @@ export function toObjectId(value) {
 }
 
 export async function resolveClusterIdForOwner(ownerId, value) {
-  if (!value) return null;
+  if (!ownerId || !value) return null;
   const id = toObjectId(value);
-  if (id) return id;
+  const lookup = id
+    ? { ownerId, _id: id }
+    : { ownerId, slug: slugifyClusterSlug(value) };
+  if (!id && !lookup.slug) return null;
 
-  const slug = slugifyClusterSlug(value);
-  if (!slug) return null;
-
-  const doc = await Cluster.findOne({ ownerId, slug }).select('_id').lean();
+  const doc = await Cluster.findOne(lookup).select('_id').lean();
   return doc?._id || null;
 }
 

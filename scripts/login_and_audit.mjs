@@ -1,6 +1,7 @@
 // scripts/login_and_audit.mjs
 // Usage:
 // EMAIL="madison.alway@gmail.com" PASSWORD="testing123" API_BASE=http://127.0.0.1:3000 node scripts/login_and_audit.mjs
+import { authenticationFailedDiagnostic, authenticationSucceededDiagnostic } from './safeDiagnostics.mjs';
 
 const API_BASE = process.env.API_BASE || 'http://127.0.0.1:3000';
 const EMAIL = process.env.EMAIL;
@@ -69,12 +70,12 @@ async function tryFirst(paths, body) {
   }
 
   if (!login) {
-    console.error('Auth failed:', reg || '(no reg)', '→ then login attempts failed.');
+    console.error(authenticationFailedDiagnostic(reg));
     process.exit(1);
   }
 
   const TOKEN = login.data.token;
-  console.log(`🔑 token via ${login.path} (${TOKEN.slice(0, 16)}…)\n`);
+  console.log(`${authenticationSucceededDiagnostic(login.path)}\n`);
 
   const endpoints = [
     '/api/entries',

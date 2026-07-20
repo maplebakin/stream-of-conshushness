@@ -22,6 +22,8 @@ import SuggestedGatherItem from '../models/SuggestedGatherItem.js';
 import SuggestedInterest from '../models/SuggestedInterest.js';
 import SuggestedTask from '../models/SuggestedTask.js';
 import { activeEntryQuery } from '../utils/entryQueries.js';
+import { logSafeError } from '../utils/errorHandler.js';
+import { resolveSourceEntries, sourceEntryMeta, sourceIdsFrom } from '../utils/sourceEntryState.js';
 
 const router = express.Router();
 
@@ -53,15 +55,6 @@ function isoDate(value) {
     return value.toISOString().slice(0, 10);
   }
   return '';
-}
-
-function sourceEntryMeta(entry) {
-  if (!entry || typeof entry !== 'object') return {};
-  return {
-    sourceEntryId: idOf(entry),
-    sourceDate: isoDate(entry.date),
-    sourceTitle: entry.title || '',
-  };
 }
 
 function sourceRippleMeta(ripple) {
@@ -157,10 +150,16 @@ router.get('/', async (req, res) => {
         .select('title notes status completed dueDate priority entryId createdAt')
         .lean();
 
+      const sourceMap = await resolveSourceEntries({
+        userId,
+        sourceIds: sourceIdsFrom(tasks, (item) => item.entryId),
+      });
+
       results.tasks = tasks.map(t => ({
         ...t,
         type: 'task',
-        preview: getPreview(t.title + ' ' + (t.notes || ''), query)
+        preview: getPreview(t.title + ' ' + (t.notes || ''), query),
+        ...sourceEntryMeta(sourceMap, t.entryId),
       }));
     }
 
@@ -265,6 +264,8 @@ router.get('/', async (req, res) => {
     if (includesType(type, 'appointments')) {
       const appointments = await Appointment.find({
         userId,
+        automationReviewStatus: { $nin: ['pending', 'dismissed'] },
+        scheduleStatus: { $ne: 'cancelled' },
         $or: [
           { title: searchPattern },
           { details: searchPattern },
@@ -274,14 +275,18 @@ router.get('/', async (req, res) => {
         .sort({ date: -1, createdAt: -1 })
         .limit(searchLimit)
         .select('title details location date startDate timeStart timeEnd entryId source createdAt')
-        .populate('entryId', 'date title')
         .lean();
+
+      const sourceMap = await resolveSourceEntries({
+        userId,
+        sourceIds: sourceIdsFrom(appointments, (item) => item.entryId),
+      });
 
       results.appointments = appointments.map((item) => ({
         ...item,
         type: 'appointment',
         preview: getPreview(`${item.details || ''} ${item.location || ''}`, query),
-        ...sourceEntryMeta(item.entryId),
+        ...sourceEntryMeta(sourceMap, item.entryId),
         source: item.source || ''
       }));
     }
@@ -289,6 +294,7 @@ router.get('/', async (req, res) => {
     if (includesType(type, 'importantEvents', 'events')) {
       const importantEvents = await ImportantEvent.find({
         userId,
+        automationReviewStatus: { $nin: ['pending', 'dismissed'] },
         $or: [
           { title: searchPattern },
           { description: searchPattern }
@@ -297,14 +303,18 @@ router.get('/', async (req, res) => {
         .sort({ date: -1, createdAt: -1 })
         .limit(searchLimit)
         .select('title description date pinned entryId source createdAt')
-        .populate('entryId', 'date title')
         .lean();
+
+      const sourceMap = await resolveSourceEntries({
+        userId,
+        sourceIds: sourceIdsFrom(importantEvents, (item) => item.entryId),
+      });
 
       results.importantEvents = importantEvents.map((item) => ({
         ...item,
         type: 'importantEvent',
         preview: getPreview(item.description || '', query),
-        ...sourceEntryMeta(item.entryId),
+        ...sourceEntryMeta(sourceMap, item.entryId),
         source: item.source || ''
       }));
     }
@@ -325,16 +335,28 @@ router.get('/', async (req, res) => {
         .select('title description list status sourceText tags sourceEntryId createdAt')
         .lean();
 
-      results.gatherItems = gatherItems.map((item) => ({
-        ...item,
-        type: 'gatherItem',
-        preview: getPreview(`${item.description || ''} ${item.sourceText || ''} ${item.list || ''}`, query)
-      }));
+      const sourceMap = await resolveSourceEntries({
+        userId,
+        sourceIds: sourceIdsFrom(gatherItems, (item) => item.sourceEntryId),
+      });
+
+      results.gatherItems = gatherItems.map((item) => {
+        const source = sourceEntryMeta(sourceMap, item.sourceEntryId);
+        const sourceText = source.sourceState && !source.sourceAvailable ? '' : item.sourceText || '';
+        return {
+          ...item,
+          type: 'gatherItem',
+          sourceText,
+          preview: getPreview(`${item.description || ''} ${sourceText} ${item.list || ''}`, query),
+          ...source,
+        };
+      });
     }
 
     if (includesType(type, 'suggestedGatherItems')) {
       const suggestedGatherItems = await SuggestedGatherItem.find({
         userId,
+        status: { $in: ['pending', 'accepting'] },
         $or: [
           { title: searchPattern },
           { description: searchPattern },
@@ -346,15 +368,24 @@ router.get('/', async (req, res) => {
         .sort({ createdAt: -1 })
         .limit(searchLimit)
         .select('title description list status sourceText tags sourceEntryId createdAt')
-        .populate('sourceEntryId', 'date title')
         .lean();
 
-      results.suggestedGatherItems = suggestedGatherItems.map((item) => ({
-        ...item,
-        type: 'suggestedGatherItem',
-        preview: getPreview(`${item.description || ''} ${item.sourceText || ''} ${item.list || ''}`, query),
-        ...sourceEntryMeta(item.sourceEntryId)
-      }));
+      const sourceMap = await resolveSourceEntries({
+        userId,
+        sourceIds: sourceIdsFrom(suggestedGatherItems, (item) => item.sourceEntryId),
+      });
+
+      results.suggestedGatherItems = suggestedGatherItems.map((item) => {
+        const source = sourceEntryMeta(sourceMap, item.sourceEntryId);
+        const sourceText = source.sourceState && !source.sourceAvailable ? '' : item.sourceText || '';
+        return {
+          ...item,
+          type: 'suggestedGatherItem',
+          sourceText,
+          preview: getPreview(`${item.description || ''} ${sourceText} ${item.list || ''}`, query),
+          ...source,
+        };
+      });
     }
 
     if (includesType(type, 'interests')) {
@@ -373,16 +404,28 @@ router.get('/', async (req, res) => {
         .select('title description category status sourceText tags sourceEntryId createdAt')
         .lean();
 
-      results.interests = interests.map((item) => ({
-        ...item,
-        type: 'interest',
-        preview: getPreview(`${item.description || ''} ${item.sourceText || ''} ${item.category || ''}`, query)
-      }));
+      const sourceMap = await resolveSourceEntries({
+        userId,
+        sourceIds: sourceIdsFrom(interests, (item) => item.sourceEntryId),
+      });
+
+      results.interests = interests.map((item) => {
+        const source = sourceEntryMeta(sourceMap, item.sourceEntryId);
+        const sourceText = source.sourceState && !source.sourceAvailable ? '' : item.sourceText || '';
+        return {
+          ...item,
+          type: 'interest',
+          sourceText,
+          preview: getPreview(`${item.description || ''} ${sourceText} ${item.category || ''}`, query),
+          ...source,
+        };
+      });
     }
 
     if (includesType(type, 'suggestedInterests')) {
       const suggestedInterests = await SuggestedInterest.find({
         userId,
+        status: { $in: ['pending', 'accepting'] },
         $or: [
           { title: searchPattern },
           { description: searchPattern },
@@ -394,35 +437,59 @@ router.get('/', async (req, res) => {
         .sort({ createdAt: -1 })
         .limit(searchLimit)
         .select('title description category status sourceText tags sourceEntryId createdAt')
-        .populate('sourceEntryId', 'date title')
         .lean();
 
-      results.suggestedInterests = suggestedInterests.map((item) => ({
-        ...item,
-        type: 'suggestedInterest',
-        preview: getPreview(`${item.description || ''} ${item.sourceText || ''} ${item.category || ''}`, query),
-        ...sourceEntryMeta(item.sourceEntryId)
-      }));
+      const sourceMap = await resolveSourceEntries({
+        userId,
+        sourceIds: sourceIdsFrom(suggestedInterests, (item) => item.sourceEntryId),
+      });
+
+      results.suggestedInterests = suggestedInterests.map((item) => {
+        const source = sourceEntryMeta(sourceMap, item.sourceEntryId);
+        const sourceText = source.sourceState && !source.sourceAvailable ? '' : item.sourceText || '';
+        return {
+          ...item,
+          type: 'suggestedInterest',
+          sourceText,
+          preview: getPreview(`${item.description || ''} ${sourceText} ${item.category || ''}`, query),
+          ...source,
+        };
+      });
     }
 
     if (includesType(type, 'suggestedTasks')) {
       const suggestedTasks = await SuggestedTask.find({
         userId,
+        status: { $in: ['pending', 'accepting', 'rejecting'] },
         title: searchPattern
       })
         .sort({ createdAt: -1 })
         .limit(searchLimit)
         .select('title status priority dueDate repeat cluster section sourceRippleId createdAt')
-        .populate('sourceRippleId', 'entryId dateKey text')
+        .populate({
+          path: 'sourceRippleId',
+          select: 'entryId dateKey text',
+          match: { userId },
+        })
         .lean();
 
-      results.suggestedTasks = suggestedTasks.map((item) => ({
-        ...item,
-        type: 'suggestedTask',
-        dueDate: isoDate(item.dueDate),
-        preview: getPreview(`${item.priority || ''} ${item.cluster || ''} ${item.section || ''}`, query),
-        ...sourceRippleMeta(item.sourceRippleId)
-      }));
+      const sourceMap = await resolveSourceEntries({
+        userId,
+        sourceIds: sourceIdsFrom(suggestedTasks, (item) => item?.sourceRippleId?.entryId),
+      });
+      results.suggestedTasks = suggestedTasks.map((item) => {
+        const ripple = sourceRippleMeta(item.sourceRippleId);
+        const source = sourceEntryMeta(sourceMap, ripple.sourceEntryId);
+        return {
+          ...item,
+          type: 'suggestedTask',
+          dueDate: isoDate(item.dueDate),
+          preview: getPreview(`${item.priority || ''} ${item.cluster || ''} ${item.section || ''}`, query),
+          ...ripple,
+          ...source,
+          sourceText: source.sourceState && !source.sourceAvailable ? '' : ripple.sourceText,
+        };
+      });
     }
 
     if (includesType(type, 'habits')) {
@@ -468,9 +535,16 @@ router.get('/', async (req, res) => {
         .select('name slug sectionId notes birthDate deathDate birthPlace deathPlace occupation tags updatedAt createdAt')
         .lean();
 
+      const sectionIds = [...new Set(researchSubjects.map((item) => idOf(item.sectionId)).filter(Boolean))];
+      const researchSections = sectionIds.length
+        ? await Section.find({ ownerId: userId, _id: { $in: sectionIds } }).select('_id slug').lean()
+        : [];
+      const sectionSlugs = new Map(researchSections.map((section) => [idOf(section), section.slug]));
+
       results.researchSubjects = researchSubjects.map((item) => ({
         ...item,
         type: 'researchSubject',
+        sectionSlug: sectionSlugs.get(idOf(item.sectionId)) || '',
         preview: getPreview(`${item.notes || ''} ${item.birthPlace || ''} ${item.deathPlace || ''} ${item.occupation || ''}`, query)
       }));
     }
@@ -537,7 +611,7 @@ router.get('/', async (req, res) => {
 
     res.json(results);
   } catch (error) {
-    console.error('[search] Search failed:', error);
+    logSafeError('search failed', error);
     res.status(500).json({ error: 'Search failed' });
   }
 });

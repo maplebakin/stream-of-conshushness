@@ -1,18 +1,17 @@
 // routes/events.js — Important Events CRUD (ESM) with date/pinned filters and alias fields
 import express from "express";
-import mongoose from "mongoose";
 import ImportantEvent from "../models/ImportantEvent.js";
+import { logSafeError } from '../utils/errorHandler.js';
+import { resolveOwnedEntryId } from '../utils/ownedReferences.js';
+import { isValidISODate } from '../utils/recurrence.js';
 
 const router = express.Router();
-const { ObjectId } = mongoose.Types;
-
-const isYMD = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+const isYMD = isValidISODate;
 const toBool = (v) => {
   const s = String(v ?? "").toLowerCase();
   return s === "1" || s === "true" || s === "yes";
 };
 const trimOr = (v, d = "") => (typeof v === "string" ? v.trim() : d);
-const normalizeEntryId = (v) => (v && ObjectId.isValid(v) ? v : null);
 
 function userIdOf(req) {
   return req.user?.userId || req.user?._id || req.user?.id;
@@ -26,6 +25,8 @@ router.post("/", async (req, res) => {
     const { title, date, description, details, cluster, pinned, entryId } = req.body || {};
     if (!title || !date) return res.status(400).json({ error: "title and date are required (YYYY-MM-DD)" });
     if (!isYMD(date))   return res.status(400).json({ error: "date must be YYYY-MM-DD" });
+    const ownedEntryId = entryId ? await resolveOwnedEntryId(userId, entryId) : null;
+    if (entryId && !ownedEntryId) return res.status(400).json({ error: 'entryId must reference one of your entries' });
 
     const doc = {
       userId,
@@ -34,7 +35,7 @@ router.post("/", async (req, res) => {
       description: trimOr(description ?? details ?? ""),
       cluster: cluster || null,
       pinned: !!pinned,
-      entryId: normalizeEntryId(entryId),
+      entryId: ownedEntryId,
     };
 
     // duplicate guard: same user + same date + same exact title
@@ -44,7 +45,7 @@ router.post("/", async (req, res) => {
     const ev = await ImportantEvent.create(doc);
     res.status(201).json(ev);
   } catch (e) {
-    console.error("POST /important-events error", e);
+    logSafeError('important events create failed', e);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -63,7 +64,7 @@ router.get("/", async (req, res) => {
     const userId = userIdOf(req);
     const { date, on, from, to, pinned, cluster } = req.query || {};
 
-    const q = { userId };
+    const q = { userId, automationReviewStatus: { $nin: ["pending", "dismissed"] } };
     const exact = date || on;
     if (exact) {
       if (!isYMD(exact)) return res.status(400).json({ error: "date must be YYYY-MM-DD" });
@@ -85,7 +86,7 @@ router.get("/", async (req, res) => {
     const rows = await ImportantEvent.find(q).sort({ date: 1, createdAt: 1 }).lean();
     res.json(rows);
   } catch (e) {
-    console.error("GET /important-events error", e);
+    logSafeError('important events list failed', e);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -94,12 +95,37 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const userId = userIdOf(req);
-    const ev = await ImportantEvent.findOne({ _id: req.params.id, userId }).lean();
+    const ev = await ImportantEvent.findOne({
+      _id: req.params.id,
+      userId,
+      automationReviewStatus: { $nin: ["pending", "dismissed"] },
+    }).lean();
     if (!ev) return res.status(404).json({ error: "Not found" });
     res.json(ev);
   } catch (e) {
-    console.error("GET /important-events/:id error", e);
+    logSafeError('important events get failed', e);
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ------------------------- AUTOMATION REVIEW ------------------------- */
+router.patch("/:id/review", async (req, res) => {
+  try {
+    const userId = userIdOf(req);
+    const action = String(req.body?.action || "").trim();
+    if (!["keep", "dismiss"].includes(action)) {
+      return res.status(400).json({ error: "action must be keep or dismiss" });
+    }
+    const ev = await ImportantEvent.findOneAndUpdate(
+      { _id: req.params.id, userId, source: "entry-automation" },
+      { $set: { automationReviewStatus: action === "keep" ? "kept" : "dismissed" } },
+      { new: true, runValidators: true }
+    ).lean();
+    if (!ev) return res.status(404).json({ error: "Not found" });
+    return res.json(ev);
+  } catch (e) {
+    logSafeError('important event review decision failed', e);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -120,8 +146,15 @@ router.patch("/:id", async (req, res) => {
     }
     if (b.cluster !== undefined) updates.cluster = b.cluster || null;
     if (b.pinned  !== undefined) updates.pinned = !!b.pinned;
-    if (b.entryId !== undefined) updates.entryId = normalizeEntryId(b.entryId);
-    if (Object.keys(updates).length) updates.source = "user-edited";
+    if (b.entryId !== undefined) {
+      const entryId = b.entryId ? await resolveOwnedEntryId(userId, b.entryId) : null;
+      if (b.entryId && !entryId) return res.status(400).json({ error: 'entryId must reference one of your entries' });
+      updates.entryId = entryId;
+    }
+    if (Object.keys(updates).length) {
+      updates.source = "user-edited";
+      updates.automationReviewStatus = "kept";
+    }
 
     const ev = await ImportantEvent.findOneAndUpdate(
       { _id: req.params.id, userId },
@@ -132,7 +165,7 @@ router.patch("/:id", async (req, res) => {
     if (!ev) return res.status(404).json({ error: "Not found" });
     res.json(ev);
   } catch (e) {
-    console.error("PATCH /important-events/:id error", e);
+    logSafeError('important events update failed', e);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -141,11 +174,18 @@ router.patch("/:id", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const userId = userIdOf(req);
-    const r = await ImportantEvent.findOneAndDelete({ _id: req.params.id, userId });
-    if (!r) return res.status(404).json({ error: "Not found" });
-    res.json({ ok: true });
+    const event = await ImportantEvent.findOne({ _id: req.params.id, userId });
+    if (!event) return res.status(404).json({ error: "Not found" });
+    if (event.entryId && ["entry-automation", "user-edited"].includes(event.source)) {
+      event.source = "entry-automation";
+      event.automationReviewStatus = "dismissed";
+      await event.save();
+      return res.json({ ok: true, dismissed: event._id });
+    }
+    await ImportantEvent.deleteOne({ _id: event._id, userId });
+    res.json({ ok: true, deleted: event._id });
   } catch (e) {
-    console.error("DELETE /important-events/:id error", e);
+    logSafeError('important events delete failed', e);
     res.status(500).json({ error: "Server error" });
   }
 });

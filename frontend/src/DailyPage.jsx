@@ -1,6 +1,6 @@
 // frontend/src/DailyPage.jsx
-import React, { useEffect, useMemo, useState, useContext, useCallback } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState, useContext, useCallback, useRef } from 'react';
+import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import { listSuggestedGatherItems } from './api/suggestedGatherItems.js';
@@ -8,7 +8,6 @@ import { listSuggestedInterests } from './api/suggestedInterests.js';
 import { getCalendarDay } from './api/calendar.js';
 
 import TaskList from './TaskList.jsx';
-import SuggestedTasksInbox from './SuggestedTasksInbox.jsx';
 import EntryQuickAssign from './adapters/EntryQuickAssign.default.jsx';
 import AnalyzeEntryButton from './adapters/AnalyzeEntryButton.default.jsx';
 import EntryModal from './EntryModal.jsx';
@@ -28,6 +27,11 @@ import { toDisplayDate, todayISOInToronto, formatHM as formatHMUtil } from './ut
 import { toDisplay } from './utils/display.js';
 import { isClustered } from './utils/isClustered.js';
 import { useReviewCount } from './hooks/useReviewCount.js';
+import { sourceEntryPath, sourceStateLabel } from './utils/sourceEntryState.js';
+import { carryOverdueTasks, dailyPreferenceKey } from './utils/carryForward.js';
+import { requestErrorSummary } from './utils/requestError.js';
+import { chooseTodayFocus } from './utils/todayFocus.js';
+import { CompactActionSummary, SecondarySection } from './components/UXPrimitives.jsx';
 
 import './Main.css';
 import './dailypage.css';
@@ -72,12 +76,6 @@ function eventAliasKey(item) {
   return `${item?.date || ''}|${item?.title || ''}`;
 }
 
-function calendarSourcePath(item) {
-  if (!item?.sourceDate) return '';
-  const hash = item.sourceEntryId ? `#entry-${encodeURIComponent(item.sourceEntryId)}` : '';
-  return `/day/${item.sourceDate}${hash}`;
-}
-
 function calendarOriginLabel(item) {
   if (item?.source === 'entry-automation') return 'Automation';
   if (item?.source === 'user-edited') return 'Edited';
@@ -85,6 +83,8 @@ function calendarOriginLabel(item) {
 }
 
 function calendarSourceText(item) {
+  const unavailable = sourceStateLabel(item);
+  if (unavailable) return unavailable;
   if (item?.sourceDate) return `From entry on ${item.sourceDate}`;
   if (item?.sourceEntryId) return 'Created from Stream entry';
   if (item?.source === 'entry-automation') return 'Created from Stream entry';
@@ -128,60 +128,42 @@ function chooseNextTimelineItem(timeline, dateISO, todayISO) {
   );
 }
 
-function chooseNextTask(dueTasks, radarTasks, dateISO) {
-  const dueToday = dueTasks.find(task => task?.dueDate === dateISO);
-  if (dueToday) return { task: dueToday, label: 'Dated task' };
-
-  const overdue = dueTasks.find(task => task?.dueDate && task.dueDate < dateISO);
-  if (overdue) return { task: overdue, label: 'Earlier task' };
-
-  const radar = radarTasks[0];
-  if (radar) return { task: radar, label: 'Undated task' };
-
-  return null;
-}
-
-function attentionRecommendation({ reviewCount, overdueCount, todayTaskCount, nextTask, nextTimelineItem }) {
-  if (reviewCount > 0) return 'Review new suggestions before planning more work.';
-  if (overdueCount > 0) return 'Start by choosing one earlier task to carry forward, finish, or clear.';
-  if (todayTaskCount > 0 && nextTask?.task?.title) return `Start with "${nextTask.task.title}".`;
-  if (nextTask?.task?.title) return `Choose whether "${nextTask.task.title}" belongs on this day.`;
-  if (nextTimelineItem?.title) return `Check "${nextTimelineItem.title}" on the schedule.`;
-  return 'No urgent signals here. Capture anything new or plan a focused block.';
-}
-
 /* ===================================================== */
 export default function DailyPage() {
+  const location = useLocation();
   const { date: routeDate } = useParams();
   const navigate = useNavigate();
-  const { token } = useContext(AuthContext);
+  const { token, user } = useContext(AuthContext);
+  const preferenceOwnerId = String(user?.userId || user?._id || user?.id || '').trim();
+  const autoCarryPreferenceKey = dailyPreferenceKey(preferenceOwnerId, 'auto-carry');
+  const carryRunPreferenceKey = dailyPreferenceKey(preferenceOwnerId, 'carry-last-run');
+  const schedulePreferenceKey = dailyPreferenceKey(preferenceOwnerId, 'show-schedule');
+  const entryFilterPreferenceKey = dailyPreferenceKey(preferenceOwnerId, 'entries-unassigned-only');
 
   const todayISO = useMemo(() => todayISOInToronto(), []);
   const [dateISO, setDateISO] = useState(routeDate || todayISO);
 
   const [taskListKey, setTaskListKey] = useState(0);
   const [rippleListKey, setRippleListKey] = useState(0);
-  const [suggestionsKey, setSuggestionsKey] = useState(0);
   const [showEntryModal, setShowEntryModal] = useState(false);
+  const [editingEntry, setEditingEntry] = useState(null);
   const [showApptModal, setShowApptModal] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState(null);
   const [confirmingAppointmentDeleteId, setConfirmingAppointmentDeleteId] = useState('');
   const [confirmingAppointmentDeleteMessage, setConfirmingAppointmentDeleteMessage] = useState('');
-  const [autoCarry, setAutoCarry] = useState(() => localStorage.getItem('auto_cf') === '1');
-  const [showSchedule, setShowSchedule] = useState(
-    () => localStorage.getItem('show_sched') !== '0'
-  );
+  const [autoCarry, setAutoCarry] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
 
   const [entries, setEntries] = useState([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
-  const [unassignedOnly, setUnassignedOnly] = useState(
-    () => localStorage.getItem('entries_unassigned_only') === '1'
-  );
+  const [unassignedOnly, setUnassignedOnly] = useState(false);
 
   const [appointments, setAppointments] = useState([]);
   const [events,       setEvents]       = useState([]);
   const [important,    setImportant]    = useState([]);
   const [loadingAgenda, setLoadingAgenda] = useState(false);
+  const [agendaError, setAgendaError] = useState('');
+  const [deletingAppointmentId, setDeletingAppointmentId] = useState('');
   const [otherSuggestionCounts, setOtherSuggestionCounts] = useState({ gather: 0, interests: 0 });
   const [loadingOtherSuggestions, setLoadingOtherSuggestions] = useState(false);
   const [otherSuggestionsError, setOtherSuggestionsError] = useState('');
@@ -191,6 +173,28 @@ export default function DailyPage() {
   const [loadingTaskAttention, setLoadingTaskAttention] = useState(false);
   const [taskAttentionError, setTaskAttentionError] = useState('');
   const reviewCount = useReviewCount(Boolean(token), reviewRefreshKey);
+  const entriesLoadSequenceRef = useRef(0);
+  const suggestionLoadSequenceRef = useRef(0);
+  const taskLoadSequenceRef = useRef(0);
+  const agendaLoadSequenceRef = useRef(0);
+
+  useEffect(() => {
+    if (!preferenceOwnerId) {
+      setAutoCarry(false);
+      setShowSchedule(false);
+      setUnassignedOnly(false);
+      return;
+    }
+
+    setAutoCarry(localStorage.getItem(autoCarryPreferenceKey) === '1');
+    setShowSchedule(localStorage.getItem(schedulePreferenceKey) === '1');
+    setUnassignedOnly(localStorage.getItem(entryFilterPreferenceKey) === '1');
+  }, [
+    preferenceOwnerId,
+    autoCarryPreferenceKey,
+    schedulePreferenceKey,
+    entryFilterPreferenceKey,
+  ]);
 
   useEffect(() => {
     if (!routeDate) {
@@ -202,18 +206,40 @@ export default function DailyPage() {
 
   useEffect(() => {
     if (!autoCarry) return;
+    // State can briefly contain the previous account's preference during an
+    // in-place account switch. The destructive action must also be authorized
+    // by the currently authenticated account's own stored setting.
+    if (!autoCarryPreferenceKey || localStorage.getItem(autoCarryPreferenceKey) !== '1') return;
     if (dateISO !== todayISO) return;
-    const last = localStorage.getItem('cf_last_run');
+    if (!carryRunPreferenceKey) return;
+    const last = localStorage.getItem(carryRunPreferenceKey);
     if (last === todayISO) return;
 
-    axios.post('/api/tasks/carry-forward')
+    carryOverdueTasks(axios, todayISO)
     .then(() => {
-      localStorage.setItem('cf_last_run', todayISO);
+      localStorage.setItem(carryRunPreferenceKey, todayISO);
       setTaskListKey(k => k + 1);
       setTaskAttentionRefreshKey(k => k + 1);
     })
     .catch(() => {});
-  }, [autoCarry, dateISO, todayISO, token]);
+  }, [autoCarry, autoCarryPreferenceKey, carryRunPreferenceKey, dateISO, todayISO, token]);
+
+  useEffect(() => {
+    if (loadingEntries || !location.hash.startsWith('#entry-')) return undefined;
+    let targetId = location.hash.slice(1);
+    try {
+      targetId = decodeURIComponent(targetId);
+    } catch {
+      // Keep the raw fragment when it is not percent-encoded correctly.
+    }
+    const frame = requestAnimationFrame(() => {
+      const target = document.getElementById(targetId);
+      if (!target) return;
+      target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      target.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [entries, loadingEntries, location.hash]);
 
   const go = (offsetDays) => {
     const d = new Date(dateISO + 'T00:00:00');
@@ -223,36 +249,48 @@ export default function DailyPage() {
 
   async function carryForwardNow() {
     try {
-      await axios.post('/api/tasks/carry-forward');
+      await carryOverdueTasks(axios, todayISO);
       setTaskListKey(k => k + 1);
       setTaskAttentionRefreshKey(k => k + 1);
     } catch (e) {
-      console.error('carry-forward failed', e);
+      console.error('carry-forward failed', requestErrorSummary(e));
     }
   }
 
   const loadEntries = useCallback(async () => {
-    if (!token || !dateISO) return;
+    const sequence = ++entriesLoadSequenceRef.current;
+    if (!token || !dateISO) {
+      setEntries([]);
+      setLoadingEntries(false);
+      return;
+    }
     setLoadingEntries(true);
     try {
       const res = await axios.get(`/api/entries/by-date/${dateISO}`);
+      if (sequence !== entriesLoadSequenceRef.current) return;
       let list = Array.isArray(res.data) ? res.data : [];
       list = list.filter(e => entryDateISO(e) === dateISO);
       list = list.filter(entryHasMeaningfulText);
       if (unassignedOnly) list = list.filter(entry => !isClustered(entry));
       setEntries(list);
     } catch (err) {
-      console.error('loadEntries error', err?.message || err);
+      if (sequence !== entriesLoadSequenceRef.current) return;
+      console.error('loadEntries error', requestErrorSummary(err));
       setEntries([]);
     } finally {
-      setLoadingEntries(false);
+      if (sequence === entriesLoadSequenceRef.current) setLoadingEntries(false);
     }
   }, [token, dateISO, unassignedOnly]);
 
   useEffect(() => { loadEntries(); }, [loadEntries]);
 
   const loadOtherSuggestionCounts = useCallback(async () => {
-    if (!token || !dateISO) return;
+    const sequence = ++suggestionLoadSequenceRef.current;
+    if (!token || !dateISO) {
+      setOtherSuggestionCounts({ gather: 0, interests: 0 });
+      setLoadingOtherSuggestions(false);
+      return;
+    }
     setLoadingOtherSuggestions(true);
     setOtherSuggestionsError('');
     try {
@@ -260,37 +298,46 @@ export default function DailyPage() {
         listSuggestedGatherItems({ date: dateISO }),
         listSuggestedInterests({ date: dateISO }),
       ]);
+      if (sequence !== suggestionLoadSequenceRef.current) return;
       setOtherSuggestionCounts({
         gather: gatherSuggestions.length,
         interests: interestSuggestions.length,
       });
     } catch (err) {
-      console.error('load suggestion counts error', err?.response?.data || err?.message || err);
+      if (sequence !== suggestionLoadSequenceRef.current) return;
+      console.error('load suggestion counts error', requestErrorSummary(err));
       setOtherSuggestionCounts({ gather: 0, interests: 0 });
       setOtherSuggestionsError('Could not load suggestion counts.');
     } finally {
-      setLoadingOtherSuggestions(false);
+      if (sequence === suggestionLoadSequenceRef.current) setLoadingOtherSuggestions(false);
     }
   }, [token, dateISO]);
 
   useEffect(() => { loadOtherSuggestionCounts(); }, [loadOtherSuggestionCounts]);
 
   const loadTaskAttention = useCallback(async () => {
-    if (!token || !dateISO) return;
+    const sequence = ++taskLoadSequenceRef.current;
+    if (!token || !dateISO) {
+      setTaskAttention({ dueToday: [], onYourRadar: [] });
+      setLoadingTaskAttention(false);
+      return;
+    }
     setLoadingTaskAttention(true);
     setTaskAttentionError('');
     try {
       const { data } = await axios.get(`/api/tasks/day/${dateISO}`);
+      if (sequence !== taskLoadSequenceRef.current) return;
       setTaskAttention({
         dueToday: Array.isArray(data?.dueToday) ? data.dueToday : [],
         onYourRadar: Array.isArray(data?.onYourRadar) ? data.onYourRadar : [],
       });
     } catch (err) {
-      console.error('loadTaskAttention error', err?.response?.data || err?.message || err);
+      if (sequence !== taskLoadSequenceRef.current) return;
+      console.error('loadTaskAttention error', requestErrorSummary(err));
       setTaskAttention({ dueToday: [], onYourRadar: [] });
       setTaskAttentionError('Could not load task summary.');
     } finally {
-      setLoadingTaskAttention(false);
+      if (sequence === taskLoadSequenceRef.current) setLoadingTaskAttention(false);
     }
   }, [token, dateISO]);
 
@@ -314,31 +361,33 @@ export default function DailyPage() {
     setTaskAttentionRefreshKey(k => k + 1);
   }
   const handleTasksChanged = useCallback(() => {
+    setTaskListKey(k => k + 1);
     setTaskAttentionRefreshKey(k => k + 1);
   }, []);
 
-  function refreshAutomationPanels() {
-    setTaskListKey(k => k + 1);
-    setTaskAttentionRefreshKey(k => k + 1);
-    setRippleListKey(k => k + 1);
-    setSuggestionsKey(k => k + 1);
-    setReviewRefreshKey(k => k + 1);
-    loadOtherSuggestionCounts();
-  }
-
   const loadAgenda = useCallback(async () => {
-    if (!token || !dateISO) return;
+    const sequence = ++agendaLoadSequenceRef.current;
+    if (!token || !dateISO) {
+      setAppointments([]); setEvents([]); setImportant([]);
+      setAgendaError('');
+      setLoadingAgenda(false);
+      return;
+    }
     setLoadingAgenda(true);
+    setAgendaError('');
     try {
       const data = await getCalendarDay(dateISO);
+      if (sequence !== agendaLoadSequenceRef.current) return;
       setAppointments(data.appointments);
       setEvents(data.events);
       setImportant(data.importantEvents);
     } catch (err) {
-      console.error('loadAgenda error', err?.message || err);
+      if (sequence !== agendaLoadSequenceRef.current) return;
+      console.error('loadAgenda error', requestErrorSummary(err));
       setAppointments([]); setEvents([]); setImportant([]);
+      setAgendaError(err?.response?.data?.error || err?.message || 'Could not load appointments and events.');
     } finally {
-      setLoadingAgenda(false);
+      if (sequence === agendaLoadSequenceRef.current) setLoadingAgenda(false);
     }
   }, [token, dateISO]);
 
@@ -359,6 +408,7 @@ export default function DailyPage() {
       sourceEntryId: a.sourceEntryId || '',
       sourceDate: a.sourceDate || '',
       sourceTitle: a.sourceTitle || '',
+      sourceState: a.sourceState || '',
     }));
     const importantKeys = new Set((important || []).map(eventAliasKey));
     const evs = (events || [])
@@ -374,6 +424,7 @@ export default function DailyPage() {
         sourceEntryId: e.sourceEntryId || '',
         sourceDate: e.sourceDate || '',
         sourceTitle: e.sourceTitle || '',
+        sourceState: e.sourceState || '',
       }));
     const imps = (important || []).map(e => ({
       _id: e._id,
@@ -386,6 +437,7 @@ export default function DailyPage() {
       sourceEntryId: e.sourceEntryId || '',
       sourceDate: e.sourceDate || '',
       sourceTitle: e.sourceTitle || '',
+      sourceState: e.sourceState || '',
     }));
     const seen = new Set();
     const all = [...appts, ...imps, ...evs].filter((item) => {
@@ -408,32 +460,127 @@ export default function DailyPage() {
 
   const attentionSummary = useMemo(() => {
     const dueTasks = Array.isArray(taskAttention.dueToday) ? taskAttention.dueToday : [];
-    const radarTasks = Array.isArray(taskAttention.onYourRadar) ? taskAttention.onYourRadar : [];
-    const overdueCount = dueTasks.filter(task => task?.dueDate && task.dueDate < dateISO).length;
-    const todayTaskCount = dueTasks.filter(task => task?.dueDate === dateISO).length;
-    const nextTask = chooseNextTask(dueTasks, radarTasks, dateISO);
+    const earlierTasks = dueTasks.filter(task => task?.dueDate && task.dueDate < dateISO);
+    const todayTasks = dueTasks.filter(task => task?.dueDate === dateISO);
     const nextTimelineItem = chooseNextTimelineItem(timeline, dateISO, todayISO);
 
     return {
-      overdueCount,
-      todayTaskCount,
-      nextTask,
+      earlierTasks,
+      todayTasks,
       nextTimelineItem,
-      recommendation: attentionRecommendation({
+      focus: chooseTodayFocus({
+        nextScheduled: nextTimelineItem,
+        todayTasks,
+        earlierTasks,
         reviewCount: reviewCount.count,
-        overdueCount,
-        todayTaskCount,
-        nextTask,
-        nextTimelineItem,
       }),
     };
   }, [dateISO, reviewCount.count, taskAttention, timeline, todayISO]);
+
+  const nowContent = useMemo(() => {
+    if (loadingAgenda || loadingTaskAttention || reviewCount.loading) {
+      return {
+        label: 'Checking the day',
+        primary: 'Finding your next thread…',
+        description: '',
+        action: null,
+      };
+    }
+
+    const { focus } = attentionSummary;
+    if (focus.kind === 'scheduled') {
+      return {
+        label: 'Next scheduled',
+        primary: focus.item.title,
+        description: focus.item.time ? formatHM(focus.item.time) : 'All day',
+        action: <a href="#daily-agenda" className="button chip">View agenda</a>,
+      };
+    }
+    if (focus.kind === 'today-task') {
+      return {
+        label: focus.count === 1 ? 'Task for today' : `${focus.count} tasks for today`,
+        primary: focus.item?.title || `${focus.count} tasks need attention`,
+        description: focus.count > 1 ? `${focus.count - 1} more waiting after this one` : '',
+        action: <Link to={`/inbox/tasks/${dateISO}`} className="button chip">Review tasks</Link>,
+      };
+    }
+    if (focus.kind === 'earlier-task') {
+      return {
+        label: 'Needs attention',
+        primary: `${focus.count} earlier ${focus.count === 1 ? 'task needs' : 'tasks need'} attention`,
+        description: focus.item?.title ? `First up: ${focus.item.title}` : '',
+        action: <Link to="/inbox/tasks" className="button chip">Review {focus.count === 1 ? 'task' : 'tasks'}</Link>,
+      };
+    }
+    if (focus.kind === 'review') {
+      return {
+        label: 'Ready to review',
+        primary: `${focus.count} ${focus.count === 1 ? 'suggestion is' : 'suggestions are'} waiting`,
+        description: 'Choose what should become part of your plans.',
+        action: <Link to="/review" className="button chip">Review</Link>,
+      };
+    }
+    return {
+      label: 'Quiet day',
+      primary: 'Nothing needs your attention right now',
+      description: 'A good moment to catch a thought.',
+      action: <button type="button" className="button chip" onClick={openNewEntry}>Capture thought</button>,
+    };
+  }, [attentionSummary, dateISO, loadingAgenda, loadingTaskAttention, reviewCount.loading]);
+
+  const nowSecondary = useMemo(() => {
+    if (loadingAgenda || loadingTaskAttention || reviewCount.loading) return null;
+    const items = [];
+    const isScheduledFocus = attentionSummary.focus.kind === 'scheduled';
+    const isTodayTaskFocus = attentionSummary.focus.kind === 'today-task';
+    const isEarlierTaskFocus = attentionSummary.focus.kind === 'earlier-task';
+    const isReviewFocus = attentionSummary.focus.kind === 'review';
+
+    if (isScheduledFocus && attentionSummary.todayTasks.length > 0) {
+      items.push(
+        <Link key="today-tasks" to={`/inbox/tasks/${dateISO}`}>
+          {attentionSummary.todayTasks.length} {attentionSummary.todayTasks.length === 1 ? 'task' : 'tasks'} today
+        </Link>
+      );
+    }
+    if (!isEarlierTaskFocus && attentionSummary.earlierTasks.length > 0) {
+      items.push(
+        <Link key="earlier-tasks" to="/inbox/tasks">
+          {attentionSummary.earlierTasks.length} earlier
+        </Link>
+      );
+    }
+    if (!isReviewFocus && reviewCount.count > 0) {
+      items.push(<Link key="review" to="/review">{reviewCount.count} to review</Link>);
+    }
+    if (
+      attentionSummary.focus.kind !== 'quiet' &&
+      !isScheduledFocus &&
+      !attentionSummary.nextTimelineItem
+    ) {
+      items.push(<span key="schedule">Nothing scheduled next</span>);
+    }
+    if (isTodayTaskFocus && attentionSummary.earlierTasks.length === 0 && reviewCount.count === 0) {
+      items.push(<span key="focus">One thing at a time</span>);
+    }
+    return items.length > 0 ? items : null;
+  }, [attentionSummary, dateISO, loadingAgenda, loadingTaskAttention, reviewCount.count, reviewCount.loading]);
 
   function openNewAppointment() {
     setEditingAppointment(null);
     setConfirmingAppointmentDeleteId('');
     setConfirmingAppointmentDeleteMessage('');
     setShowApptModal(true);
+  }
+
+  function openNewEntry() {
+    setEditingEntry(null);
+    setShowEntryModal(true);
+  }
+
+  function openEditEntry(entry) {
+    setEditingEntry(entry);
+    setShowEntryModal(true);
   }
 
   function openEditAppointment(appointment) {
@@ -452,13 +599,19 @@ export default function DailyPage() {
       setConfirmingAppointmentDeleteMessage(confirmationMessage);
       return;
     }
+    if (deletingAppointmentId) return;
+    setDeletingAppointmentId(id);
+    setAgendaError('');
     try {
       await axios.delete(`/api/appointments/${encodeURIComponent(id)}`);
       setConfirmingAppointmentDeleteId('');
       setConfirmingAppointmentDeleteMessage('');
-      loadAgenda();
+      await loadAgenda();
     } catch (err) {
-      console.error('delete appointment failed', err?.response?.data || err.message);
+      console.error('delete appointment failed', requestErrorSummary(err));
+      setAgendaError(err?.response?.data?.error || err?.message || 'Could not delete the appointment.');
+    } finally {
+      setDeletingAppointmentId('');
     }
   }
 
@@ -480,33 +633,14 @@ export default function DailyPage() {
             </button>
           )}
 
-          <span className="daily-date font-glow text-vein" title="ISO date">{dateISO}</span>
         </div>
 
         <div className="daily-actions">
-          {dateISO === todayISO && (
-            <>
-              <button
-                className="button chip"
-                onClick={() => {
-                  const next = !autoCarry;
-                  setAutoCarry(next);
-                  localStorage.setItem('auto_cf', next ? '1' : '0');
-                }}
-                title="Automatically carry forward overdue tasks on Today"
-              >
-                Auto-carry: {autoCarry ? 'On' : 'Off'}
-              </button>
-              <button className="button chip" onClick={carryForwardNow}>
-                Carry forward now
-              </button>
-            </>
-          )}
           <button
             className="button rounded-button bg-lantern px-4 py-2 font-thread text-ink shadow-soft transition-all hover:bg-plum hover:text-mist"
-            onClick={() => setShowEntryModal(true)}
+            onClick={openNewEntry}
           >
-            + New Entry
+            + Capture thought
           </button>
           <button
             className="button rounded-button bg-spool px-4 py-2 font-thread text-ink shadow-soft transition-all hover:bg-plum hover:text-mist"
@@ -514,65 +648,48 @@ export default function DailyPage() {
           >
             + Add appointment
           </button>
+          {dateISO === todayISO && (
+            <details className="daily-options-menu">
+              <summary aria-label="Day options" title="Day options">
+                <span aria-hidden="true">⚙</span>
+              </summary>
+              <div className="daily-options-menu__panel">
+                <strong>Day options</strong>
+                <button
+                  type="button"
+                  className="button chip"
+                  onClick={() => {
+                    const next = !autoCarry;
+                    setAutoCarry(next);
+                    if (autoCarryPreferenceKey) localStorage.setItem(autoCarryPreferenceKey, next ? '1' : '0');
+                  }}
+                >
+                  Automatic carry-forward: {autoCarry ? 'On' : 'Off'}
+                </button>
+                <button type="button" className="button chip" onClick={carryForwardNow}>
+                  Carry earlier tasks to today now
+                </button>
+              </div>
+            </details>
+          )}
         </div>
       </header>
 
-      <section className="panel daily-attention" aria-labelledby="daily-attention-title">
-        <div className="daily-attention__lead">
-          <div>
-            <p className="daily-attention__eyebrow">Command Center</p>
-            <h3 id="daily-attention-title">What needs attention now?</h3>
-          </div>
-          <p className="daily-attention__recommendation">{attentionSummary.recommendation}</p>
-        </div>
-
-        <div className="daily-attention__grid" aria-live="polite">
-          <Link
-            to="/review"
-            className={`daily-attention__tile daily-attention__tile--action${reviewCount.count > 0 ? ' daily-attention__tile--needs-action' : ''}`}
-          >
-            <span className="daily-attention__label">Review Inbox</span>
-            <strong>{reviewCount.loading ? '...' : reviewCount.count}</strong>
-            <span>{reviewCount.count > 0 ? 'Pending suggestions' : 'No pending review items'}</span>
-          </Link>
-
-          <div className={`daily-attention__tile${attentionSummary.overdueCount > 0 ? ' daily-attention__tile--needs-action' : ''}`}>
-            <span className="daily-attention__label">Earlier Tasks</span>
-            <strong>{loadingTaskAttention ? '...' : attentionSummary.overdueCount}</strong>
-            <span>{attentionSummary.overdueCount > 0 ? 'Due before this day' : 'Nothing earlier is waiting'}</span>
-          </div>
-
-          <Link to={`/inbox/tasks/${dateISO}`} className="daily-attention__tile daily-attention__tile--action">
-            <span className="daily-attention__label">Today Tasks</span>
-            <strong>{loadingTaskAttention ? '...' : attentionSummary.todayTaskCount}</strong>
-            <span>
-              {attentionSummary.nextTask?.task?.title
-                ? `${attentionSummary.nextTask.label}: ${attentionSummary.nextTask.task.title}`
-                : 'No dated tasks for this day'}
-            </span>
-          </Link>
-
-          <a href="#daily-agenda" className="daily-attention__tile daily-attention__tile--action">
-            <span className="daily-attention__label">Next Schedule</span>
-            <strong>
-              {loadingAgenda
-                ? '...'
-                : attentionSummary.nextTimelineItem
-                  ? attentionSummary.nextTimelineItem.time ? formatHM(attentionSummary.nextTimelineItem.time) : 'All day'
-                  : 'None'}
-            </strong>
-            <span>{attentionSummary.nextTimelineItem?.title || 'Nothing scheduled for this day'}</span>
-          </a>
-        </div>
-
-        {(reviewCount.error || taskAttentionError) && (
-          <div className="daily-attention__note muted">
-            {[reviewCount.error, taskAttentionError].filter(Boolean).join(' ')}
-          </div>
-        )}
-      </section>
-
-      <NotesSection date={dateISO} />
+      <CompactActionSummary
+        className="daily-attention"
+        eyebrow="Now"
+        title="What matters next?"
+        label={nowContent.label}
+        primary={nowContent.primary}
+        description={nowContent.description}
+        action={nowContent.action}
+        secondary={nowSecondary}
+      />
+      {(reviewCount.error || taskAttentionError) && (
+        <p className="daily-attention__note muted" role="status">
+          {[reviewCount.error, taskAttentionError].filter(Boolean).join(' ')}
+        </p>
+      )}
 
       <section className="daily-layout">
         <div className="daily-main">
@@ -590,20 +707,25 @@ export default function DailyPage() {
               },
               'TaskList'
             )}
-            <h3 className="daily-section-heading daily-section-heading--spaced">On Your Radar</h3>
-            {renderSafe(
-              TaskList,
-              {
-                key: `radar-${taskListKey}`,
-                date: dateISO,
-                bucket: 'onYourRadar',
-                header: null,
-                keepCompleted: false,
-                onTasksChanged: handleTasksChanged,
-              },
-              'TaskList'
-            )}
-            <div className="daily-suggestions">
+            <SecondarySection summary="On your radar" hint="A few relevant tasks">
+              {renderSafe(
+                TaskList,
+                {
+                  key: `radar-${taskListKey}`,
+                  date: dateISO,
+                  bucket: 'onYourRadar',
+                  header: null,
+                  keepCompleted: false,
+                  onTasksChanged: handleTasksChanged,
+                },
+                'TaskList'
+              )}
+            </SecondarySection>
+            <SecondarySection
+              summary="Review details"
+              hint={reviewCount.count > 0 ? `${reviewCount.count} waiting` : 'No action needed'}
+            >
+              <div className="daily-suggestions">
               <div className="side-header">
                 <h3 className="daily-section-heading">Suggested Tasks</h3>
                 <div className="daily-review-actions">
@@ -613,16 +735,9 @@ export default function DailyPage() {
                   <Link className="button chip" to={`/inbox/tasks/${dateISO}`}>Task inbox</Link>
                 </div>
               </div>
-              {renderSafe(
-                SuggestedTasksInbox,
-                {
-                  key: `suggested-tasks-${suggestionsKey}-${dateISO}`,
-                  dateISO,
-                  onAccepted: refreshAutomationPanels,
-                  onRejected: refreshAutomationPanels,
-                },
-                'SuggestedTasksInbox'
-              )}
+              <p className="muted">
+                Review, edit, accept, or dismiss entry inferences in one place before they become tasks.
+              </p>
               <div className="suggestion-links">
                 <Link to="/gather-lists">Gather suggestions</Link>
                 <Link to="/interests">Interest suggestions</Link>
@@ -646,8 +761,9 @@ export default function DailyPage() {
                   </div>
                 )}
               </div>
-            </div>
-            <DailyRipples key={rippleListKey} date={dateISO} />
+              </div>
+              <DailyRipples key={rippleListKey} date={dateISO} />
+            </SecondarySection>
           </div>
 
           <div className="panel">
@@ -658,9 +774,11 @@ export default function DailyPage() {
                 onClick={() => {
                   const next = !unassignedOnly;
                   setUnassignedOnly(next);
-                  localStorage.setItem('entries_unassigned_only', next ? '1' : '0');
+                  if (entryFilterPreferenceKey) {
+                    localStorage.setItem(entryFilterPreferenceKey, next ? '1' : '0');
+                  }
                   setEntries(prev => next
-                    ? prev.filter(e => !e?.cluster || e.cluster === '')
+                    ? prev.filter(e => !isClustered(e))
                     : prev
                   );
                 }}
@@ -679,9 +797,17 @@ export default function DailyPage() {
               const safeText =
                 toDisplay(en?.text ?? en?.content ?? '') || <span className="muted">(no text)</span>;
               return (
-                <div key={en._id} id={`entry-${en._id}`} className="entry-card">
+                <div key={en._id} id={`entry-${en._id}`} className="entry-card" tabIndex={-1}>
                   <div className="entry-text">{safeText}</div>
                   <div className="entry-actions-row">
+                    <button
+                      type="button"
+                      className="button chip"
+                      onClick={() => openEditEntry(en)}
+                      aria-label={`Edit entry from ${en.date || dateISO}`}
+                    >
+                      Edit entry
+                    </button>
                     {renderSafe(EntryQuickAssign, {
                       entry: en,
                       onUpdated: handleEntryUpdated,
@@ -706,16 +832,22 @@ export default function DailyPage() {
             <div className="side-header">
               <h3 className="font-thread text-vein">Appointments & Events</h3>
               <div className="side-header__actions">
-                <button className="button chip" onClick={loadAgenda} title="Refresh agenda">Refresh</button>
+                <button type="button" className="button chip" onClick={loadAgenda} title="Refresh agenda" disabled={loadingAgenda}>Refresh</button>
               </div>
             </div>
 
             {loadingAgenda && <p className="muted">Loading…</p>}
-            {!loadingAgenda && timeline.length === 0 && (
+            {!loadingAgenda && agendaError && (
+              <div className="alert error" role="alert">
+                {agendaError}{' '}
+                <button type="button" className="button chip" onClick={loadAgenda}>Retry</button>
+              </div>
+            )}
+            {!loadingAgenda && !agendaError && timeline.length === 0 && (
               <p className="muted">Nothing scheduled or logged for this day.</p>
             )}
 
-            {!loadingAgenda && timeline.length > 0 && (
+            {!loadingAgenda && !agendaError && timeline.length > 0 && (
               <ul className="agenda-list">
                 {timeline.map(item => {
                   const appointmentDetails = item.type === 'appointment'
@@ -723,7 +855,8 @@ export default function DailyPage() {
                     : [];
                   const appointmentDeleteId = item.type === 'appointment' ? getStoredAppointmentId(item) : '';
                   const confirmingDelete = appointmentDeleteId && confirmingAppointmentDeleteId === appointmentDeleteId;
-                  const sourcePath = calendarSourcePath(item);
+                  const deleting = appointmentDeleteId && deletingAppointmentId === appointmentDeleteId;
+                  const sourcePath = sourceEntryPath(item);
                   const sourceText = calendarSourceText(item);
 
                   return (
@@ -757,14 +890,15 @@ export default function DailyPage() {
                         </div>
                         {item.type === 'appointment' && (
                           <div className="agenda-actions">
-                            <button type="button" className="button chip" onClick={() => openEditAppointment(item)} title="Edit appointment">Edit</button>
+                            <button type="button" className="button chip" onClick={() => openEditAppointment(item)} title="Edit appointment" disabled={Boolean(deletingAppointmentId)}>Edit</button>
                             <button
                               type="button"
                               className="button chip"
                               onClick={() => deleteAppointment(item)}
                               title={confirmingDelete ? confirmingAppointmentDeleteMessage || 'Confirm delete appointment' : 'Delete appointment'}
+                              disabled={Boolean(deletingAppointmentId)}
                             >
-                              {confirmingDelete ? 'Confirm Delete' : 'Delete'}
+                              {deleting ? 'Deleting…' : confirmingDelete ? 'Confirm Delete' : 'Delete'}
                             </button>
                             {confirmingDelete && (
                               <button
@@ -774,6 +908,7 @@ export default function DailyPage() {
                                   setConfirmingAppointmentDeleteId('');
                                   setConfirmingAppointmentDeleteMessage('');
                                 }}
+                                disabled={Boolean(deletingAppointmentId)}
                               >
                                 Cancel
                               </button>
@@ -788,47 +923,49 @@ export default function DailyPage() {
             )}
           </div>
 
-          <div className="panel">
-            <div className="side-header">
-              <h3 className="font-thread text-vein">Hourly Schedule</h3>
-              <button
-                className="button chip"
-                onClick={() => {
-                  const next = !showSchedule;
-                  setShowSchedule(next);
-                  localStorage.setItem('show_sched', next ? '1' : '0');
-                }}
-              >
-                {showSchedule ? 'Hide' : 'Show'}
-              </button>
+          <SecondarySection
+            summary="Hourly schedule"
+            hint="Optional planning grid"
+            open={showSchedule}
+            className="daily-schedule-disclosure"
+            onToggle={(event) => {
+              const next = event.currentTarget.open;
+              setShowSchedule(next);
+              if (schedulePreferenceKey) {
+                localStorage.setItem(schedulePreferenceKey, next ? '1' : '0');
+              }
+            }}
+          >
+            <div className="hourly-schedule-wrap">
+              <HourlySchedule date={dateISO} />
             </div>
+          </SecondarySection>
 
-            {showSchedule ? (
-              <div className="hourly-schedule-wrap">
-                <HourlySchedule date={dateISO} />
-              </div>
-            ) : (
-              <p className="muted hourly-schedule-hidden">Hidden</p>
-            )}
-          </div>
-
-          <div className="panel">
-            <h3 className="font-thread text-vein">Habits</h3>
-            <p className="muted font-glow">Coming in Phase 4.</p>
-          </div>
         </aside>
       </section>
 
+      <SecondarySection summary="Notes for this day" hint="Optional context">
+        <NotesSection date={dateISO} />
+      </SecondarySection>
+
       {showEntryModal &&
         renderSafe(EntryModal, {
-          defaultDate: dateISO,
-          onClose: () => setShowEntryModal(false),
-          onSaved: () => {
+          initialEntry: editingEntry,
+          defaultDate: editingEntry?.date || dateISO,
+          onClose: () => {
+            setShowEntryModal(false);
+            setEditingEntry(null);
+          },
+          onSaved: (updatedEntry) => {
+            if (editingEntry) handleEntryUpdated(updatedEntry);
+            setShowEntryModal(false);
+            setEditingEntry(null);
             setTaskListKey(k => k + 1);
             loadEntries();
             loadAgenda();
+            setTaskAttentionRefreshKey(k => k + 1);
+            setReviewRefreshKey(k => k + 1);
             setRippleListKey(k => k + 1);
-            setSuggestionsKey(k => k + 1);
             loadOtherSuggestionCounts();
           },
           onAnalyzed: () => setRippleListKey(k => k + 1),

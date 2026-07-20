@@ -1,17 +1,18 @@
 // routes/compat.js
 import express, { Router } from 'express';
+import mongoose from 'mongoose';
 import auth from '../middleware/auth.js';
 import Task from '../models/Task.js';
-import Entry from '../models/Entry.js';
 import Note from '../models/Note.js';
 import { torontoYmd, addDaysISO } from '../utils/date.js';
+import { logSafeError } from '../utils/errorHandler.js';
+import { setTaskCompletionForOwner } from './tasks.js';
 
 const r = Router();
 
 // parse JSON here too (even if app has it) so compat is self-contained
 r.use(express.json({ limit: '2mb' }));
 r.use(express.urlencoded({ extended: true }));
-r.use(auth);
 
 /* ───────────────── helpers ───────────────── */
 const str = (v) => (v == null ? '' : String(v)).trim();
@@ -25,11 +26,21 @@ function expressJsonReplay(mapper) {
       req.body = mapped.body;
       return next();
     } catch (e) {
-      console.error('[compat] replay error:', e);
+      logSafeError('compat replay failed', e);
       return res.status(500).json({ error: 'compat replay failed' });
     }
   };
 }
+
+// Authentication entry points must remain public just like their canonical
+// `/api/auth/*` counterparts. Keep these shims before the owner-scoped auth
+// gate so older clients can actually sign in or recover an account.
+r.post('/login',        (_req, res) => res.redirect(307, '/api/auth/login'));
+r.post('/register',     (_req, res) => res.redirect(307, '/api/auth/register'));
+r.post('/forgot',       (_req, res) => res.redirect(307, '/api/auth/forgot'));
+r.post('/reset',        (_req, res) => res.redirect(307, '/api/auth/reset'));
+
+r.use(auth);
 
 /* ─── RIPPLES (legacy shims) ────────────────────────────────────────── */
 r.post('/ripples/approve', (req, res) => {
@@ -65,12 +76,21 @@ r.post('/tasks/:id/complete', async (req, res) => {
   try {
     const userId = req.user.userId;
     const id = req.params.id;
-    const t = await Task.findOne({ _id: id, userId });
-    if (!t) return res.status(404).json({ error: 'task not found' });
-    if (!t.completed) { t.completed = true; await t.save(); }
-    return res.json({ ok: true, task: { id: t._id, completed: t.completed } });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid id' });
+    }
+    const result = await setTaskCompletionForOwner({ userId, taskId: id, completed: true });
+    if (result.outcome === 'not-found') return res.status(404).json({ error: 'task not found' });
+    if (result.outcome === 'conflict') {
+      return res.status(409).json({ error: 'Task changed; refresh and try again' });
+    }
+    return res.json({
+      ok: true,
+      task: { id: result.task._id, completed: result.task.completed },
+      next: result.next || null,
+    });
   } catch (e) {
-    console.error('[compat] complete failed:', e);
+    logSafeError('compat complete failed', e);
     return res.status(500).json({ error: 'complete failed' });
   }
 });
@@ -99,42 +119,16 @@ r.post('/tasks/carry-forward', async (req, res) => {
     const result = await Task.updateMany(match, { $set: { dueDate: to } });
     return res.json({ moved: result.modifiedCount || 0, from, to, cluster: cluster || null });
   } catch (e) {
-    console.error('[compat] carry-forward failed:', e);
+    logSafeError('compat carry forward failed', e);
     return res.status(500).json({ error: 'carry-forward failed' });
   }
 });
 
 
-// POST /api/tasks/from-entry { entryId, title?, text?, dueDate?, cluster? }
-r.post('/tasks/from-entry', async (req, res) => {
-  try {
-    const userId = req.user.userId;
-    const { entryId, title = '', text = '', dueDate = null, cluster = '' } = req.body || {};
-    if (!entryId) return res.status(400).json({ error: 'entryId required' });
-
-    let base = { title: '', text: '' };
-    try {
-      const e = await Entry.findOne({ _id: entryId, userId });
-      if (e) { base.text = text || e.text || e.content || ''; base.title = title || e.title || ''; }
-    } catch { /* ignore */ }
-
-    const created = await Task.create({
-      userId,
-      title: (title || base.title || '').slice(0, 200) || 'Task',
-      notes: (text || base.text || '').slice(0, 5000),
-      dueDate: dueDate || null,
-      clusters: cluster ? [cluster] : [],
-      sections: [],
-      rrule: '',
-      completed: false,
-      entryId,
-    });
-
-    return res.status(201).json({ ok: true, task: created });
-  } catch (e) {
-    console.error('[compat] from-entry failed:', e);
-    return res.status(500).json({ error: 'from-entry failed' });
-  }
+// Preserve the legacy URL, but let the canonical route perform entry and
+// cluster ownership validation. A 307 keeps the original POST body intact.
+r.post('/tasks/from-entry', (_req, res) => {
+  return res.redirect(307, '/api/tasks/from-entry');
 });
 
 /* ─── NOTES (singular compat handled here to avoid FE 404/400) ───────── */
@@ -147,7 +141,7 @@ r.get('/note/:date', async (req, res) => {
     const item = await Note.findOne({ userId, date }).lean();
     return res.json({ ok: true, item: item || null, content: item?.content || '' });
   } catch (e) {
-    console.error('[compat] note get failed:', e);
+    logSafeError('compat note get failed', e);
     return res.status(500).json({ error: 'note get failed' });
   }
 });
@@ -161,7 +155,7 @@ r.get('/note', async (req, res) => {
     const item = await Note.findOne({ userId, date }).lean();
     return res.json({ ok: true, item: item || null, content: item?.content || '' });
   } catch (e) {
-    console.error('[compat] note get failed:', e);
+    logSafeError('compat note get failed', e);
     return res.status(500).json({ error: 'note get failed' });
   }
 });
@@ -178,10 +172,6 @@ r.get('/calendar/upcoming/list', (req, res) => {
 });
 
 /* ─── AUTH legacy passthroughs ──────────────────────────────────────── */
-r.post('/login',        expressJsonReplay((req) => ({ url: '/api/auth/login',           body: req.body })));
-r.post('/register',     expressJsonReplay((req) => ({ url: '/api/auth/register',        body: req.body })));
-r.post('/forgot',       expressJsonReplay((req) => ({ url: '/api/auth/forgot',          body: req.body })));
-r.post('/reset',        expressJsonReplay((req) => ({ url: '/api/auth/reset',           body: req.body })));
 r.get('/change-password',  (_req,res)=>res.status(405).json({error:'use POST /api/auth/change-password'}));
 r.post('/change-password', expressJsonReplay((req) => ({ url: '/api/auth/change-password', body: req.body })));
 

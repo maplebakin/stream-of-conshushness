@@ -8,7 +8,9 @@ import { todayISOInToronto } from '../utils/date.js';
 import '../Main.css';
 import './SectionPage.css';
 
-const ALLOWED_TABS = ['journal', 'manual', 'progress', 'gift-guide'];
+// Only expose working room modes. Legacy bookmarks for unfinished modes are
+// redirected to Journal below rather than presenting controls with no action.
+const ALLOWED_TABS = ['journal'];
 
 function normalizePageList(raw = []) {
   const arr = Array.isArray(raw) ? raw : [];
@@ -271,11 +273,6 @@ export default function SectionPageRoom() {
             <div className="empty">Create a page for this section to start journaling.</div>
           )}
 
-          {activeTab !== 'journal' && (
-            <div className="callout">
-              “{activeTab.replace('-', ' ')}” is coming online soon. Capture your notes in Journal for now.
-            </div>
-          )}
         </div>
       </main>
 

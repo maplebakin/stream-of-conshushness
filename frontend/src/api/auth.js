@@ -32,8 +32,8 @@ export async function me() {
   return data;
 }
 
-export async function updateMe({ email, username }) {
-  const { data } = await api.patch('/api/me', { email, username });
+export async function updateMe({ username, profilePicture }) {
+  const { data } = await api.patch('/api/me', { username, profilePicture });
   return data;
 }
 

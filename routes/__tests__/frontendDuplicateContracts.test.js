@@ -145,10 +145,10 @@ describe('frontend duplicate component reference contracts', () => {
 
     const adapter = read('frontend/src/adapters/EntryQuickAssign.default.jsx');
     expect(adapter).toContain("axios.get('/api/clusters'");
-    expect(adapter).toContain('function normalizeClusters');
+    expect(adapter).toContain('normalizeClusterList(data)');
     expect(adapter).toContain('<select');
     expect(adapter).toContain('<option value="">No cluster</option>');
-    expect(adapter).toContain("axios.patch(`/api/entries/${entry._id}`, { cluster: nextCluster }");
+    expect(adapter).toContain("{ clusters: clusterId ? [clusterId] : [], cluster: '' }");
     expect(adapter).toContain("axios.post(\n        '/api/tasks'");
     expect(adapter).toContain('/link-entry');
     expect(adapter).not.toContain('/api/tasks/from-entry');
@@ -159,8 +159,8 @@ describe('frontend duplicate component reference contracts', () => {
     const harness = read('frontend/src/adapters/AdapterHarness.jsx');
     const adapterIndex = read('frontend/src/adapters/index.js');
 
-    expect(app).toContain("const AdapterHarness = lazy(() => import('./adapters/AdapterHarness.jsx'))");
-    expect(app).toContain('path="/_adapters" element={<AdapterHarness />}');
+    expect(app).toContain('const AdapterHarness = import.meta.env.DEV');
+    expect(app).toContain('{AdapterHarness && <Route path="/_adapters" element={<AdapterHarness />} />}');
     expect(importedBy('frontend/src/adapters/AdapterHarness.jsx')).toEqual(['frontend/src/App.jsx']);
     expect(harness).toContain("import ADAPTERS from './index.js'");
     expect(adapterIndex).toContain('export const ADAPTERS = {');

@@ -5,5 +5,5 @@ export function searchContent(query, type = 'all', limit = 50) {
 }
 
 export function completeSearchTask(taskId) {
-  return api.patch(`/api/tasks/${taskId}/toggle`);
+  return api.patch(`/api/tasks/${taskId}/toggle`, { completed: true });
 }

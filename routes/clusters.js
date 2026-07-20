@@ -12,6 +12,7 @@ import SuggestedGatherItem from '../models/SuggestedGatherItem.js';
 import SuggestedInterest from '../models/SuggestedInterest.js';
 import SuggestedTask from '../models/SuggestedTask.js';
 import Task from '../models/Task.js';
+import { logSafeError } from '../utils/errorHandler.js';
 
 const router = express.Router();
 
@@ -70,7 +71,7 @@ router.get('/', async (req, res) => {
     const clusters = await Cluster.find({ ownerId }).sort({ createdAt: 1 }).lean();
     res.json({ data: clusters });
   } catch (error) {
-    console.error('List clusters error:', error);
+    logSafeError('clusters list failed', error);
     res.status(500).json({ error: 'Failed to list clusters' });
   }
 });
@@ -84,7 +85,7 @@ router.get('/:id', async (req, res) => {
     }
     res.json({ data: cluster });
   } catch (error) {
-    console.error('Get cluster error:', error);
+    logSafeError('clusters get failed', error);
     res.status(500).json({ error: 'Failed to load cluster' });
   }
 });
@@ -122,7 +123,7 @@ router.post('/', async (req, res) => {
     if (error?.code === 11000) {
       return res.status(409).json({ error: 'Slug already in use' });
     }
-    console.error('Create cluster error:', error);
+    logSafeError('clusters create failed', error);
     res.status(500).json({ error: 'Failed to create cluster' });
   }
 });
@@ -183,7 +184,7 @@ router.put('/:id', async (req, res) => {
     if (error?.code === 11000) {
       return res.status(409).json({ error: 'Slug already in use' });
     }
-    console.error('Update cluster error:', error);
+    logSafeError('clusters update failed', error);
     res.status(500).json({ error: 'Failed to update cluster' });
   }
 });
@@ -191,14 +192,17 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const ownerId = getOwnerId(req);
-    const cluster = await Cluster.findOneAndDelete({ _id: req.params.id, ownerId });
+    const cluster = await Cluster.findOne({ _id: req.params.id, ownerId });
     if (!cluster) {
       return res.status(404).json({ error: 'Cluster not found' });
     }
+    // Unlink first so a cleanup failure leaves a retryable cluster record
+    // instead of dangling references to a cluster that no longer exists.
     await unlinkDeletedCluster({ ownerId, cluster });
+    await Cluster.deleteOne({ _id: cluster._id, ownerId });
     res.json({ ok: true });
   } catch (error) {
-    console.error('Delete cluster error:', error);
+    logSafeError('clusters delete failed', error);
     res.status(500).json({ error: 'Failed to delete cluster' });
   }
 });

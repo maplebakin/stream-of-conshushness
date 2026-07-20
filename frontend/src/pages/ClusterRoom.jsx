@@ -236,7 +236,7 @@ export default function ClusterRoom() {
 
   async function handleToggleTask(task) {
     try {
-      await axios.patch(`/api/tasks/${task._id}`, { completed: !task.completed });
+      await axios.patch(`/api/tasks/${task._id}/toggle`, { completed: !task.completed });
       await loadClusterData(activeCluster);
     } catch (err) {
       console.error('Toggle task failed:', err);

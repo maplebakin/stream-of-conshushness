@@ -139,7 +139,7 @@ function dedupe(items = []) {
 
 export function extractInterests(text = '') {
   const sourceText = cleanPhrase(text);
-  if (!sourceText || isBlockedSource(sourceText)) return [];
+  if (!sourceText) return [];
 
   const suggestions = [];
 
@@ -147,6 +147,18 @@ export function extractInterests(text = '') {
     pattern.lastIndex = 0;
     let match;
     while ((match = pattern.exec(sourceText)) !== null) {
+      const before = sourceText.slice(0, match.index);
+      const after = sourceText.slice(match.index + match[0].length);
+      const sentenceStart = Math.max(before.lastIndexOf('.'), before.lastIndexOf('!'), before.lastIndexOf('?')) + 1;
+      const followingStops = [after.indexOf('.'), after.indexOf('!'), after.indexOf('?')].filter((index) => index >= 0);
+      const sentenceEnd = followingStops.length
+        ? match.index + match[0].length + Math.min(...followingStops)
+        : sourceText.length;
+      const matchedSentence = sourceText.slice(sentenceStart, sentenceEnd).trim();
+      // Conflict checks apply to the sentence that produced the candidate,
+      // not the whole journal entry. A later dated task must not erase an
+      // otherwise valid interest inference from an earlier sentence.
+      if (isBlockedSource(matchedSentence)) continue;
       const raw = cleanPhrase(match[1]);
       if (isBlockedCandidate(raw, reason)) continue;
       const title = sentenceCase(raw);

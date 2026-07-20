@@ -15,10 +15,48 @@ import {
 } from "../utils/entryAutomation.js";
 import { normalizeDate } from "../utils/date.js";
 import { activeEntryQuery } from "../utils/entryQueries.js";
+import { logSafeError } from "../utils/errorHandler.js";
 
 const router = express.Router();
 
 const { ObjectId } = mongoose.Types;
+const CLIENT_REQUEST_ID_PATTERN = /^[a-z0-9][a-z0-9._:-]{7,127}$/i;
+
+function entryError(res, error) {
+  if (error instanceof RangeError) return res.status(400).json({ error: 'Invalid date' });
+  if (error?.statusCode === 400 && error?.name === 'EntryInputError') {
+    return res.status(400).json({ error: error.message });
+  }
+  if (error?.name === 'VersionError') {
+    return res.status(409).json({
+      error: 'This entry changed while it was being saved. Reload it before trying again.',
+    });
+  }
+  return res.status(500).json({ error: 'Server error' });
+}
+
+function clientRequestIdFrom(payload = {}) {
+  if (!Object.prototype.hasOwnProperty.call(payload, 'clientRequestId')) return '';
+  const value = typeof payload.clientRequestId === 'string' ? payload.clientRequestId.trim() : '';
+  return CLIENT_REQUEST_ID_PATTERN.test(value) ? value : null;
+}
+
+async function sendIdempotentEntry(res, entry, userId) {
+  if (!entry) return false;
+  if (entry.deletedAt) {
+    res.status(409).json({ error: 'This capture already exists in trash' });
+    return true;
+  }
+  let current = entry;
+  if (entry.automationPending) {
+    current = await updateEntryWithAutomation({ userId, entryId: entry._id, updates: {} }) || entry;
+  }
+  if (typeof current.populate === 'function') {
+    await current.populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } });
+  }
+  res.set('Idempotency-Replayed', 'true').status(200).json(current);
+  return true;
+}
 
 /* --------------------------- Routes --------------------------- */
 
@@ -45,8 +83,8 @@ router.get('/count', async (req, res) => {
     const count = await Entry.countDocuments(q);
     res.json({ count });
   } catch (e) {
-    console.error('GET /entries/count error', e);
-    res.status(500).json({ error: 'Server error' });
+    logSafeError('GET /entries/count error', e);
+    entryError(res, e);
   }
 });
 
@@ -100,11 +138,11 @@ router.get("/", async (req, res) => {
     const rows = await Entry.find(q)
       .sort({ pinned: -1, date: -1, createdAt: -1, _id: -1 })
       .limit(limit)
-      .populate('clusters', 'name slug icon color');
+      .populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } });
     res.json(rows);
   } catch (e) {
-    console.error("GET /entries error", e);
-    res.status(500).json({ error: "Server error" });
+    logSafeError('GET /entries error', e);
+    entryError(res, e);
   }
 });
 
@@ -113,11 +151,11 @@ router.get("/by-date/:date", async (req, res) => {
   try {
     const userId = getUserIdFromRequest(req);
     const dateISO = normalizeDate(req.params.date);
-    const rows = await Entry.find({ ...activeEntryQuery(userId), date: dateISO }).sort({ createdAt: -1 }).populate('clusters', 'name slug icon color');
+    const rows = await Entry.find({ ...activeEntryQuery(userId), date: dateISO }).sort({ createdAt: -1 }).populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } });
     res.json(rows);
   } catch (e) {
-    console.error("GET /entries/by-date/:date error", e);
-    res.status(500).json({ error: "Server error" });
+    logSafeError('GET /entries/by-date error', e);
+    entryError(res, e);
   }
 });
 
@@ -127,11 +165,11 @@ router.get('/trash', async (req, res) => {
     const rows = await Entry.find({ userId, deletedAt: { $exists: true, $ne: null } })
       .sort({ deletedAt: -1, createdAt: -1 })
       .limit(100)
-      .populate('clusters', 'name slug icon color');
+      .populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } });
     res.json(rows);
   } catch (e) {
-    console.error("GET /entries/trash error", e);
-    res.status(500).json({ error: "Server error" });
+    logSafeError('GET /entries/trash error', e);
+    entryError(res, e);
   }
 });
 
@@ -141,12 +179,12 @@ router.get("/:id", async (req, res) => {
     const userId = getUserIdFromRequest(req);
     const { id } = req.params;
     if (!ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid id" });
-    const doc = await Entry.findOne({ _id: id, ...activeEntryQuery(userId) }).populate('clusters', 'name slug icon color');
+    const doc = await Entry.findOne({ _id: id, ...activeEntryQuery(userId) }).populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } });
     if (!doc) return res.status(404).json({ error: "Not found" });
     res.json(doc);
   } catch (e) {
-    console.error("GET /entries/:id error", e);
-    res.status(500).json({ error: "Server error" });
+    logSafeError('GET /entries/id error', e);
+    entryError(res, e);
   }
 });
 
@@ -156,12 +194,57 @@ router.post("/", async (req, res) => {
     const userId = getUserIdFromRequest(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-    const entry = await createEntryWithAutomation({ userId, payload: req.body || {} });
-    await entry.populate('clusters', 'name slug icon color');
+    const payload = req.body || {};
+    const clientRequestId = clientRequestIdFrom(payload);
+    if (clientRequestId === null) {
+      return res.status(400).json({ error: 'clientRequestId is invalid' });
+    }
+    if (clientRequestId) {
+      const existing = await Entry.findOne({ userId, clientRequestId });
+      if (await sendIdempotentEntry(res, existing, userId)) return;
+    }
+
+    const entry = await createEntryWithAutomation({
+      userId,
+      payload: clientRequestId ? { ...payload, clientRequestId } : payload,
+    });
+    await entry.populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } });
     res.status(201).json(entry);
   } catch (e) {
-    console.error("POST /entries error", e);
-    res.status(500).json({ error: "Server error" });
+    if (e?.code === 11000) {
+      const userId = getUserIdFromRequest(req);
+      const clientRequestId = clientRequestIdFrom(req.body || {});
+      if (userId && clientRequestId) {
+        const existing = await Entry.findOne({ userId, clientRequestId });
+        if (await sendIdempotentEntry(res, existing, userId)) return;
+      }
+    }
+    logSafeError('POST /entries error', e);
+    entryError(res, e);
+  }
+});
+
+// Retry an interrupted automation run without changing the journal text.
+// The revision-aware automation layer makes repeated requests safe.
+router.post('/:id/retry-automation', async (req, res) => {
+  try {
+    const userId = getUserIdFromRequest(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
+    const existing = await Entry.findOne({ _id: req.params.id, ...activeEntryQuery(userId) });
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    if (!existing.automationPending) return res.json(existing);
+    const updated = await updateEntryWithAutomation({
+      userId,
+      entryId: existing._id,
+      updates: {},
+    });
+    if (!updated) return res.status(404).json({ error: 'Not found' });
+    await updated.populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } });
+    res.json(updated);
+  } catch (e) {
+    logSafeError('POST /entries/id/retry-automation error', e);
+    entryError(res, e);
   }
 });
 
@@ -176,11 +259,11 @@ router.patch("/:id", async (req, res) => {
 
     const doc = await updateEntryWithAutomation({ userId, entryId: id, updates: req.body || {} });
     if (!doc) return res.status(404).json({ error: "Not found" });
-    await doc.populate('clusters', 'name slug icon color');
+    await doc.populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } });
     res.json(doc);
   } catch (e) {
-    console.error("PATCH /entries/:id error", e);
-    res.status(500).json({ error: "Server error" });
+    logSafeError('PATCH /entries/id error', e);
+    entryError(res, e);
   }
 });
 
@@ -201,7 +284,7 @@ router.delete("/:id", async (req, res) => {
     }
     res.json({ ok: true, deleted: doc._id, trashed: true });
   } catch (e) {
-    console.error("DELETE /entries/:id error", e);
+    logSafeError('DELETE /entries/id error', e);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -218,12 +301,12 @@ router.post('/:id/restore', async (req, res) => {
       { _id: id, userId, deletedAt: { $exists: true, $ne: null } },
       { $set: { deletedAt: null } },
       { new: true }
-    ).populate('clusters', 'name slug icon color');
+    ).populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } });
 
     if (!doc) return res.status(404).json({ error: "Not found or not deleted" });
     res.json({ ok: true, entry: doc });
   } catch (e) {
-    console.error("POST /entries/:id/restore error", e);
+    logSafeError('POST /entries/id restore error', e);
     res.status(500).json({ error: "Server error" });
   }
 });

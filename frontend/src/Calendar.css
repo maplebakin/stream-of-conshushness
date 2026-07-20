@@ -3,7 +3,7 @@
 ==================================*/
 .calendar-page {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 1fr;
   gap: 16px;
   height: 100%;
   min-height: 0;
@@ -16,10 +16,9 @@
 
 /* Sidebar (Upcoming) scrolls independently */
 .calendar-page > aside.panel {
-  position: sticky;
-  top: 12px;
+  position: static;
   align-self: start;
-  height: 100%;
+  height: auto;
   min-height: 0;
   min-width: 0;
   overflow: auto;
@@ -28,6 +27,10 @@
   border-radius: var(--radius-card);
   box-shadow: 0 10px 24px rgba(66, 45, 34, 0.08), var(--shadow-border);
   padding: 12px;
+}
+
+.calendar-horizon-panel {
+  max-width: 100%;
 }
 
 /* Main panel (header + grid + legend) */
@@ -51,6 +54,44 @@
 .calendar-header .subtitle { font-size: 0.9rem; color: var(--color-muted); }
 .calendar-nav { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .calendar-nav .button { min-height: 40px; }
+
+.calendar-add {
+  position: relative;
+}
+
+.calendar-add__menu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  width: min(22rem, calc(100vw - 2rem));
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.45rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.calendar-add__menu button {
+  min-height: 56px;
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: var(--radius-input);
+  text-align: left;
+}
+
+.calendar-add__menu button:hover,
+.calendar-add__menu button:focus-visible {
+  background: color-mix(in srgb, var(--color-surface) 72%, var(--color-spool) 28%);
+}
+
+.calendar-add__menu span {
+  color: var(--color-muted);
+  font-size: 0.82rem;
+}
 
 /* ================================
    Month Grid
@@ -214,7 +255,7 @@
   .calendar-nav {
     width: 100%;
     display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    grid-template-columns: 44px minmax(0, 1fr) 44px auto;
     gap: var(--space-2);
   }
 

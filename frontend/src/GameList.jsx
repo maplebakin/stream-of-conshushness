@@ -7,6 +7,8 @@ export default function GameList() {
   const { token } = useContext(AuthContext);
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const [showModal, setShowModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -19,18 +21,31 @@ export default function GameList() {
         headers: { Authorization: `Bearer ${token}` }
       })
       .then((res) => {
-        setGames(res.data);
+        setGames(Array.isArray(res.data) ? res.data : []);
+        setError('');
       })
       .catch((err) => {
         console.error('⚠️ Error fetching games:', err);
+        setError(err?.response?.data?.error || 'Could not load games.');
       })
       .finally(() => setLoading(false));
   }, [token]);
 
-  const handleAddGame = async () => {
+  const closeModal = () => {
+    if (saving) return;
+    setShowModal(false);
+    setNewTitle('');
+    setNewDescription('');
+    setError('');
+  };
+
+  const handleAddGame = async (event) => {
+    event?.preventDefault?.();
     if (!newTitle.trim()) return;
+    setSaving(true);
+    setError('');
     try {
-      await axios.post(
+      const { data: created } = await axios.post(
         '/api/games',
         {
           title: newTitle.trim(),
@@ -43,14 +58,15 @@ export default function GameList() {
       setNewTitle('');
       setNewDescription('');
       setShowModal(false);
-
-      // Refresh game list
-      const res = await axios.get('/api/games', {
-        headers: { Authorization: `Bearer ${token}` }
+      setGames((current) => {
+        if (!created?._id) return current;
+        return [created, ...current.filter((game) => game._id !== created._id)];
       });
-      setGames(res.data);
     } catch (err) {
       console.error('Error adding game:', err);
+      setError(err?.response?.data?.error || 'Could not add the game.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -60,26 +76,43 @@ export default function GameList() {
     <div className="game-list">
       <h2>🎮 Your Games</h2>
 
-      <button onClick={() => setShowModal(true)}>+ Add Game</button>
+      <button type="button" onClick={() => { setError(''); setShowModal(true); }}>+ Add Game</button>
+
+      {error && !showModal && <div className="alert error" role="alert">{error}</div>}
 
       {showModal && (
-        <div className="modal">
-          <h3>Add a New Game</h3>
-          <input
-            type="text"
-            placeholder="Game title"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-          />
-          <textarea
-            placeholder="Description (optional)"
-            value={newDescription}
-            onChange={(e) => setNewDescription(e.target.value)}
-          />
-          <div className="modal-actions">
-            <button onClick={handleAddGame}>Save</button>
-            <button onClick={() => setShowModal(false)}>Cancel</button>
-          </div>
+        <div className="modal-backdrop" onClick={(event) => event.target === event.currentTarget && closeModal()}>
+          <form className="modal-card" onSubmit={handleAddGame} aria-busy={saving}>
+            <h3>Add a New Game</h3>
+            <label className="field">
+              <span>Title</span>
+              <input
+                type="text"
+                placeholder="Game title"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                disabled={saving}
+                autoFocus
+                required
+              />
+            </label>
+            <label className="field">
+              <span>Description (optional)</span>
+              <textarea
+                placeholder="Description (optional)"
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                disabled={saving}
+              />
+            </label>
+            {error && <div className="alert error" role="alert">{error}</div>}
+            <div className="modal-actions">
+              <button type="submit" disabled={saving || !newTitle.trim()}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              <button type="button" onClick={closeModal} disabled={saving}>Cancel</button>
+            </div>
+          </form>
         </div>
       )}
 
