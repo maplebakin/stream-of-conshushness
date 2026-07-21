@@ -1,0 +1,40 @@
+.mobile-date-navigator__label {
+  min-width: 0;
+  color: var(--color-text-strong);
+  font-family: var(--font-sans);
+  font-weight: 750;
+  text-align: center;
+}
+
+.mobile-date-navigator__arrow,
+.mobile-date-navigator__today {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+
+.mobile-date-navigator__arrow {
+  width: 44px;
+  padding: 0;
+}
+
+.mobile-date-navigator__today {
+  padding-inline: 0.7rem;
+  color: var(--color-plum);
+}
+
+.mobile-date-navigator__arrow:hover,
+.mobile-date-navigator__arrow:focus-visible,
+.mobile-date-navigator__today:hover,
+.mobile-date-navigator__today:focus-visible {
+  border-color: color-mix(in srgb, var(--color-spool) 52%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 72%, var(--color-spool) 28%);
+}

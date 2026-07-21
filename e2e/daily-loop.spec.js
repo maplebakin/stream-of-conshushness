@@ -137,7 +137,7 @@ test('Stream entry can be reviewed into a task on the correct day', async ({ pag
   await registerDisposableUser(page, request, 'task');
 
   await page
-    .getByPlaceholder('Capture a thought, task, idea, appointment, or thing to remember...')
+    .getByPlaceholder('Capture a thought, task, or reminder…')
     .fill('I need to call the dentist tomorrow.');
   await page.getByRole('button', { name: 'Create entry' }).click();
   await expect(page.getByText('I need to call the dentist tomorrow.')).toBeVisible();
@@ -170,7 +170,7 @@ test('Stream ordinal visit plan appears on the expected day agenda', async ({ pa
   await registerDisposableUser(page, request, 'calendar');
 
   await page
-    .getByPlaceholder('Capture a thought, task, idea, appointment, or thing to remember...')
+    .getByPlaceholder('Capture a thought, task, or reminder…')
     .fill("I'm going to visit my mom on the 13th.");
   await page.getByRole('button', { name: 'Create entry' }).click();
   await expect(page.getByText("I'm going to visit my mom on the 13th.")).toBeVisible();
@@ -203,7 +203,15 @@ test('mobile authenticated hierarchy keeps primary actions in the first viewport
   await expect(page.getByRole('link', { name: 'Today', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Calendar', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Account', exact: true })).toBeVisible();
-  await expect(page.getByPlaceholder('Capture a thought, task, idea, appointment, or thing to remember...')).toBeInViewport();
+  for (const width of [360, 390, 430]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/');
+    await expect(page.getByPlaceholder('Capture a thought, task, or reminder…')).toBeInViewport();
+    await expect(page.getByRole('button', { name: 'Create entry' })).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
 
   await page.getByRole('link', { name: 'Today', exact: true }).click();
   const nowSummary = page.locator('.compact-action-summary');
@@ -217,7 +225,7 @@ test('mobile authenticated hierarchy keeps primary actions in the first viewport
   await expect(dayOptions).toBeVisible();
   await dayOptions.click();
   await expect(page.getByRole('button', { name: /Automatic carry-forward: Off/i })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Carry earlier tasks to today now/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Carry earlier tasks to today now/i })).not.toBeVisible();
   await dayOptions.click();
 
   await page.getByRole('link', { name: 'Calendar', exact: true }).click();
@@ -230,6 +238,9 @@ test('mobile authenticated hierarchy keeps primary actions in the first viewport
   await page.getByRole('link', { name: 'Account', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Account' })).toBeVisible();
   await expect(page.getByText('Verification code', { exact: true })).not.toBeVisible();
+  await page.getByRole('link', { name: 'Stream', exact: true }).click();
+  await page.getByRole('button', { name: 'Open account menu' }).click();
+  await expect(page.getByRole('menuitem', { name: /Sign out/i })).toBeVisible();
 });
 
 test('a grouped work schedule can be accepted and safely reconciled', async ({ page, request }) => {
@@ -239,7 +250,7 @@ test('a grouped work schedule can be accepted and safely reconciled', async ({ p
   const friday = nextWeekdayISO(5);
 
   await registerDisposableUser(page, request, 'work_schedule');
-  const composer = page.getByPlaceholder('Capture a thought, task, idea, appointment, or thing to remember...');
+  const composer = page.getByPlaceholder('Capture a thought, task, or reminder…');
   await composer.fill(
     'My schedule was released. Next week I work Monday 10–3, Wednesday 12–8, and Friday 7:50–1:50.'
   );

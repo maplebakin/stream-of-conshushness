@@ -90,11 +90,13 @@ describe('frontend stability endpoint contracts', () => {
     const main = read('frontend/src/MainPage.jsx');
     const daily = read('frontend/src/DailyPage.jsx');
     const hook = read('frontend/src/hooks/useReviewCount.js');
+    const reviewSummary = read('frontend/src/components/ReviewInboxSummary.jsx');
 
     expect(hook).toContain('listReviewItems({ limit: 1 })');
     expect(main).toContain('useReviewCount');
-    expect(main).toContain('reviewCount.count > 0');
-    expect(main).toContain('useful thread');
+    expect(main).toContain('ReviewInboxSummary');
+    expect(main).toContain('reviewCount.counts');
+    expect(reviewSummary).toContain('useful ${total === 1 ? \'thread\' : \'threads\'}');
     expect(daily).toContain('useReviewCount');
     expect(daily).toContain('reviewCount.count > 0');
     expect(daily).toContain('Ready to review');
@@ -112,14 +114,16 @@ describe('frontend stability endpoint contracts', () => {
   it('keeps header, layout, and command palette navigation aligned with current routes', () => {
     const app = read('frontend/src/App.jsx');
     const header = read('frontend/src/Header.jsx');
+    const mobileShell = read('frontend/src/components/MobileShell.jsx');
     const commandPalette = read('frontend/src/components/CommandPalette.jsx');
+    const navigationSources = `${header}\n${mobileShell}`;
 
     for (const target of ['/', '/today', '/calendar']) {
       expect(header).toContain(`to="${target}"`);
     }
 
     for (const target of ['/sections', '/clusters', '/goals', '/review', '/ripples', '/interests', '/gather-lists', '/inbox/tasks', '/search', '/trash', '/export', '/account', '/settings']) {
-      expect(header).toContain(`to="${target}"`);
+      expect(navigationSources).toContain(`to="${target}"`);
     }
 
     for (const target of ['/', '/today', '/calendar', '/goals', '/review', '/sections', '/clusters', '/ripples', '/interests', '/gather-lists', '/search', '/export', '/trash', '/account', '/settings']) {

@@ -32,6 +32,7 @@ import { carryOverdueTasks, dailyPreferenceKey } from './utils/carryForward.js';
 import { requestErrorSummary } from './utils/requestError.js';
 import { chooseTodayFocus } from './utils/todayFocus.js';
 import { CompactActionSummary, SecondarySection } from './components/UXPrimitives.jsx';
+import MobileDateNavigator from './components/MobileDateNavigator.jsx';
 
 import './Main.css';
 import './dailypage.css';
@@ -618,36 +619,37 @@ export default function DailyPage() {
   return (
     <main className="daily-page">
       <header className="daily-header">
-        <div className="centered-header">
-          <button className="button nav-arrow" onClick={() => go(-1)} aria-label="Previous day">◀</button>
-          <h2 className="font-echo text-2xl text-plum">{toDisplayDate(dateISO)}</h2>
-          <button className="button nav-arrow" onClick={() => go(1)} aria-label="Next day">▶</button>
-
-          {dateISO !== todayISO && (
-            <button
-              className="button today-btn"
-              onClick={() => navigate(`/day/${todayISO}`)}
-              title="Jump to today"
-            >
-              Today
-            </button>
-          )}
-
-        </div>
+        <MobileDateNavigator
+          className="centered-header"
+          label={toDisplayDate(dateISO, { weekday: 'short', month: 'short', day: 'numeric' })}
+          onPrevious={() => go(-1)}
+          onNext={() => go(1)}
+          onToday={() => navigate(`/day/${todayISO}`)}
+          showToday={dateISO !== todayISO}
+        />
 
         <div className="daily-actions">
-          <button
-            className="button rounded-button bg-lantern px-4 py-2 font-thread text-ink shadow-soft transition-all hover:bg-plum hover:text-mist"
-            onClick={openNewEntry}
-          >
-            + Capture thought
-          </button>
-          <button
-            className="button rounded-button bg-spool px-4 py-2 font-thread text-ink shadow-soft transition-all hover:bg-plum hover:text-mist"
-            onClick={openNewAppointment}
-          >
-            + Add appointment
-          </button>
+          <div className="daily-actions__desktop">
+            <button
+              className="button rounded-button bg-lantern px-4 py-2 font-thread text-ink shadow-soft transition-all hover:bg-plum hover:text-mist"
+              onClick={openNewEntry}
+            >
+              + Capture thought
+            </button>
+            <button
+              className="button rounded-button bg-spool px-4 py-2 font-thread text-ink shadow-soft transition-all hover:bg-plum hover:text-mist"
+              onClick={openNewAppointment}
+            >
+              + Add appointment
+            </button>
+          </div>
+          <details className="daily-add-menu">
+            <summary aria-label="Add to this day">+ Add</summary>
+            <div className="daily-add-menu__panel" aria-label="Add to this day">
+              <button type="button" onClick={openNewEntry}>Capture thought</button>
+              <button type="button" onClick={openNewAppointment}>Appointment</button>
+            </div>
+          </details>
           {dateISO === todayISO && (
             <details className="daily-options-menu">
               <summary aria-label="Day options" title="Day options">
@@ -666,9 +668,11 @@ export default function DailyPage() {
                 >
                   Automatic carry-forward: {autoCarry ? 'On' : 'Off'}
                 </button>
-                <button type="button" className="button chip" onClick={carryForwardNow}>
-                  Carry earlier tasks to today now
-                </button>
+                {attentionSummary.earlierTasks.length > 0 && (
+                  <button type="button" className="button chip" onClick={carryForwardNow}>
+                    Carry earlier tasks to today now
+                  </button>
+                )}
               </div>
             </details>
           )}

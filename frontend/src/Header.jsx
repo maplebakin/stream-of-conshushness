@@ -6,14 +6,13 @@ import {
   MapPin,
   Menu,
   Search,
-  UserCircle,
   Waves,
   X,
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.jsx';
 import axios from './api/axiosInstance';
-import PrivateUploadImage from './components/PrivateUploadImage';
 import ThemeToggle from './components/ThemeToggle.jsx';
+import { AccountMenu, MobileBottomNav } from './components/MobileShell.jsx';
 import { requestErrorSummary } from './utils/requestError.js';
 import './Main.css';
 import './Header.css';
@@ -39,7 +38,7 @@ function NavItem({ to, label, pathname, icon, mobileOptional = false }) {
 
 export default function Header() {
   const location = useLocation();
-  const { isAuthenticated, user: authenticatedUser } = useContext(AuthContext);
+  const { isAuthenticated, user: authenticatedUser, logout } = useContext(AuthContext);
   const [user, setUser] = useState(authenticatedUser || null);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreButtonRef = useRef(null);
@@ -95,21 +94,7 @@ export default function Header() {
       </nav>
 
       <div className="app-header__utilities">
-        {isAuthenticated && (
-          <Link to="/account" className="account-link" aria-label="Account">
-            {user?.profilePicture ? (
-              <PrivateUploadImage
-                url={user.profilePicture}
-                alt=""
-                className="account-avatar"
-                fallback={<UserCircle size={24} aria-hidden="true" />}
-              />
-            ) : (
-              <UserCircle size={24} aria-hidden="true" />
-            )}
-            <span>Account</span>
-          </Link>
-        )}
+        {isAuthenticated && <AccountMenu user={user} onSignOut={logout} />}
         {isAuthenticated && (
           <button
             ref={moreButtonRef}
@@ -152,6 +137,7 @@ export default function Header() {
           <div className="mobile-nav-panel__theme"><ThemeToggle variant="button" /></div>
         </nav>
       )}
+      {isAuthenticated && <MobileBottomNav />}
     </header>
   );
 }

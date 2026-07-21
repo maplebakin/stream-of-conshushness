@@ -10,6 +10,7 @@ import { AuthContext } from './AuthContext.jsx';
 import { getLocalTodayISO, toDisplayDate } from './utils/date.js';
 import SafeHTML from './components/SafeHTML.jsx'; // (top of file)
 import RecentActivityWidget from './components/RecentActivityWidget.jsx';
+import ReviewInboxSummary from './components/ReviewInboxSummary.jsx';
 import { confirmAndTrashEntry, getEntryTrashConfirmationMessage } from './utils/entryDeletion.js';
 import { useReviewCount } from './hooks/useReviewCount.js';
 import {
@@ -429,7 +430,7 @@ export default function MainPage() {
             ref={quickEntryRef}
             rows={1}
             className="quick-entry-input"
-            placeholder="Capture a thought, task, idea, appointment, or thing to remember..."
+            placeholder="Capture a thought, task, or reminder…"
             value={quickEntryText}
             onChange={(e) => handleQuickEntryChange(e.target.value)}
             onInput={autoResizeQuickEntry}
@@ -465,12 +466,15 @@ export default function MainPage() {
           </button>
         </form>
 
-        {reviewCount.count > 0 && (
-          <Link to="/review" className="stream-review-summary">
-            <span><strong>{reviewCount.count}</strong> useful thread{reviewCount.count === 1 ? '' : 's'} ready to review</span>
-            <span>Take a look →</span>
-          </Link>
-        )}
+        <ReviewInboxSummary className="stream-review-summary" counts={reviewCount.counts} total={reviewCount.count} />
+
+        <SecondarySection
+          summary="Recent activity"
+          hint="Changes across your space"
+          className="stream-activity"
+        >
+          <RecentActivityWidget />
+        </SecondarySection>
 
         {!streamTutorialDismissed && !loading && entries.length === 0 && (
           <section className="stream-onboarding-card" aria-labelledby="stream-onboarding-title">
@@ -640,9 +644,6 @@ export default function MainPage() {
             </article>
           ))}
 
-        <SecondarySection summary="Recent activity" hint="Changes across your space">
-          <RecentActivityWidget />
-        </SecondarySection>
       </section>
 
       {/* Modal */}

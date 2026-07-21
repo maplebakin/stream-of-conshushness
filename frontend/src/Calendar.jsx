@@ -1,12 +1,14 @@
 // frontend/src/Calendar.jsx
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import {
   getAppointmentDeleteConfirmation,
   getStoredAppointmentId,
 } from './utils/appointmentIds.js';
+import { getCalendarDay } from './api/calendar.js';
+import { sourceEntryPath, sourceStateLabel } from './utils/sourceEntryState.js';
 
 import AppointmentModal from './AppointmentModal.jsx';
 import ImportantEventModal from './adapters/ImportantEventModal.default.jsx';
@@ -25,8 +27,48 @@ function daysInMonth(year, monthIndex) {
 function monthParam(y, mIdx) {
   return `${y}-${String(mIdx + 1).padStart(2, '0')}`; // YYYY-MM
 }
+
+function isISODate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+}
+
+function humanDate(value, options = {}) {
+  if (!isISODate(value)) return value || '';
+  return new Date(`${value}T12:00:00Z`).toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    ...options,
+  });
+}
+
+function timeLabel(item) {
+  const start = item?.timeStart || item?.time || '';
+  if (!start) return 'All day';
+  const [hour, minute = '00'] = String(start).split(':');
+  const hourNumber = Number(hour);
+  if (!Number.isFinite(hourNumber)) return start;
+  const suffix = hourNumber >= 12 ? 'PM' : 'AM';
+  const displayHour = hourNumber % 12 || 12;
+  const startLabel = `${displayHour}:${minute} ${suffix}`;
+  if (!item?.timeEnd) return startLabel;
+  const [endHour, endMinute = '00'] = String(item.timeEnd).split(':');
+  const endHourNumber = Number(endHour);
+  if (!Number.isFinite(endHourNumber)) return startLabel;
+  const endSuffix = endHourNumber >= 12 ? 'PM' : 'AM';
+  const endLabel = `${endHourNumber % 12 || 12}:${endMinute} ${endSuffix}`;
+  return `${startLabel}–${endLabel}`;
+}
+
+function provenanceLabel(item) {
+  const sourceState = sourceStateLabel(item);
+  if (sourceState) return sourceState;
+  if (item?.source === 'user-edited') return 'Edited';
+  if (item?.source === 'entry-automation' || item?.sourceEntryId || item?.entryId) return 'Automation';
+  return 'Manual';
+}
+
 export default function Calendar() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { token } = useContext(AuthContext);
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
@@ -39,6 +81,11 @@ export default function Calendar() {
   const [initialYear, initialMonth] = requestedDate.split('-').map(Number);
   const [y, setY] = useState(initialYear);
   const [mIdx, setMIdx] = useState(initialMonth - 1); // 0..11
+  const initialSelectedDate = isISODate(searchParams.get('day'))
+    && searchParams.get('day').startsWith(`${initialYear}-${String(initialMonth).padStart(2, '0')}`)
+    ? searchParams.get('day')
+    : requestedDate;
+  const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
 
   // month grid
   const firstWeekday = new Date(y, mIdx, 1).getDay(); // 0..6 Sun..Sat
@@ -57,6 +104,10 @@ export default function Calendar() {
   const [loadingMonth, setLoadingMonth] = useState(false);
   const [calendarError, setCalendarError] = useState('');
   const monthRequestSequenceRef = useRef(0);
+  const [selectedAgenda, setSelectedAgenda] = useState({ appointments: [], events: [] });
+  const [loadingSelectedAgenda, setLoadingSelectedAgenda] = useState(false);
+  const [selectedAgendaError, setSelectedAgendaError] = useState('');
+  const [selectedAgendaRefreshKey, setSelectedAgendaRefreshKey] = useState(0);
 
   // Modals
   const [showApptModal, setShowApptModal] = useState(false);
@@ -90,16 +141,46 @@ export default function Calendar() {
 
   useEffect(() => { loadMonth(); }, [loadMonth]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedDate) return undefined;
+    setLoadingSelectedAgenda(true);
+    setSelectedAgendaError('');
+    getCalendarDay(selectedDate)
+      .then((data) => {
+        if (!cancelled) setSelectedAgenda({ appointments: data.appointments, events: data.importantEvents });
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setSelectedAgenda({ appointments: [], events: [] });
+          setSelectedAgendaError(error?.response?.data?.error || error?.message || 'Could not load this day.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSelectedAgenda(false);
+      });
+    return () => { cancelled = true; };
+  }, [selectedDate, selectedAgendaRefreshKey]);
+
   // nav
   function prevMonth() {
     const d = new Date(y, mIdx - 1, 1);
     setY(d.getFullYear());
     setMIdx(d.getMonth());
+    setSelectedDate(toISO(d.getFullYear(), d.getMonth(), 1));
   }
   function nextMonth() {
     const d = new Date(y, mIdx + 1, 1);
     setY(d.getFullYear());
     setMIdx(d.getMonth());
+    setSelectedDate(toISO(d.getFullYear(), d.getMonth(), 1));
+  }
+
+  function goToToday() {
+    const [todayYear, todayMonth] = tzToday.split('-').map(Number);
+    setY(todayYear);
+    setMIdx(todayMonth - 1);
+    setSelectedDate(tzToday);
   }
 
   function openNewAppointment() {
@@ -134,6 +215,7 @@ export default function Calendar() {
       setConfirmingAppointmentDeleteMessage('');
       await loadMonth();
       refreshHorizon();
+      setSelectedAgendaRefreshKey((key) => key + 1);
     } catch (error) {
       setCalendarError(error?.response?.data?.error || error?.message || 'Could not delete the appointment.');
     } finally {
@@ -148,6 +230,15 @@ export default function Calendar() {
     month: 'long',
     day: 'numeric',
   });
+  const selectedAgendaItems = useMemo(() => [
+    ...(selectedAgenda.appointments || []).map((item) => ({ ...item, type: 'appointment' })),
+    ...(selectedAgenda.events || []).map((item) => ({ ...item, type: 'event' })),
+  ].sort((a, b) => {
+    const aTime = a.timeStart || a.time || '99:99';
+    const bTime = b.timeStart || b.time || '99:99';
+    if (aTime !== bTime) return aTime.localeCompare(bTime);
+    return String(a.title || '').localeCompare(String(b.title || ''));
+  }), [selectedAgenda]);
 
   return (
     <main className="calendar-page">
@@ -159,7 +250,9 @@ export default function Calendar() {
           </div>
           <div className="calendar-nav">
             <button type="button" className="button" onClick={prevMonth} aria-label="Previous month">◀</button>
-            <button type="button" className="button" onClick={() => navigate(`/day/${tzToday}`)}>Today</button>
+            {(selectedDate !== tzToday || monthParam(y, mIdx) !== tzToday.slice(0, 7)) && (
+              <button type="button" className="button" onClick={goToToday}>Today</button>
+            )}
             <button type="button" className="button" onClick={nextMonth} aria-label="Next month">▶</button>
             <div className="calendar-add">
               <button
@@ -167,11 +260,12 @@ export default function Calendar() {
                 className="button"
                 onClick={() => setShowAddMenu(open => !open)}
                 aria-expanded={showAddMenu}
+                aria-controls="calendar-add-menu"
               >
                 + Add
               </button>
               {showAddMenu && (
-                <div className="calendar-add__menu" aria-label="Add to calendar">
+                <div id="calendar-add-menu" className="calendar-add__menu" aria-label="Add to calendar">
                   <button type="button" onClick={() => { setShowAddMenu(false); openNewAppointment(); }}>
                     <strong>Appointment</strong>
                     <span>A scheduled time or recurring commitment</span>
@@ -202,16 +296,22 @@ export default function Calendar() {
           {cells.map((d, i) => {
             const iso = d ? toISO(y, mIdx, d) : '';
             const isTodayCell = d && iso === tzToday;
+            const isSelectedCell = d && iso === selectedDate;
             const counts = (d && dayCounts[iso]) || { tasks: 0, appointments: 0, events: 0 };
+            const visibleTaskDots = Math.min(counts.tasks, 2);
+            const indicatorTotal = counts.events + counts.appointments + counts.tasks;
+            const visibleIndicatorTotal = (counts.events > 0 ? 1 : 0) + (counts.appointments > 0 ? 1 : 0) + visibleTaskDots;
+            const extraIndicatorCount = Math.max(0, indicatorTotal - visibleIndicatorTotal);
 
             return (
               <button
                 key={i}
-                className={`calendar-cell ${d ? '' : 'empty'} ${isTodayCell ? 'today' : ''}`}
+                className={`calendar-cell ${d ? '' : 'empty'} ${isTodayCell ? 'today' : ''} ${isSelectedCell ? 'selected' : ''}`}
                 disabled={!d}
-                onClick={() => d && navigate(`/day/${iso}`)}
+                onClick={() => d && setSelectedDate(iso)}
+                aria-pressed={d ? isSelectedCell : undefined}
                 aria-label={d
-                  ? `Open ${iso}: ${counts.tasks} tasks, ${counts.appointments} appointments, ${counts.events} important events`
+                  ? `Select ${humanDate(iso, { year: 'numeric' })}: ${counts.tasks} tasks, ${counts.appointments} appointments, ${counts.events} important events`
                   : 'Empty calendar cell'}
                 title={d ? iso : ''}
               >
@@ -230,10 +330,11 @@ export default function Calendar() {
                     {d && (
                       <div className="calendar-dots">
                         {counts.events > 0 && <span className="calendar-dot event" title={`${counts.events} important event(s)`} />}
-                        {Array.from({ length: Math.min(counts.tasks, 3) }).map((_, i) => (
+                        {Array.from({ length: visibleTaskDots }).map((_, i) => (
                           <span key={`t${i}`} className="calendar-dot task" />
                         ))}
                         {counts.appointments > 0 && <span className="calendar-dot appt" title={`${counts.appointments} appointment(s)`} />}
+                        {extraIndicatorCount > 0 && <span className="calendar-more">+{extraIndicatorCount}</span>}
                       </div>
                     )}
                   </>
@@ -248,6 +349,69 @@ export default function Calendar() {
           <span className="legend-item"><span className="legend-swatch appt" />🗓️ appointments</span>
           <span className="legend-item"><span className="legend-swatch task" />● tasks</span>
         </div>
+
+        <section className="calendar-selected-day" aria-labelledby="calendar-selected-day-title">
+          <header className="calendar-selected-day__header">
+            <div>
+              <p className="calendar-selected-day__eyebrow">Selected day</p>
+              <h3 id="calendar-selected-day-title">{humanDate(selectedDate)}</h3>
+            </div>
+            <Link className="button chip" to={`/day/${selectedDate}`}>Open full day</Link>
+          </header>
+
+          {loadingSelectedAgenda && <p className="muted" role="status">Loading day…</p>}
+          {!loadingSelectedAgenda && selectedAgendaError && <p className="alert error" role="alert">{selectedAgendaError}</p>}
+          {!loadingSelectedAgenda && !selectedAgendaError && selectedAgendaItems.length === 0 && (
+            <p className="muted">Nothing scheduled for this day.</p>
+          )}
+          {!loadingSelectedAgenda && !selectedAgendaError && selectedAgendaItems.length > 0 && (
+            <ul className="calendar-selected-day__list">
+              {selectedAgendaItems.map((item) => {
+                const sourcePath = sourceEntryPath(item);
+                const appointmentDeleteId = item.type === 'appointment' ? getStoredAppointmentId(item) : '';
+                const confirmingDelete = appointmentDeleteId && confirmingAppointmentDeleteId === appointmentDeleteId;
+                const deleting = appointmentDeleteId && deletingAppointmentId === appointmentDeleteId;
+                return (
+                  <li key={`${item.type}-${item._id || item.id}-${item.date}`} className="calendar-selected-day__item">
+                    <div className="calendar-selected-day__item-copy">
+                      <strong>{item.type === 'appointment' ? '🗓️' : '⭐'} {item.title || '(untitled)'}</strong>
+                      <span>{timeLabel(item)} · {provenanceLabel(item)}</span>
+                    </div>
+                    <div className="calendar-selected-day__item-actions">
+                      {sourcePath && <Link className="button chip" to={sourcePath}>View source</Link>}
+                      {item.type === 'appointment' && (
+                        <>
+                          <button type="button" className="button chip" onClick={() => openEditAppointment(item)}>Edit</button>
+                          <button
+                            type="button"
+                            className="button chip"
+                            onClick={() => deleteAppointment(item)}
+                            disabled={Boolean(deletingAppointmentId)}
+                          >
+                            {deleting ? 'Deleting…' : confirmingDelete ? 'Confirm delete' : 'Delete'}
+                          </button>
+                          {confirmingDelete && (
+                            <button
+                              type="button"
+                              className="button chip"
+                              onClick={() => {
+                                setConfirmingAppointmentDeleteId('');
+                                setConfirmingAppointmentDeleteMessage('');
+                              }}
+                              disabled={Boolean(deletingAppointmentId)}
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
       </section>
 
       <aside className="panel calendar-horizon-panel" aria-label="Upcoming calendar items">
@@ -267,7 +431,7 @@ export default function Calendar() {
 
       {showApptModal && (
         <AppointmentModal
-          defaultDate={tzToday}
+          defaultDate={selectedDate}
           initialAppointment={editingAppointment}
           onClose={() => {
             setShowApptModal(false);
@@ -278,14 +442,20 @@ export default function Calendar() {
             setEditingAppointment(null);
             refreshHorizon();
             loadMonth();
+            setSelectedAgendaRefreshKey((key) => key + 1);
           }}
         />
       )}
       {showEventModal && (
         <ImportantEventModal
-          defaultDate={tzToday}
+          defaultDate={selectedDate}
           onClose={() => setShowEventModal(false)}
-          onSaved={() => { setShowEventModal(false); refreshHorizon(); loadMonth(); }}
+          onSaved={() => {
+            setShowEventModal(false);
+            refreshHorizon();
+            loadMonth();
+            setSelectedAgendaRefreshKey((key) => key + 1);
+          }}
         />
       )}
     </main>

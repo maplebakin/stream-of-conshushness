@@ -203,3 +203,55 @@
     padding-inline: 0;
   }
 }
+
+/* Mobile is a focused shell: route navigation lives at the bottom so the
+   page's first viewport can belong to the current workflow. */
+@media (max-width: 720px) {
+  .app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 56px;
+    padding: 0.35rem 0.45rem;
+  }
+
+  .app-header__brand {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .primary-nav {
+    display: none;
+  }
+
+  .app-header__utilities {
+    flex: 0 0 auto;
+    gap: 0.1rem;
+  }
+
+  .app-header .account-link,
+  .app-header .account-menu__toggle,
+  .app-header .mobile-menu-button {
+    min-height: 44px;
+  }
+
+  .app-header .account-link {
+    width: 44px;
+    padding-inline: 0;
+  }
+
+  .app-header .account-link span,
+  .app-header .mobile-menu-button span {
+    display: none;
+  }
+
+  .app-header .account-menu__toggle {
+    width: 28px;
+    padding-inline: 0;
+  }
+
+  .app-header .mobile-menu-button {
+    width: 44px;
+    padding-inline: 0;
+  }
+}

@@ -220,8 +220,8 @@ export default function NotesSection({ date }) {
               setNote(e.target.value);
               saveLocalNoteDraft(window.localStorage, ownerId, date, e.target.value);
             }}
-            placeholder={`Cottage packing:\n- blanket\n- pillows\n- 4 shirts\n- shorts\n- underwear\n- socks\n- bathing suit`}
-            rows={8}
+            placeholder="A detail to remember today…"
+            rows={4}
             disabled={status === 'saving' && !note && !lastSavedContentRef.current}
             aria-label={`Remember this note for ${date}`}
           />

@@ -220,3 +220,31 @@ body {
     padding: var(--space-3);
   }
 }
+
+@media (max-width: 720px) {
+  .app-body--focused {
+    padding-bottom: calc(var(--space-8) + 4.4rem + env(safe-area-inset-bottom));
+  }
+
+  .app-main {
+    scroll-margin-top: calc(56px + var(--space-3));
+  }
+
+  .muted,
+  .text-muted {
+    color: color-mix(in srgb, var(--color-vein) 92%, var(--color-ink) 8%);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: color-mix(in srgb, var(--color-vein) 88%, transparent);
+    opacity: 1;
+  }
+
+  button[disabled],
+  input[disabled],
+  select[disabled],
+  textarea[disabled] {
+    color: color-mix(in srgb, var(--color-vein) 78%, var(--color-ink) 22%);
+  }
+}

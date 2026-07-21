@@ -1321,3 +1321,295 @@
     padding: var(--space-3);
   }
 }
+
+/* Intentional mobile Today composition -------------------------------- */
+.daily-page .mobile-date-navigator {
+  grid-template-columns: 44px minmax(0, 1fr) 44px auto;
+  align-items: center;
+}
+
+.daily-page .mobile-date-navigator__label {
+  font-family: var(--font-echo);
+  font-size: clamp(1.25rem, 3vw, 1.7rem);
+  color: var(--color-plum);
+}
+
+.daily-page .mobile-date-navigator__arrow,
+.daily-page .mobile-date-navigator__today {
+  background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
+}
+
+.daily-page .daily-actions__desktop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.daily-page .daily-add-menu {
+  display: none;
+  position: relative;
+}
+
+.daily-page .daily-add-menu > summary {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--color-spool) 46%, var(--color-border) 54%);
+  border-radius: var(--radius-button);
+  background: color-mix(in srgb, var(--color-spool) 17%, var(--color-surface) 83%);
+  color: var(--color-plum);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 750;
+  list-style: none;
+}
+
+.daily-page .daily-add-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.daily-page .daily-add-menu__panel {
+  position: absolute;
+  z-index: 25;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  width: min(14rem, calc(100vw - 2 * var(--space-3)));
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-elevated);
+  box-shadow: var(--shadow-float);
+}
+
+.daily-page .daily-add-menu__panel button {
+  min-height: 44px;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-input);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+.daily-page .daily-add-menu__panel button:hover,
+.daily-page .daily-add-menu__panel button:focus-visible {
+  background: color-mix(in srgb, var(--color-surface) 72%, var(--color-spool) 28%);
+}
+
+@media (max-width: 720px) {
+  .daily-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .daily-page .daily-header {
+    display: contents;
+  }
+
+  .daily-page .mobile-date-navigator {
+    order: 1;
+    position: static;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px auto;
+    gap: 0.35rem;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .daily-page .mobile-date-navigator__label {
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .daily-page .mobile-date-navigator__arrow,
+  .daily-page .mobile-date-navigator__today {
+    min-height: 44px;
+  }
+
+  .daily-page .mobile-date-navigator__today {
+    padding-inline: 0.55rem;
+  }
+
+  .daily-page .daily-attention {
+    order: 2;
+    margin: 0;
+  }
+
+  .daily-page .daily-attention.compact-action-summary {
+    padding: var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .daily-page .daily-attention .compact-action-summary__header h2 {
+    font-family: var(--font-thread);
+    font-size: 1.13rem;
+  }
+
+  .daily-page .daily-attention .compact-action-summary__body {
+    align-items: center;
+  }
+
+  .daily-page .daily-attention .compact-action-summary__copy strong {
+    font-family: var(--font-sans);
+    font-size: 0.98rem;
+  }
+
+  .daily-page .daily-attention .compact-action-summary__copy p {
+    font-size: 0.8rem;
+  }
+
+  .daily-page .daily-attention__note {
+    order: 3;
+    margin: 0;
+  }
+
+  .daily-page .daily-layout {
+    order: 4;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .daily-page .daily-side {
+    order: 1;
+  }
+
+  .daily-page .daily-main {
+    order: 2;
+  }
+
+  .daily-page .daily-layout .panel {
+    padding: var(--space-3);
+    border-radius: var(--radius-card);
+  }
+
+  .daily-page .daily-actions {
+    order: 5;
+    justify-content: flex-end;
+    width: 100%;
+    margin: 0;
+    padding-top: var(--space-1);
+  }
+
+  .daily-page .daily-actions__desktop {
+    display: none;
+  }
+
+  .daily-page .daily-add-menu {
+    display: block;
+  }
+
+  .daily-page .daily-options-menu {
+    margin-left: 0;
+  }
+
+  .daily-page .daily-options-menu > summary {
+    min-height: 44px;
+  }
+
+  .daily-page .daily-options-menu__panel {
+    right: 0;
+    left: auto;
+    width: min(19rem, calc(100vw - 2 * var(--space-3)));
+  }
+
+  .daily-page > .secondary-section {
+    order: 6;
+  }
+
+  .daily-page > .secondary-section > summary {
+    min-height: 44px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--font-sans);
+    font-size: 0.86rem;
+  }
+
+  .daily-page .today-notes-panel {
+    padding: var(--space-3);
+    border-radius: var(--radius-card);
+  }
+
+  .daily-page .today-notes-header {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .daily-page .today-notes-header h3 {
+    font-family: var(--font-thread);
+    font-size: 1.02rem;
+  }
+
+  .daily-page .today-notes-header p {
+    margin: 0.15rem 0 0;
+    font-size: 0.75rem;
+  }
+
+  .daily-page .today-notes-actions {
+    flex: 0 0 auto;
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .daily-page .today-notes-actions .pill {
+    min-height: 28px;
+    padding: 0.2rem 0.45rem;
+    font-size: 0.7rem;
+  }
+
+  .daily-page .today-notes-actions .button {
+    min-height: 40px;
+    padding-inline: 0.65rem;
+    font-size: 0.76rem;
+  }
+
+  .daily-page .today-notes-textarea {
+    min-height: 7rem;
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+  }
+
+  .daily-page .today-notes-preview {
+    display: none;
+  }
+
+  .daily-page .agenda-item {
+    padding: var(--space-2);
+  }
+
+  .daily-page .agenda-title,
+  .daily-page .agenda-meta,
+  .daily-page .agenda-source {
+    font-family: var(--font-sans);
+  }
+
+  .daily-page .agenda-source,
+  .daily-page .agenda-actions {
+    gap: 0.35rem;
+  }
+
+  .daily-page .agenda-actions .button,
+  .daily-page .agenda-source-link {
+    min-height: 40px;
+  }
+}

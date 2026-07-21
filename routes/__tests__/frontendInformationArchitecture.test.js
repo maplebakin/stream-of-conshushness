@@ -8,14 +8,18 @@ const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf
 describe('authenticated information architecture', () => {
   it('keeps primary navigation compact, labeled, and account-oriented', () => {
     const header = read('frontend/src/Header.jsx');
+    const mobileShell = read('frontend/src/components/MobileShell.jsx');
     const account = read('frontend/src/pages/Account.jsx');
 
     for (const label of ['Stream', 'Today', 'Calendar', 'Search', 'Review']) {
       expect(header).toContain(`label="${label}"`);
     }
-    expect(header).toContain('<span>Account</span>');
+    expect(header).toContain('AccountMenu');
+    expect(header).toContain('MobileBottomNav');
+    expect(mobileShell).toContain('<span>Account</span>');
+    expect(mobileShell).toContain('Sign out');
     expect(header).not.toContain('Log Out');
-    expect(header).not.toContain('logout');
+    expect(mobileShell).not.toContain('Log Out');
     expect(account).toContain('Sign out');
     expect(account).toContain('onClick={logout}');
   });
@@ -40,6 +44,8 @@ describe('authenticated information architecture', () => {
     expect(today).toContain('summary="On your radar"');
     expect(today).toContain('summary="Review details"');
     expect(today).toContain('aria-label="Day options"');
+    expect(today).toContain('MobileDateNavigator');
+    expect(today).toContain('showToday={dateISO !== todayISO}');
     expect(today).not.toContain('summary="Day options"');
     expect(today).not.toContain('Carry-forward is off');
     expect(today).toContain('Automatic carry-forward:');
