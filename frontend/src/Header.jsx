@@ -79,7 +79,8 @@ export default function Header() {
   }, [isAuthenticated, authenticatedUser]);
 
   return (
-    <header className="app-header" role="banner">
+    <>
+      <header className="app-header" role="banner">
       <Link to="/" className="app-header__brand" aria-label="StreamofConshushness home">
         <span className="app-header__mark" aria-hidden="true">〰</span>
         <span>StreamofConshushness</span>
@@ -137,7 +138,8 @@ export default function Header() {
           <div className="mobile-nav-panel__theme"><ThemeToggle variant="button" /></div>
         </nav>
       )}
+      </header>
       {isAuthenticated && <MobileBottomNav />}
-    </header>
+    </>
   );
 }
