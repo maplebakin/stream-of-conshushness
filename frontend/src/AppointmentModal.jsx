@@ -1,36 +1,22 @@
 // frontend/src/AppointmentModal.jsx
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import './AppointmentModal.css';
 import RepeatFields from './components/RepeatFields.jsx';
 import ClusterPicker from './components/ClusterPicker.jsx';
 import axios from './api/axiosInstance';
 import { getStoredAppointmentId, isRecurringAppointment } from './utils/appointmentIds.js';
 import { todayISOInToronto } from './utils/date.js';
-
-function parseRRule(rrule = '') {
-  const out = {};
-  for (const part of String(rrule || '').split(';')) {
-    const [key, value] = part.split('=');
-    if (key) out[key.toUpperCase()] = value || '';
-  }
-  return out;
-}
-
-function initialRepeat(appointment) {
-  const parsed = parseRRule(appointment?.rrule || '');
-  return {
-    repeatOn: Boolean(parsed.FREQ),
-    freq: parsed.FREQ || 'WEEKLY',
-    interval: Number.parseInt(parsed.INTERVAL || '1', 10) || 1,
-    byday: parsed.BYDAY ? parsed.BYDAY.split(',').filter(Boolean) : ['MO'],
-    until: appointment?.until || parsed.UNTIL || '',
-  };
-}
+import { primaryClusterReference } from './utils/clusterHelpers.js';
+import { requestErrorSummary } from './utils/requestError.js';
+import { appointmentValidationError, initialAppointmentRepeat } from './utils/appointmentRepeat.js';
 
 export default function AppointmentModal({ onClose, onSaved, defaultCluster = '', defaultDate = '', initialAppointment = null }) {
+  const dialogRef = useRef(null);
+  const savingRef = useRef(false);
+  const previousFocusRef = useRef(null);
   const editingId = getStoredAppointmentId(initialAppointment);
   const editingRecurringSeries = Boolean(editingId && isRecurringAppointment(initialAppointment));
-  const repeatInitial = initialRepeat(initialAppointment);
+  const repeatInitial = initialAppointmentRepeat(initialAppointment);
 
   // base fields
   const [title, setTitle] = useState(initialAppointment?.title || 'New Appointment');
@@ -39,7 +25,9 @@ export default function AppointmentModal({ onClose, onSaved, defaultCluster = ''
   const [timeEnd, setTimeEnd] = useState(initialAppointment?.timeEnd || '');
   const [location, setLocation] = useState(initialAppointment?.location || '');
   const [details, setDetails] = useState(initialAppointment?.details || '');
-  const [cluster, setCluster] = useState(initialAppointment?.cluster || defaultCluster);
+  const [cluster, setCluster] = useState(primaryClusterReference(initialAppointment) || defaultCluster);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   // repeat state
   const [repeatOn, setRepeatOn] = useState(repeatInitial.repeatOn);
@@ -49,6 +37,45 @@ export default function AppointmentModal({ onClose, onSaved, defaultCluster = ''
   const [startDate, setStartDate] = useState(initialAppointment?.startDate || initialAppointment?.date || defaultDate || todayISOInToronto());
   const [until, setUntil] = useState(repeatInitial.until);
 
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement;
+    const dialog = dialogRef.current;
+    const focusableSelector = 'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+    dialog?.querySelector(focusableSelector)?.focus();
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape' && !savingRef.current) {
+        event.preventDefault();
+        onClose?.();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialog) return;
+
+      const focusable = [...dialog.querySelectorAll(focusableSelector)]
+        .filter((element) => !element.hasAttribute('disabled'));
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previousFocusRef.current?.focus?.();
+    };
+  }, [onClose]);
+
   async function saveAppointment() {
     const body = {
       title,
@@ -56,7 +83,8 @@ export default function AppointmentModal({ onClose, onSaved, defaultCluster = ''
       timeEnd: timeEnd || null,
       location,
       details,
-      cluster,
+      cluster: '',
+      clusterId: cluster || null,
       tz: initialAppointment?.tz || 'America/Toronto',
     };
 
@@ -83,22 +111,60 @@ export default function AppointmentModal({ onClose, onSaved, defaultCluster = ''
 
   async function onSubmit(e) {
     e.preventDefault();
+    if (savingRef.current) return;
+    const validationError = appointmentValidationError({
+      title,
+      date,
+      repeatOn,
+      startDate,
+      until,
+      timeStart,
+      timeEnd,
+    });
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
+    setError('');
     try {
       const appt = await saveAppointment();
       onSaved?.(appt);
       onClose?.();
     } catch (err) {
-      console.error('save appointment failed:', err);
+      console.error('save appointment failed:', requestErrorSummary(err));
+      setError(err?.response?.data?.error || err.message || 'Could not save appointment.');
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   }
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal">
-        <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="appt-title">
+    <div
+      className="modal-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !savingRef.current) onClose?.();
+      }}
+    >
+      <div
+        className="modal"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !savingRef.current) onClose?.();
+        }}
+      >
+        <div
+          className="modal-card"
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="appt-title"
+          tabIndex={-1}
+        >
           <div className="modal-header">
             <h3 id="appt-title">{editingId ? 'Edit Appointment' : 'Appointment'}</h3>
-            <button className="modal-close" onClick={onClose} aria-label="Close">×</button>
+            <button type="button" className="modal-close" onClick={onClose} aria-label="Close" disabled={saving}>×</button>
           </div>
 
           <form className="modal-body" onSubmit={onSubmit}>
@@ -116,7 +182,7 @@ export default function AppointmentModal({ onClose, onSaved, defaultCluster = ''
             {!repeatOn && (
               <label>
                 <div>Date</div>
-                <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
               </label>
             )}
 
@@ -156,9 +222,11 @@ export default function AppointmentModal({ onClose, onSaved, defaultCluster = ''
               until={until} setUntil={setUntil}
             />
 
+            {error && <div className="alert error" role="alert">{error}</div>}
+
             <div className="modal-footer">
-              <button type="button" onClick={onClose}>Cancel</button>
-              <button type="submit">Save</button>
+              <button type="button" onClick={onClose} disabled={saving}>Cancel</button>
+              <button type="submit" disabled={saving || !title.trim()}>{saving ? 'Saving…' : 'Save'}</button>
             </div>
           </form>
         </div>

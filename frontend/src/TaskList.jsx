@@ -1,6 +1,6 @@
 // frontend/src/TaskList.jsx
 // src/TaskList.jsx
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
@@ -8,22 +8,35 @@ import { useToast } from './hooks/useToast.js';
 import { todayISOInToronto } from './utils/date.js';
 import './Main.css';
 import './TaskList.css';
-import { describeRepeat } from './utils/repeat.js';
+import { taskRecurrenceLabel } from './utils/taskRecurrence.js';
+import { clearRequestId, stableRequestId } from './utils/idempotency.js';
 import { useTasks } from './hooks/useTasks.js';
 import { useQueryClient } from '@tanstack/react-query';
 
-export default function TaskList({ date, header = 'Tasks', bucket }) {
+export default function TaskList({ date, header = 'Tasks', bucket, onTasksChanged }) {
   const { token } = useContext(AuthContext);
   const { showUndo, showToast } = useToast();
   const today = useMemo(() => todayISOInToronto(), []);
   const isToday = date === today;
+  const showDayControls = !bucket || bucket === 'dueToday';
   const queryClient = useQueryClient();
 
   // Today-only toggles
   const [includeOverdue, setIncludeOverdue] = useState(true);
   const [includeRecurring, setIncludeRecurring] = useState(true);
 
-  const { data: queriedTasks = [], isLoading: queryLoading } = useTasks(date, includeOverdue, includeRecurring, isToday);
+  const {
+    data: queriedTasks = [],
+    isLoading: queryLoading,
+    isError: queryFailed,
+    error: queryError,
+  } = useTasks(
+    date,
+    includeOverdue,
+    includeRecurring,
+    isToday,
+    !bucket
+  );
 
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : {}),
@@ -32,6 +45,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
 
   const [bucketTasks, setBucketTasks] = useState([]);
   const [bucketLoading, setBucketLoading] = useState(false);
+  const [bucketError, setBucketError] = useState('');
   const [bucketRefreshTick, setBucketRefreshTick] = useState(0);
 
   useEffect(() => {
@@ -40,10 +54,12 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
     if (!bucket) {
       setBucketTasks([]);
       setBucketLoading(false);
+      setBucketError('');
       return () => { ignore = true; };
     }
 
     setBucketLoading(true);
+    setBucketError('');
     axios
       .get(`/api/tasks/day/${date}`, { headers: authHeaders })
       .then(({ data }) => {
@@ -55,6 +71,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
         if (!ignore) {
           console.error('Bucket task fetch failed:', e);
           setBucketTasks([]);
+          setBucketError(e?.response?.data?.error || e?.message || 'Could not load tasks.');
           showToast('Could not load tasks. Please try again.', { type: 'error' });
         }
       })
@@ -74,51 +91,70 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
   const [showInbox, setShowInbox] = useState(false);
   const [inbox, setInbox] = useState([]);
   const [inboxCount, setInboxCount] = useState(0);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const [inboxError, setInboxError] = useState('');
 
   // NEW: Add Task composer
   const [showComposer, setShowComposer] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [adding, setAdding] = useState(false);
+  const addingRef = useRef(false);
+  const createRequestIdRef = useRef(null);
 
   // Bulk operations state
   const [selectedTasks, setSelectedTasks] = useState(new Set());
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
+  useEffect(() => {
+    const visibleIds = new Set(tasks.map(task => task._id));
+    setSelectedTasks(previous => {
+      const next = new Set([...previous].filter(id => visibleIds.has(id)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [tasks]);
 
   async function fetchInboxCount() {
-    const { data } = await axios.get('/api/tasks?view=inbox&countOnly=1', { headers: authHeaders });
-    setInboxCount(data?.count || 0);
+    try {
+      const { data } = await axios.get('/api/tasks?view=inbox&countOnly=1', { headers: authHeaders });
+      setInboxCount(data?.count || 0);
+    } catch (error) {
+      setInboxCount(0);
+      setInboxError(error?.response?.data?.error || error?.message || 'Could not load the task inbox.');
+    }
   }
 
   async function fetchInbox() {
-    const { data } = await axios.get('/api/tasks?view=inbox', { headers: authHeaders });
-    setInbox(data || []);
+    setInboxLoading(true);
+    setInboxError('');
+    try {
+      const { data } = await axios.get('/api/tasks?view=inbox', { headers: authHeaders });
+      setInbox(Array.isArray(data) ? data : []);
+    } catch (error) {
+      setInbox([]);
+      setInboxError(error?.response?.data?.error || error?.message || 'Could not load the task inbox.');
+    } finally {
+      setInboxLoading(false);
+    }
   }
 
   useEffect(() => {
-    fetchInboxCount();
+    if (token && showDayControls) fetchInboxCount();
+    else setInboxCount(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date, includeOverdue, includeRecurring]);
+  }, [date, includeOverdue, includeRecurring, showDayControls, token]);
 
   async function toggleComplete(task) {
     try {
-      // Repeating: advance schedule
-      if (!task.completed && (task.repeat || task.rrule)) {
-        await axios.patch(
-          `/api/tasks/${task._id}/toggle`,
-          null,
-          { headers: authHeaders }
-        );
-      } else {
-        // Non-repeating: toggle completed
-        await axios.patch(
-          `/api/tasks/${task._id}`,
-          { completed: !task.completed },
-          { headers: authHeaders }
-        );
-      }
-      queryClient.invalidateQueries(['tasks']);
+      // The toggle route keeps completed/status/completedAt in sync and spawns
+      // the next occurrence for a recurring task when appropriate.
+      await axios.patch(
+        `/api/tasks/${task._id}/toggle`,
+        { completed: !task.completed },
+        { headers: authHeaders }
+      );
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
       if (bucket) setBucketRefreshTick((x) => x + 1);
+      onTasksChanged?.();
     } catch (e) {
       console.error('Toggle complete failed:', e);
       showToast('Could not update task status. Please try again.', { type: 'error' });
@@ -149,8 +185,9 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
       // Optimistic UI first
       setInbox((prev) => prev.filter((x) => x._id !== task._id));
       setInboxCount((c) => Math.max(0, c - 1));
-      queryClient.invalidateQueries(['tasks']);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
       if (bucket) setBucketRefreshTick((x) => x + 1);
+      onTasksChanged?.();
       // Then try to link to journal entry for that date
       linkEntryForDate(updated._id, date);
     } catch (e) {
@@ -161,17 +198,23 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
 
   // NEW: create task directly from header composer (and link it to the day)
   async function createTask() {
+    if (addingRef.current) return;
     const title = (newTitle || '').trim();
     if (!title) return;
+    addingRef.current = true;
     setAdding(true);
     try {
+      const payload = { title, dueDate: date };
+      const requestId = stableRequestId(createRequestIdRef, JSON.stringify(payload), 'task');
       const { data } = await axios.post(
         '/api/tasks',
-        { title, dueDate: date },
-        { headers: authHeaders }
+        payload,
+        { headers: { ...authHeaders, 'Idempotency-Key': requestId } }
       );
-      queryClient.invalidateQueries(['tasks']);
+      clearRequestId(createRequestIdRef);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
       if (bucket) setBucketRefreshTick((x) => x + 1);
+      onTasksChanged?.();
       setNewTitle('');
       setShowComposer(false);
       // Link the freshly created task to this day's journal
@@ -180,6 +223,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
       console.error('Failed to create task', e);
       showToast('Could not create task. Please try again.', { type: 'error' });
     } finally {
+      addingRef.current = false;
       setAdding(false);
     }
   }
@@ -190,6 +234,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
       createTask();
     } else if (e.key === 'Escape') {
       e.preventDefault();
+      if (addingRef.current) return;
       setShowComposer(false);
       setNewTitle('');
     }
@@ -223,8 +268,9 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
       const ids = Array.from(selectedTasks);
       await axios.post('/api/tasks/bulk/complete', { ids }, { headers: authHeaders });
       // Refresh tasks
-      await queryClient.invalidateQueries(['tasks']);
+      await queryClient.invalidateQueries({ queryKey: ['tasks'] });
       if (bucket) setBucketRefreshTick((x) => x + 1);
+      onTasksChanged?.();
       setSelectedTasks(new Set());
     } catch (e) {
       console.error('Bulk complete failed:', e);
@@ -239,40 +285,31 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
     setBulkActionLoading(true);
     try {
       const ids = Array.from(selectedTasks);
-      // Store tasks before deleting for undo
+      // Store task ids before deleting so undo can restore the original records.
       const tasksToDelete = tasks.filter(t => selectedTasks.has(t._id));
 
       // Delete tasks
       await axios.post('/api/tasks/bulk/delete', { ids }, { headers: authHeaders });
 
       // Optimistically update UI
-      queryClient.invalidateQueries(['tasks']);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
       if (bucket) setBucketRefreshTick((x) => x + 1);
+      onTasksChanged?.();
       setSelectedTasks(new Set());
 
       // Show undo toast
       showUndo(
-        `Deleted ${tasksToDelete.length} task${tasksToDelete.length > 1 ? 's' : ''}`,
+        `Moved ${tasksToDelete.length} task${tasksToDelete.length > 1 ? 's' : ''} to trash`,
         async () => {
-          // Undo callback: recreate the tasks
           try {
-            const recreatePromises = tasksToDelete.map(task =>
-              axios.post('/api/tasks', {
-                title: task.title,
-                notes: task.notes || '',
-                dueDate: task.dueDate,
-                priority: task.priority || 0,
-                clusters: task.clusters || [],
-                sections: task.sections || [],
-                rrule: task.rrule || '',
-                completed: task.completed || false,
-                status: task.status || 'todo',
-              }, { headers: authHeaders })
+            await Promise.all(
+              tasksToDelete.map(task =>
+                axios.post(`/api/tasks/${encodeURIComponent(task._id)}/restore`, {}, { headers: authHeaders })
+              )
             );
-            await Promise.all(recreatePromises);
-            // Refresh tasks after undo
-            await queryClient.invalidateQueries(['tasks']);
-      if (bucket) setBucketRefreshTick((x) => x + 1);
+            await queryClient.invalidateQueries({ queryKey: ['tasks'] });
+            if (bucket) setBucketRefreshTick((x) => x + 1);
+            onTasksChanged?.();
           } catch (e) {
             console.error('Undo failed:', e);
             showToast('Failed to undo deletion. Please try again.', { type: 'error' });
@@ -283,7 +320,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
       console.error('Bulk delete failed:', e);
       showToast('Failed to delete tasks. Please try again.', { type: 'error' });
       // Refresh to restore correct state
-      await queryClient.invalidateQueries(['tasks']);
+      await queryClient.invalidateQueries({ queryKey: ['tasks'] });
       if (bucket) setBucketRefreshTick((x) => x + 1);
     } finally {
       setBulkActionLoading(false);
@@ -297,7 +334,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
 
         {/* Right side: toggles + add task */}
         <div className="task-list-controls">
-          {isToday && (
+          {isToday && !bucket && (
             <div className="task-toggles">
               <button
                 className={`pill-toggle ${includeOverdue ? 'active' : ''}`}
@@ -321,7 +358,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
           )}
 
           {/* Add Task trigger */}
-          {!showComposer && (
+          {showDayControls && !showComposer && (
             <button
               className="add-task-btn"
               type="button"
@@ -372,7 +409,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
       )}
 
       {/* Inline composer */}
-      {showComposer && (
+      {showDayControls && showComposer && (
         <div className="add-task-row">
           <input
             className="add-task-input input"
@@ -401,7 +438,11 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
         </div>
       )}
 
-      {loading ? (
+      {!loading && (bucketError || (queryFailed && !bucket)) ? (
+        <div className="alert error" role="alert">
+          {bucketError || queryError?.response?.data?.error || queryError?.message || 'Could not load tasks.'}
+        </div>
+      ) : loading ? (
         <div className="muted">Loading…</div>
       ) : tasks.length === 0 ? (
         <div className="muted">No tasks due for this day.</div>
@@ -409,63 +450,66 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
         <>
           {/* Select All checkbox */}
           {tasks.length > 0 && (
-            <div className="select-all-row">
+            <label className="select-all-row">
               <input
                 type="checkbox"
                 checked={selectedTasks.size === tasks.length && tasks.length > 0}
                 onChange={toggleSelectAll}
                 title="Select all tasks"
               />
-              <label onClick={toggleSelectAll}>
-                Select all
-              </label>
-            </div>
+              <span>Select all</span>
+            </label>
           )}
 
           <ul className="tasks">
-            {tasks.map(t => (
-              <li
-                key={t._id}
-                className={`task-item ${t.completed ? 'done' : ''} ${selectedTasks.has(t._id) ? 'selected' : ''}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedTasks.has(t._id)}
-                  onChange={() => toggleTaskSelection(t._id)}
-                  onClick={(e) => e.stopPropagation()}
-                  title="Select task"
-                />
-                <button
-                  className="checkbox"
-                  onClick={() => toggleComplete(t)}
-                  aria-label={t.completed ? 'Mark incomplete' : 'Mark complete'}
-                  title={t.completed ? 'Mark incomplete' : 'Mark complete'}
-                />
-                <div className="task-item-main">
-                  <div className="task-title">{t.title}</div>
-                  <div className="task-item-meta">
-                    {t.clusters && t.clusters.length > 0 && t.clusters[0]?.slug && (
-                      <Link
-                        to={`/clusters/${t.clusters[0].slug}`}
-                        className="cluster muted"
-                        title={`View cluster: ${t.clusters[0].name}`}
-                      >
-                        {t.clusters[0].icon && `${t.clusters[0].icon} `}{t.clusters[0].name}
-                      </Link>
-                    )}
-                    {t.repeat && <span className="repeat muted">{describeRepeat(t.repeat)}</span>}
-                    {t.dueDate && <span className="due-badge">due {t.dueDate}</span>}
+            {tasks.map(t => {
+              const recurrence = taskRecurrenceLabel(t);
+              return (
+                <li
+                  key={t._id}
+                  className={`task-item ${t.completed ? 'done' : ''} ${selectedTasks.has(t._id) ? 'selected' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedTasks.has(t._id)}
+                    onChange={() => toggleTaskSelection(t._id)}
+                    onClick={(e) => e.stopPropagation()}
+                    title="Select task"
+                  />
+                  <button
+                    type="button"
+                    className="checkbox"
+                    onClick={() => toggleComplete(t)}
+                    aria-label={t.completed ? 'Mark incomplete' : 'Mark complete'}
+                    title={t.completed ? 'Mark incomplete' : 'Mark complete'}
+                  />
+                  <div className="task-item-main">
+                    <div className="task-title">{t.title}</div>
+                    <div className="task-item-meta">
+                      {t.clusters && t.clusters.length > 0 && t.clusters[0]?.slug && (
+                        <Link
+                          to={`/clusters/${t.clusters[0].slug}`}
+                          className="cluster muted"
+                          title={`View cluster: ${t.clusters[0].name}`}
+                        >
+                          {t.clusters[0].icon && `${t.clusters[0].icon} `}{t.clusters[0].name}
+                        </Link>
+                      )}
+                      {recurrence && <span className="repeat muted">Repeats: {recurrence}</span>}
+                      {t.dueDate && <span className="due-badge">due {t.dueDate}</span>}
+                    </div>
                   </div>
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         </>
       )}
 
       {/* Inbox (undated) — collapsed by default */}
-      <div className="inbox">
+      {showDayControls && <div className="inbox">
         <button
+          type="button"
           className="inbox-toggle"
           onClick={() => {
             const next = !showInbox;
@@ -478,7 +522,14 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
 
         {showInbox && (
           <div className="inbox-panel" style={{ marginTop: 8 }}>
-            {inbox.length === 0 ? (
+            {inboxLoading ? (
+              <div className="muted">Loading inbox…</div>
+            ) : inboxError ? (
+              <div className="alert error" role="alert">
+                {inboxError}{' '}
+                <button type="button" className="button chip" onClick={fetchInbox}>Retry</button>
+              </div>
+            ) : inbox.length === 0 ? (
               <div className="muted">No undated tasks.</div>
             ) : (
               <ul className="tasks">
@@ -486,6 +537,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
                   <li key={t._id} className="task-item">
                     <div className="task-title">{t.title}</div>
                     <button
+                      type="button"
                       className="make-task-btn"
                       onClick={() => addInboxTaskToDay(t)}
                       title={`Set due date to ${date}`}
@@ -498,7 +550,7 @@ export default function TaskList({ date, header = 'Tasks', bucket }) {
             )}
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

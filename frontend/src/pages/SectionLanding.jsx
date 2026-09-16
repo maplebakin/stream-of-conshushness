@@ -63,7 +63,7 @@ export default function SectionLanding() {
               <Link
                 key={p.id}
                 to={`/sections/${sectionSlug}/${p.slug}/journal`}
-                className="rounded-button text-ink hover:bg-thread hover:text-mist px-3 py-2"
+                className="hover:bg-thread rounded-button px-3 py-2 text-ink hover:text-mist"
               >
                 {p.emoji ? `${p.emoji} ` : ''}{p.title}
               </Link>

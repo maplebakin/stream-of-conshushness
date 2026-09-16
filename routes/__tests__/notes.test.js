@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   findOneAndUpdate: vi.fn(),
   create: vi.fn(),
   deleteOne: vi.fn(),
+  resolveOwnedEntryId: vi.fn(),
 }));
 
 vi.mock('../../middleware/auth.js', () => ({
@@ -32,6 +33,11 @@ vi.mock('../../models/Note.js', () => ({
 vi.mock('../../utils/clusterIds.js', () => ({
   normalizeClusterIds: (ids = []) => ids,
   resolveClusterIdForOwner: async () => null,
+  resolveClusterIdsForOwner: async (_userId, ids = []) => ids,
+}));
+
+vi.mock('../../utils/ownedReferences.js', () => ({
+  resolveOwnedEntryId: (...args) => mocks.resolveOwnedEntryId(...args),
 }));
 
 const router = (await import('../notes.js')).default;
@@ -92,24 +98,31 @@ describe('date-based notes routes', () => {
       const note = mocks.store.find((item) => (
         item.userId === query.userId &&
         (!query.date || item.date === query.date) &&
+        (!query.dailyKey || item.dailyKey === query.dailyKey) &&
         (!query._id || item._id === query._id)
       ));
       return Promise.resolve(note || null);
     });
 
-    mocks.findOneAndUpdate.mockImplementation((query, update) => {
+    mocks.findOneAndUpdate.mockImplementation((query, update, options = {}) => {
       const set = update?.$set || {};
       let note = mocks.store.find((item) => (
         item.userId === query.userId &&
         (!query.date || item.date === query.date) &&
+        (!query.dailyKey || (
+          query.dailyKey?.$exists === false
+            ? item.dailyKey === undefined
+            : item.dailyKey === query.dailyKey
+        )) &&
         (!query._id || item._id === query._id)
       ));
       if (!note) {
-        if (query._id) return Promise.resolve(null);
+        if (query._id || !options.upsert) return Promise.resolve(null);
         note = {
           _id: `507f1f77bcf86cd7994390${mocks.store.length + 11}`,
           userId: query.userId,
-          date: query.date,
+          date: query.date || set.date,
+          ...(typeof query.dailyKey === 'string' ? { dailyKey: query.dailyKey } : {}),
           content: '',
         };
         mocks.store.push(note);
@@ -126,6 +139,7 @@ describe('date-based notes routes', () => {
       mocks.store.push(note);
       return Promise.resolve({ ...note });
     });
+    mocks.resolveOwnedEntryId.mockResolvedValue(null);
 
     mocks.deleteOne.mockImplementation((query) => {
       const index = mocks.store.findIndex((item) => item._id === query._id && item.userId === query.userId);
@@ -139,7 +153,7 @@ describe('date-based notes routes', () => {
     const res = await request(app).get('/api/note/2026-06-07');
 
     expect(res.status).toBe(200);
-    expect(mocks.findOne).toHaveBeenCalledWith({ userId: 'user123', date: '2026-06-07' });
+    expect(mocks.findOne).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user123', date: '2026-06-07' }));
     expect(res.body).toMatchObject({
       ok: true,
       item: { _id: '507f1f77bcf86cd799439011', userId: 'user123', date: '2026-06-07' },
@@ -160,7 +174,7 @@ describe('date-based notes routes', () => {
     const res = await request(app).get('/api/note/2026-06-07');
 
     expect(res.status).toBe(200);
-    expect(mocks.findOne).toHaveBeenCalledWith({ userId: 'new-user', date: '2026-06-07' });
+    expect(mocks.findOne).toHaveBeenCalledWith(expect.objectContaining({ userId: 'new-user', date: '2026-06-07' }));
     expect(res.body).toEqual({ ok: true, item: null, content: '' });
   });
 
@@ -171,7 +185,7 @@ describe('date-based notes routes', () => {
 
     expect(res.status).toBe(201);
     expect(mocks.findOneAndUpdate).toHaveBeenCalledWith(
-      { userId: 'user123', date: '2026-06-08' },
+      { userId: 'user123', dailyKey: '2026-06-08' },
       {
         $set: expect.objectContaining({
           userId: 'user123',
@@ -286,6 +300,41 @@ describe('date-based notes routes', () => {
     expect(res.body.item).toMatchObject({ userId: 'user123', date: '2026-06-12', content: '' });
   });
 
+  it('accepts only an owned source entry reference and allows clearing it', async () => {
+    const entryId = '507f1f77bcf86cd799439099';
+    mocks.resolveOwnedEntryId.mockResolvedValueOnce(entryId);
+
+    const createRes = await request(app)
+      .post('/api/notes')
+      .send({ date: '2026-06-12', content: 'Context', entryId });
+
+    expect(createRes.status).toBe(201);
+    expect(mocks.resolveOwnedEntryId).toHaveBeenCalledWith('user123', entryId);
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ entryId }));
+
+    const clearRes = await request(app)
+      .patch('/api/notes/507f1f77bcf86cd799439011')
+      .send({ entryId: null });
+    expect(clearRes.status).toBe(200);
+    expect(mocks.findOneAndUpdate.mock.calls.at(-1)[1].$set).toEqual({ entryId: null });
+  });
+
+  it('rejects a foreign or invalid source entry reference', async () => {
+    mocks.resolveOwnedEntryId.mockResolvedValue(null);
+
+    const createRes = await request(app)
+      .post('/api/notes')
+      .send({ date: '2026-06-12', content: 'Context', entryId: '507f1f77bcf86cd799439099' });
+    const patchRes = await request(app)
+      .patch('/api/notes/507f1f77bcf86cd799439011')
+      .send({ entryId: '507f1f77bcf86cd799439099' });
+
+    expect(createRes.status).toBe(400);
+    expect(patchRes.status).toBe(400);
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
   it('updates an authenticated user owned note by id without changing ownership', async () => {
     const res = await request(app)
       .patch('/api/notes/507f1f77bcf86cd799439011')
@@ -304,6 +353,24 @@ describe('date-based notes routes', () => {
       userId: 'user123',
       content: 'Updated note',
     });
+  });
+
+  it('does not erase content or move dates during a cluster-only patch', async () => {
+    const clusterId = '507f1f77bcf86cd799439099';
+    const res = await request(app)
+      .patch('/api/notes/507f1f77bcf86cd799439011')
+      .send({ clusters: [clusterId] });
+
+    expect(res.status).toBe(200);
+    expect(mocks.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: '507f1f77bcf86cd799439011', userId: 'user123' },
+      {
+        $set: { clusters: [clusterId] },
+        $currentDate: { updatedAt: true },
+      },
+      { new: true, runValidators: true }
+    );
+    expect(res.body.item).toMatchObject({ date: '2026-06-07', content: 'My note' });
   });
 
   it('returns not found when updating another user note by id', async () => {

@@ -103,4 +103,51 @@ describe('POST /api/admin/grant', () => {
     expect(attempts[0].status).not.toBe(429);
     expect(attempts[3].status).toBe(429);
   });
+
+  it('increments authVersion when an admin resets a password by user id', async () => {
+    const target = {
+      _id: 'target-user',
+      username: 'target',
+      authVersion: 2,
+      save: vi.fn().mockResolvedValue(undefined),
+    };
+    const adminSelect = vi.fn().mockResolvedValue({
+      _id: 'mock-user',
+      username: 'mock',
+      isAdmin: true,
+    });
+    mockFindById.mockReset();
+    mockFindById
+      .mockReturnValueOnce({ select: adminSelect })
+      .mockResolvedValueOnce(target);
+
+    const res = await request(app)
+      .put('/api/admin/users/507f1f77bcf86cd799439011/password')
+      .set('Authorization', 'Bearer token')
+      .send({ newPassword: 'replacement-password' });
+
+    expect(res.status).toBe(200);
+    expect(target.authVersion).toBe(3);
+    expect(target.save).toHaveBeenCalledOnce();
+  });
+
+  it('increments a legacy authVersion when an admin resets a password by username', async () => {
+    selectSpy.mockResolvedValue({ _id: 'mock-user', username: 'mock', isAdmin: true });
+    const target = {
+      _id: 'target-user',
+      username: 'target',
+      authVersion: undefined,
+      save: vi.fn().mockResolvedValue(undefined),
+    };
+    mockFindOne.mockResolvedValue(target);
+
+    const res = await request(app)
+      .post('/api/admin/reset-username')
+      .set('Authorization', 'Bearer token')
+      .send({ username: 'target', newPassword: 'replacement-password' });
+
+    expect(res.status).toBe(200);
+    expect(target.authVersion).toBe(1);
+    expect(target.save).toHaveBeenCalledOnce();
+  });
 });

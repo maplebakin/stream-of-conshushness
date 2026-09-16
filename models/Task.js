@@ -1,12 +1,20 @@
 // models/Task.js
 import mongoose from 'mongoose';
+import { isValidISODate, recurrenceValidationError } from '../utils/recurrence.js';
 
 const taskSchema = new mongoose.Schema(
   {
     userId     : { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     title      : { type: String, required: true },
     notes      : { type: String, default: '' },
-    dueDate    : { type: String, default: null },           // 'YYYY-MM-DD' or null
+    dueDate    : {
+      type: String,
+      default: null,
+      validate: {
+        validator: (value) => value == null || value === '' || isValidISODate(value),
+        message: 'dueDate must be YYYY-MM-DD',
+      },
+    },
     completed  : { type: Boolean, default: false, index: true },
     completedAt: { type: Date, default: null },
     priority   : { type: Number, default: 0 },
@@ -17,10 +25,22 @@ const taskSchema = new mongoose.Schema(
     sections   : { type: [String], default: [], index: true },
 
     // Recurrence (aligns with UI)
-    rrule      : { type: String, default: '' },
+    rrule      : {
+      type: String,
+      default: '',
+      validate: {
+        validator(value) {
+          return !recurrenceValidationError(value, this.dueDate || '');
+        },
+        message: (props) => `Invalid task recurrence: ${props.value}`,
+      },
+    },
 
     entryId    : { type: mongoose.Schema.Types.ObjectId, ref: 'Entry', default: null },
     goalId     : { type: mongoose.Schema.Types.ObjectId, ref: 'Goal', default: null },
+    sourceSuggestionId: { type: mongoose.Schema.Types.ObjectId, ref: 'SuggestedTask', default: null },
+    recurrenceSourceTaskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', default: null },
+    clientRequestId: { type: String, default: null },
 
     // Soft delete support
     deletedAt  : { type: Date, default: null, index: true },
@@ -79,5 +99,17 @@ taskSchema.pre('save', function(next) {
 });
 
 taskSchema.index({ userId: 1, clusters: 1 });
+taskSchema.index(
+  { userId: 1, sourceSuggestionId: 1 },
+  { unique: true, partialFilterExpression: { sourceSuggestionId: { $type: 'objectId' } } }
+);
+taskSchema.index(
+  { userId: 1, clientRequestId: 1 },
+  { unique: true, partialFilterExpression: { clientRequestId: { $type: 'string' } } }
+);
+taskSchema.index(
+  { userId: 1, recurrenceSourceTaskId: 1 },
+  { unique: true, partialFilterExpression: { recurrenceSourceTaskId: { $type: 'objectId' } } }
+);
 
 export default mongoose.model('Task', taskSchema);

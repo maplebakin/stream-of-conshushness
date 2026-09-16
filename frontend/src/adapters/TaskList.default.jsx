@@ -135,11 +135,12 @@ export default function TaskList({
   async function toggle(task) {
     if (!token) return;
     const previous = tasks;
-    setTasks((current) => current.map((t) => (t._id === task._id ? { ...t, completed: !t.completed } : t)));
+    const desiredCompleted = !task.completed;
+    setTasks((current) => current.map((t) => (t._id === task._id ? { ...t, completed: desiredCompleted } : t)));
 
     try {
-      const resp = await axios.patch(`/api/tasks/${task._id}/toggle`);
-      const updated = normalizeTask(resp?.data?.task || resp?.data || { ...task, completed: !task.completed });
+      const resp = await axios.patch(`/api/tasks/${task._id}/toggle`, { completed: desiredCompleted });
+      const updated = normalizeTask(resp?.data?.task || resp?.data || { ...task, completed: desiredCompleted });
       const spawned = resp?.data?.next ? normalizeTask(resp.data.next) : null;
 
       setTasks((current) => {
@@ -151,8 +152,8 @@ export default function TaskList({
       });
     } catch (errToggle) {
       try {
-        await axios.patch(`/api/tasks/${task._id}`, { completed: !task.completed });
-        setTasks((current) => current.map((t) => (t._id === task._id ? { ...t, completed: !t.completed } : t)));
+        await axios.patch(`/api/tasks/${task._id}`, { completed: desiredCompleted });
+        setTasks((current) => current.map((t) => (t._id === task._id ? { ...t, completed: desiredCompleted } : t)));
       } catch (errFallback) {
         console.warn('[TaskList] toggle failed', errToggle?.response?.data || errToggle.message, errFallback?.response?.data || errFallback.message);
         setTasks(previous);

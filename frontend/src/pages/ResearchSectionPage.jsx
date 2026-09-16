@@ -1,9 +1,10 @@
 // frontend/src/pages/ResearchSectionPage.jsx
 // Genealogy/research project view: list of people + detail panel
-import { useState, useEffect, useCallback, useContext } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect, useCallback, useContext, useRef } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
+import { requestErrorSummary } from '../utils/requestError.js';
 
 // ─── tiny helpers ─────────────────────────────────────────────────────────────
 
@@ -213,7 +214,7 @@ function SubjectForm({ initial = {}, onSave, onCancel, allSubjects = [], subject
 
 // ─── SubjectDetail ────────────────────────────────────────────────────────────
 
-function SubjectDetail({ subject, onEdit, onDelete }) {
+function SubjectDetail({ subject, onEdit, onDelete, confirmingDelete, onCancelDelete }) {
   if (!subject) return null;
 
   const parents = subject.parentIds || [];
@@ -232,7 +233,12 @@ function SubjectDetail({ subject, onEdit, onDelete }) {
         </div>
         <div style={styles.detailActions}>
           <button style={styles.btnSecondary} onClick={onEdit}>Edit</button>
-          <button style={styles.btnDanger} onClick={onDelete}>Delete</button>
+          <button style={styles.btnDanger} onClick={onDelete}>
+            {confirmingDelete ? 'Confirm Delete' : 'Delete'}
+          </button>
+          {confirmingDelete && (
+            <button style={styles.btnSecondary} onClick={onCancelDelete}>Cancel</button>
+          )}
         </div>
       </div>
 
@@ -312,63 +318,100 @@ function SubjectDetail({ subject, onEdit, onDelete }) {
 
 export default function ResearchSectionPage() {
   const { sectionKey } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated } = useContext(AuthContext);
+  const requestedSubjectId = searchParams.get('subject') || '';
 
   const [subjects, setSubjects] = useState([]);
   const [selected, setSelected] = useState(null);       // full subject with populated rels
   const [view, setView] = useState('list');              // 'list' | 'new' | 'edit'
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [listError, setListError] = useState(null);
+  const [detailError, setDetailError] = useState('');
+  const [confirmingDeleteSubjectId, setConfirmingDeleteSubjectId] = useState('');
+  const listSequenceRef = useRef(0);
+  const detailSequenceRef = useRef(0);
 
   // Load list
   const loadSubjects = useCallback(async (query = '') => {
+    const sequence = ++listSequenceRef.current;
     if (!isAuthenticated) return;
     try {
       const params = query ? `?q=${encodeURIComponent(query)}` : '';
       const { data } = await axios.get(`/api/research/${sectionKey}/subjects${params}`);
+      if (sequence !== listSequenceRef.current) return;
       setSubjects(data.subjects || []);
-      setError(null);
+      setListError(null);
     } catch (e) {
-      setError(e.response?.data?.error || 'Failed to load research subjects');
+      if (sequence !== listSequenceRef.current) return;
+      console.error('Failed to load research subjects:', requestErrorSummary(e));
+      setListError(e.response?.data?.error || 'Failed to load research subjects');
     } finally {
-      setLoading(false);
+      if (sequence === listSequenceRef.current) setLoading(false);
     }
   }, [sectionKey, isAuthenticated]);
 
   useEffect(() => { loadSubjects(); }, [loadSubjects]);
 
   // Load detail for selected subject
-  async function selectSubject(id) {
+  const selectSubject = useCallback(async (id) => {
+    const sequence = ++detailSequenceRef.current;
+    setDetailError('');
     try {
       const { data } = await axios.get(`/api/research/${sectionKey}/subjects/${id}`);
+      if (sequence !== detailSequenceRef.current) return;
       setSelected(data.subject);
       setView('list');
+      setConfirmingDeleteSubjectId('');
     } catch (e) {
-      console.error('Failed to load subject:', e);
+      if (sequence !== detailSequenceRef.current) return;
+      console.error('Failed to load subject:', requestErrorSummary(e));
+      setSelected(null);
+      setDetailError(e.response?.data?.error || 'That research subject is unavailable.');
+      setSearchParams({}, { replace: true });
     }
-  }
+  }, [sectionKey, setSearchParams]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (!requestedSubjectId) {
+      detailSequenceRef.current += 1;
+      setSelected(null);
+      setDetailError('');
+      return;
+    }
+    selectSubject(requestedSubjectId);
+  }, [isAuthenticated, requestedSubjectId, selectSubject]);
 
   async function handleCreate(body) {
     const { data } = await axios.post(`/api/research/${sectionKey}/subjects`, body);
     setSubjects(prev => [...prev, data.subject].sort((a, b) => a.name.localeCompare(b.name)));
-    setSelected(data.subject);
     setView('list');
+    setConfirmingDeleteSubjectId('');
+    setSearchParams({ subject: data.subject._id }, { replace: true });
   }
 
   async function handleUpdate(body) {
     const { data } = await axios.patch(`/api/research/${sectionKey}/subjects/${selected._id}`, body);
     setSubjects(prev => prev.map(s => s._id === data.subject._id ? data.subject : s));
+    setConfirmingDeleteSubjectId('');
     // Reload full populated detail
     await selectSubject(data.subject._id);
   }
 
   async function handleDelete() {
-    if (!window.confirm(`Delete "${selected.name}"? This cannot be undone.`)) return;
+    if (!selected?._id) return;
+    if (confirmingDeleteSubjectId !== selected._id) {
+      setConfirmingDeleteSubjectId(selected._id);
+      return;
+    }
     await axios.delete(`/api/research/${sectionKey}/subjects/${selected._id}`);
     setSubjects(prev => prev.filter(s => s._id !== selected._id));
     setSelected(null);
     setView('list');
+    setConfirmingDeleteSubjectId('');
+    setSearchParams({}, { replace: true });
   }
 
   function handleSearch(e) {
@@ -378,8 +421,13 @@ export default function ResearchSectionPage() {
     loadSubjects(val);
   }
 
-  if (loading) return <div style={styles.loading}>Loading research project…</div>;
-  if (error) return <div style={styles.error}>{error}</div>;
+  if (loading) return <div style={styles.loading} role="status">Loading research project…</div>;
+  if (listError) return (
+    <div style={styles.error} role="alert">
+      <p>{listError}</p>
+      <button type="button" onClick={() => loadSubjects(q)}>Try again</button>
+    </div>
+  );
 
   return (
     <div style={styles.page}>
@@ -391,6 +439,7 @@ export default function ResearchSectionPage() {
             placeholder="Search people…"
             value={q}
             onChange={handleSearch}
+            aria-label="Search this research project"
           />
           <button
             style={styles.btnPrimary}
@@ -405,19 +454,27 @@ export default function ResearchSectionPage() {
         ) : (
           <ul style={styles.personList}>
             {subjects.map(s => (
-              <li
-                key={s._id}
-                style={{
-                  ...styles.personItem,
-                  ...(selected?._id === s._id ? styles.personItemActive : {}),
-                }}
-                onClick={() => selectSubject(s._id)}
-              >
-                <div style={styles.personName}>{s.name} {genderIcon(s.gender)}</div>
-                <div style={styles.personMeta}>{lifespan(s)}</div>
-                {s.tags?.length > 0 && (
-                  <div style={styles.personTags}>{s.tags.slice(0, 3).map(t => <span key={t} style={styles.tagSmall}>{t}</span>)}</div>
-                )}
+              <li key={s._id}>
+                <button
+                  type="button"
+                  style={{
+                    ...styles.personItem,
+                    ...styles.personButton,
+                    ...(selected?._id === s._id ? styles.personItemActive : {}),
+                  }}
+                  aria-current={selected?._id === s._id ? 'true' : undefined}
+                  onClick={() => {
+                    setSelected(null);
+                    setDetailError('');
+                    setSearchParams({ subject: s._id }, { replace: true });
+                  }}
+                >
+                  <span style={styles.personName}>{s.name} {genderIcon(s.gender)}</span>
+                  <span style={styles.personMeta}>{lifespan(s)}</span>
+                  {s.tags?.length > 0 && (
+                    <span style={styles.personTags}>{s.tags.slice(0, 3).map(t => <span key={t} style={styles.tagSmall}>{t}</span>)}</span>
+                  )}
+                </button>
               </li>
             ))}
           </ul>
@@ -425,6 +482,7 @@ export default function ResearchSectionPage() {
       </div>
 
       <div style={styles.main}>
+        {detailError && <div style={styles.error} role="alert">{detailError}</div>}
         {view === 'new' && (
           <>
             <h2 style={{ marginTop: 0 }}>Add person</h2>
@@ -459,8 +517,10 @@ export default function ResearchSectionPage() {
         {view === 'list' && selected && (
           <SubjectDetail
             subject={selected}
-            onEdit={() => setView('edit')}
+            onEdit={() => { setConfirmingDeleteSubjectId(''); setView('edit'); }}
             onDelete={handleDelete}
+            confirmingDelete={confirmingDeleteSubjectId === selected._id}
+            onCancelDelete={() => setConfirmingDeleteSubjectId('')}
           />
         )}
       </div>
@@ -514,12 +574,21 @@ const styles = {
     borderBottom: '1px solid var(--border-primary, #2a2a2a)',
     transition: 'background 0.1s',
   },
+  personButton: {
+    display: 'block',
+    width: '100%',
+    border: 0,
+    background: 'transparent',
+    color: 'inherit',
+    font: 'inherit',
+    textAlign: 'left',
+  },
   personItemActive: {
     background: 'var(--accent-primary-dim, rgba(99,102,241,0.15))',
     borderLeft: '3px solid var(--accent-primary, #6366f1)',
   },
-  personName: { fontWeight: 600, fontSize: '0.95em' },
-  personMeta: { fontSize: '0.8em', color: 'var(--text-secondary, #888)', marginTop: 2 },
+  personName: { display: 'block', fontWeight: 600, fontSize: '0.95em' },
+  personMeta: { display: 'block', fontSize: '0.8em', color: 'var(--text-secondary, #888)', marginTop: 2 },
   personTags: { display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' },
   tagSmall: {
     fontSize: '0.7em',

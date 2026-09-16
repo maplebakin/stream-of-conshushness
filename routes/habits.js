@@ -2,6 +2,8 @@ import express from 'express';
 import auth from '../middleware/auth.js';
 import Habit from '../models/Habit.js';
 import { calculateHabitAnalytics } from '../utils/habitAnalytics.js';
+import { logSafeError } from '../utils/errorHandler.js';
+import { torontoYmd } from '../utils/date.js';
 
 const router = express.Router();
 
@@ -36,10 +38,19 @@ router.post('/', auth, async (req, res) => {
 // PATCH habit (add date to history or update fields)
 router.patch('/:id', auth, async (req, res) => {
   try {
+    const updates = {};
+    if (typeof req.body?.title === 'string') updates.title = req.body.title.trim();
+    if (req.body?.cluster === null || typeof req.body?.cluster === 'string') updates.cluster = req.body.cluster;
+    if (req.body?.repeat === null || typeof req.body?.repeat === 'string') updates.repeat = req.body.repeat;
+    if (Array.isArray(req.body?.history)) {
+      updates.history = req.body.history.filter((date) => typeof date === 'string');
+    }
+    if (!Object.keys(updates).length) return res.status(400).json({ error: 'No valid updates provided' });
+
     const habit = await Habit.findOneAndUpdate(
       { _id: req.params.id, userId: req.user.userId },
-      req.body,
-      { new: true }
+      { $set: updates },
+      { new: true, runValidators: true }
     );
     if (!habit) return res.status(404).json({ error: 'Habit not found' });
     res.json(habit);
@@ -60,7 +71,7 @@ router.delete('/:id', auth, async (req, res) => {
 // PATCH – mark habit as done for today
 router.patch('/:id/done', auth, async (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
+    const today = torontoYmd();
     const habit = await Habit.findOne({ _id: req.params.id, userId: req.user.userId });
     if (!habit) return res.status(404).json({ error: 'Habit not found' });
 
@@ -82,7 +93,7 @@ router.get('/analytics', auth, async (req, res) => {
     const analytics = habits.map(habit => calculateHabitAnalytics(habit));
     res.json(analytics);
   } catch (error) {
-    console.error('[habits] Analytics failed:', error);
+    logSafeError('habits analytics failed', error);
     res.status(500).json({ error: 'Failed to load analytics' });
   }
 });
@@ -96,7 +107,7 @@ router.get('/:id/analytics', auth, async (req, res) => {
     const analytics = calculateHabitAnalytics(habit);
     res.json(analytics);
   } catch (error) {
-    console.error('[habits] Analytics failed:', error);
+    logSafeError('habits analytics failed', error);
     res.status(500).json({ error: 'Failed to load analytics' });
   }
 });

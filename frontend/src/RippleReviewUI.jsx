@@ -6,6 +6,8 @@ import { toDisplay, formatRecurrence } from './utils/display.js';
 import TaskModal from './TaskModal.jsx';
 import { normalizeClusterList } from './utils/clusterHelpers.js';
 import { todayISOInToronto } from './utils/date.js';
+import { standaloneRippleReviewPath } from './utils/rippleReview.js';
+import { useToast } from './hooks/useToast.js';
 import './RippleReviewUI.css';
 
 const band = (c) => (Number(c) >= 0.66 ? 'high' : Number(c) >= 0.33 ? 'medium' : 'low');
@@ -79,6 +81,7 @@ async function dismissRipple(id, headers) {
  */
 export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) {
   const { token } = useContext(AuthContext);
+  const { showToast } = useToast();
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : {}),
     [token]
@@ -135,8 +138,7 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
     setErr('');
     (async () => {
       try {
-        let res = await axios.get(`/api/ripples?date=${dayISO}`, { headers: authHeaders })
-          .catch(() => axios.get(`/api/ripples/${dayISO}`, { headers: authHeaders }));
+        const res = await axios.get(standaloneRippleReviewPath(dayISO), { headers: authHeaders });
         if (ignore) return;
         const arr = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.ripples) ? res.data.ripples : []);
         setRipples(arr);
@@ -181,7 +183,7 @@ export default function RippleReviewUI({ date, header = '🌊 Ripple Review' }) 
       setRipples(prev => prev.filter(r => (r._id || r.id) !== id));
     } catch (e) {
       console.error('dismiss error:', e);
-      alert('Could not dismiss ripple.');
+      showToast('Could not dismiss ripple.', { type: 'error' });
     }
   }
 

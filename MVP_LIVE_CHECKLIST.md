@@ -11,7 +11,10 @@
 ## Stability gates
 - [x] `npm test` passes
 - [x] `npm run build` passes
-- [x] Frontend lint has 0 errors (warnings remain)
+- [x] Frontend lint has 0 errors and 0 warnings
+- [x] `npm run verify` runs local CI-equivalent checks
+- [x] `npm run test:daily-loop` covers entry -> suggestion -> task -> carry-forward
+- [x] Unified Review Inbox surfaces pending automation artifacts in one workflow
 
 ## Security / operations
 - [x] Duplicate compat route mount removed
@@ -20,12 +23,11 @@
 - [x] Basic audit logging for admin reset action
 
 ## Known limitations for v0.1
-- Frontend still has lint warnings (mostly hook deps and Tailwind class order)
 - Health endpoint tests are still lightweight and not full integration tests
 - Legacy compat routes remain for backward compatibility (intentional)
-- Browserslist DB warning during build (`caniuse-lite` is stale)
+- Route audit script still reports noisy false positives for auth aliases and parameterized routes
 
 ## Suggested next small wins
-1. Clean remaining frontend lint warnings.
+1. Refine `scripts/routeAudit.mjs` until it can become a CI gate.
 2. Add integration tests around `/api/note/:date` shim behavior.
-3. Add a simple smoke E2E script for the full daily loop.
+3. Add bulk accept/reject actions to the unified Review Inbox after real-world use shows which actions are safe to batch.

@@ -1,42 +1,12 @@
 // frontend/src/App.jsx
-import React, { useContext, useState } from 'react';
+import React, { lazy, Suspense, useContext, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import CommandPalette from './components/CommandPalette.jsx';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts.js';
+import ErrorBoundary from './ErrorBoundary.jsx';
 
 import './variables.css';
 import './DesignSystem.css'
-// Pages / Layout
-import MainPage from './MainPage.jsx';
-import DailyPage from './DailyPage.jsx';
-import Calendar from './Calendar.jsx';
-import GoalPage from './GoalPage.jsx';
-import Login from './Login.jsx';
-import RegisterPage from './RegisterPage.jsx';
-import GameList from './GameList.jsx';
-import GamePage from './GamePage.jsx';
-
-import SectionsIndex from './pages/SectionsIndex.jsx';        // sections index grid
-import SectionPage from './pages/SectionPage.jsx';            // section detail
-import SectionPageRoom from './pages/SectionPageRoom.jsx';    // NEW: page room under a section
-import ClustersIndex from './pages/ClustersIndex.jsx';        // clusters index
-import ClusterRoom from './pages/ClusterRoom.jsx';            // per-cluster room
-import GatherListsPage from './pages/GatherListsPage.jsx';
-import InterestsPage from './pages/InterestsPage.jsx';
-
-import RippleReviewUI from './RippleReviewUI';
-import Layout from './Layout.jsx';
-import SuggestedTasksInbox from './SuggestedTasksInbox.jsx';
-import InboxTasksPage from './pages/InboxTasksPage.jsx';
-import Account from './pages/Account.jsx';
-import UserSettings from './pages/UserSettings.jsx';
-import AdminPanel from './pages/AdminPanel.jsx';
-import AdapterHarness from './adapters/AdapterHarness.jsx';
-import ExportData from './pages/ExportData.jsx';
-import GlobalSearch from './pages/GlobalSearch.jsx';
-import HabitAnalytics from './pages/HabitAnalytics.jsx';
-import TrashPage from './pages/TrashPage.jsx';
-import ResearchSectionPage from './pages/ResearchSectionPage.jsx';
 
 // Auth / Search / Theme / Toast Contexts
 import { AuthProvider, AuthContext } from './AuthContext.jsx';
@@ -44,10 +14,40 @@ import { SearchProvider } from './SearchContext.jsx';
 import { ThemeProvider } from './ThemeContext.jsx';
 import { ToastProvider } from './ToastContext.jsx';
 
-// Password reset pages
-import ForgotPassword from './pages/ForgotPassword.jsx';
-import ResetPassword from './pages/ResetPassword.jsx';
 import { todayISOInToronto } from './utils/date.js';
+
+// Route modules are lazy-loaded to keep the first app chunk focused on shell/auth state.
+const Layout = lazy(() => import('./Layout.jsx'));
+const MainPage = lazy(() => import('./MainPage.jsx'));
+const DailyPage = lazy(() => import('./DailyPage.jsx'));
+const Calendar = lazy(() => import('./Calendar.jsx'));
+const GoalPage = lazy(() => import('./GoalPage.jsx'));
+const Login = lazy(() => import('./Login.jsx'));
+const RegisterPage = lazy(() => import('./RegisterPage.jsx'));
+const GameList = lazy(() => import('./GameList.jsx'));
+const GamePage = lazy(() => import('./GamePage.jsx'));
+const RippleReviewUI = lazy(() => import('./RippleReviewUI.jsx'));
+const AdapterHarness = import.meta.env.DEV
+  ? lazy(() => import('./adapters/AdapterHarness.jsx'))
+  : null;
+const SectionsIndex = lazy(() => import('./pages/SectionsIndex.jsx'));
+const SectionPage = lazy(() => import('./pages/SectionPage.jsx'));
+const SectionPageRoom = lazy(() => import('./pages/SectionPageRoom.jsx'));
+const ClustersIndex = lazy(() => import('./pages/ClustersIndex.jsx'));
+const ClusterRoom = lazy(() => import('./pages/ClusterRoom.jsx'));
+const GatherListsPage = lazy(() => import('./pages/GatherListsPage.jsx'));
+const InterestsPage = lazy(() => import('./pages/InterestsPage.jsx'));
+const InboxTasksPage = lazy(() => import('./pages/InboxTasksPage.jsx'));
+const Account = lazy(() => import('./pages/Account.jsx'));
+const UserSettings = lazy(() => import('./pages/UserSettings.jsx'));
+const AdminPanel = lazy(() => import('./pages/AdminPanel.jsx'));
+const ExportData = lazy(() => import('./pages/ExportData.jsx'));
+const GlobalSearch = lazy(() => import('./pages/GlobalSearch.jsx'));
+const ReviewInbox = lazy(() => import('./pages/ReviewInbox.jsx'));
+const TrashPage = lazy(() => import('./pages/TrashPage.jsx'));
+const ResearchSectionPage = lazy(() => import('./pages/ResearchSectionPage.jsx'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword.jsx'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword.jsx'));
 
 /* Helper: redirect to "today" using local time (Toronto normalization happens server-side) */
 function TodayRedirect() {
@@ -74,6 +74,7 @@ function AppRoutes() {
         isOpen={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
       />
+      <Suspense fallback={<div className="page" role="status" aria-live="polite">Loading…</div>}>
       <Routes>
       {/* Public routes */}
       <Route path="/login" element={<Login />} />
@@ -89,7 +90,7 @@ function AppRoutes() {
           <Route path="/goals" element={<GoalPage />} />
           <Route path="/today" element={<TodayRedirect />} />
           <Route path="/day/:date" element={<DailyPage />} />
-          <Route path="/_adapters" element={<AdapterHarness />} />
+          {AdapterHarness && <Route path="/_adapters" element={<AdapterHarness />} />}
 
           {/* Sections */}
           <Route path="/sections" element={<SectionsIndex />} />               {/* landing */}
@@ -112,6 +113,7 @@ function AppRoutes() {
           <Route path="/section/games/:slug" element={<GamePage />} />
 
           {/* Utilities */}
+          <Route path="/review" element={<ReviewInbox />} />
           <Route path="/ripples" element={<RippleReviewUI />} />
           <Route path="/inbox/tasks" element={<InboxTasksPage />} />
           <Route path="/inbox/tasks/:date" element={<InboxTasksPage />} />
@@ -121,7 +123,8 @@ function AppRoutes() {
           <Route path="/settings" element={<UserSettings />} />
           <Route path="/export" element={<ExportData />} />
           <Route path="/search" element={<GlobalSearch />} />
-          <Route path="/habits/analytics" element={<HabitAnalytics />} />
+          {/* Keep old bookmarks safe while the unfinished habit UI remains private. */}
+          <Route path="/habits/analytics" element={<Navigate to="/today" replace />} />
           <Route path="/trash" element={<TrashPage />} />
 
           {/* 404 inside authed shell */}
@@ -130,7 +133,8 @@ function AppRoutes() {
       ) : (
         <Route path="*" element={<Navigate to="/login" replace />} />
       )}
-    </Routes>
+      </Routes>
+      </Suspense>
     </>
   );
 }
@@ -142,7 +146,9 @@ export default function App() {
         <ToastProvider>
           <SearchProvider>
             <BrowserRouter>
-              <AppRoutes />
+              <ErrorBoundary>
+                <AppRoutes />
+              </ErrorBoundary>
             </BrowserRouter>
           </SearchProvider>
         </ToastProvider>

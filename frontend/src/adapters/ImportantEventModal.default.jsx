@@ -2,9 +2,11 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import axios from '../api/axiosInstance';
 import { AuthContext } from '../AuthContext.jsx';
+import { useToast } from '../hooks/useToast.js';
 
 export default function ImportantEventModal({ defaultDate = '', onClose, onSaved }) {
   const { token } = useContext(AuthContext);
+  const { showToast } = useToast();
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(defaultDate);
@@ -14,9 +16,10 @@ export default function ImportantEventModal({ defaultDate = '', onClose, onSaved
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  async function handleSave() {
+  async function handleSave(event) {
+    event?.preventDefault?.();
     const t = title.trim();
-    if (!t) return;
+    if (!t || !date || saving) return;
     setSaving(true);
     try {
       await axios.post('/api/important-events', { title: t, date, details }, { headers });
@@ -24,7 +27,7 @@ export default function ImportantEventModal({ defaultDate = '', onClose, onSaved
       onClose?.();
     } catch (e) {
       console.error('create important event failed', e?.response?.data || e.message);
-      alert('Could not save event.');
+      showToast('Could not save event.', { type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -37,7 +40,7 @@ export default function ImportantEventModal({ defaultDate = '', onClose, onSaved
 
   return (
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && !saving && onClose?.()}>
-      <div className="modal-card" role="dialog" aria-modal="true" onKeyDown={onKeyDown}>
+      <form className="modal-card" role="dialog" aria-modal="true" onKeyDown={onKeyDown} onSubmit={handleSave}>
         <div className="modal-header">
           <h3>Add important event</h3>
         </div>
@@ -78,12 +81,12 @@ export default function ImportantEventModal({ defaultDate = '', onClose, onSaved
         </div>
 
         <div className="modal-actions">
-          <button className="button" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="button" onClick={handleSave} disabled={saving || !title.trim()}>
+          <button type="button" className="button" onClick={onClose} disabled={saving}>Cancel</button>
+          <button type="submit" className="button" disabled={saving || !title.trim() || !date}>
             {saving ? 'Saving…' : 'Add'}
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

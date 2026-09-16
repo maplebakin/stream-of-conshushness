@@ -18,6 +18,7 @@
 @media (max-width: 1100px) {
   .daily-page .daily-layout { grid-template-columns: 1fr; }
   .daily-page .daily-side { order: 2; }
+  .daily-page .daily-attention__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ---------------------------------------
@@ -82,6 +83,16 @@
   justify-content: flex-end;
 }
 
+.daily-page .daily-options {
+  margin-bottom: var(--space-3);
+}
+
+.daily-page .daily-options__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
 /* ---------------------------------------
    Soft Buttons & Chips (scoped!)
 ---------------------------------------- */
@@ -122,6 +133,119 @@
 
 .daily-page .daily-actions .bg-spool {
   background: color-mix(in srgb, var(--color-surface) 86%, var(--color-spool) 14%);
+}
+
+/* ---------------------------------------
+   Daily Command Center
+---------------------------------------- */
+.daily-page .daily-attention {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-color: color-mix(in srgb, var(--color-ripple) 18%, var(--color-border) 82%);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 94%, white 6%), var(--color-surface)),
+    var(--color-surface);
+}
+
+.daily-page .daily-attention__lead {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(220px, 1.1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.daily-page .daily-attention__eyebrow {
+  margin: 0 0 0.2rem;
+  color: var(--color-vein);
+  font-family: var(--font-glow);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.daily-page .daily-attention h3 {
+  margin: 0;
+  color: var(--color-plum);
+  font-family: var(--font-thread);
+  font-size: 1.12rem;
+}
+
+.daily-page .daily-attention__recommendation {
+  margin: 0;
+  min-height: 100%;
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-ripple) 32%, var(--color-border) 68%);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--color-surface) 82%, var(--color-ripple) 18%);
+  color: var(--color-ink);
+  line-height: 1.4;
+}
+
+.daily-page .daily-attention__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-2);
+}
+
+.daily-page .daily-attention__tile {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 0.28rem;
+  min-height: 98px;
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--color-surface) 92%, white 8%);
+  color: var(--color-ink);
+  text-decoration: none;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+.daily-page .daily-attention__tile--action {
+  cursor: pointer;
+}
+
+.daily-page .daily-attention__tile--action:hover {
+  border-color: color-mix(in srgb, var(--color-spool) 48%, var(--color-border) 52%);
+  background: color-mix(in srgb, var(--color-surface) 84%, var(--color-spool) 16%);
+  transform: translateY(-1px);
+}
+
+.daily-page .daily-attention__tile--action:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.daily-page .daily-attention__tile--needs-action {
+  border-color: color-mix(in srgb, var(--color-spool) 42%, var(--color-border) 58%);
+  background: color-mix(in srgb, var(--color-surface) 82%, var(--color-spool) 18%);
+}
+
+.daily-page .daily-attention__label {
+  color: var(--color-vein);
+  font-family: var(--font-glow);
+  font-size: 0.78rem;
+}
+
+.daily-page .daily-attention__tile strong {
+  color: var(--color-plum);
+  font-family: var(--font-thread);
+  font-size: 1.55rem;
+  line-height: 1;
+}
+
+.daily-page .daily-attention__tile span:last-child {
+  min-width: 0;
+  color: var(--color-vein);
+  font-size: 0.86rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.daily-page .daily-attention__note {
+  font-size: 0.86rem;
 }
 
 /* ---------------------------------------
@@ -288,6 +412,14 @@
   font-size: 1rem;
 }
 
+.daily-page .daily-review-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .daily-page .agenda-list {
   display: grid;
   gap: var(--space-1);
@@ -352,6 +484,83 @@
   gap: var(--space-2); margin-bottom: var(--space-2);
 }
 .daily-page .entry-card .entry-text { margin-bottom: .5rem; }
+
+.daily-page .entry-actions-row,
+.daily-page .side-header__actions,
+.daily-page .agenda-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.daily-page .agenda-type-label {
+  margin-left: var(--space-2);
+}
+
+.daily-page .agenda-details {
+  margin-top: 0.2rem;
+}
+
+.daily-page .agenda-source {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  color: var(--color-muted);
+  font-size: 0.82rem;
+}
+
+.daily-page .agenda-origin-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.35rem;
+  padding: 0.12rem 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface-soft) 42%, var(--color-surface) 58%);
+  color: var(--color-vein);
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.daily-page .agenda-origin-pill--entry-automation {
+  border-color: color-mix(in srgb, var(--color-ripple) 42%, var(--color-border) 58%);
+  background: color-mix(in srgb, var(--color-ripple) 13%, var(--color-surface) 87%);
+  color: var(--color-success);
+}
+
+.daily-page .agenda-origin-pill--user-edited {
+  border-color: color-mix(in srgb, var(--color-lantern) 46%, var(--color-border) 54%);
+  background: color-mix(in srgb, var(--color-lantern) 14%, var(--color-surface) 86%);
+  color: var(--color-warning);
+}
+
+.daily-page .agenda-origin-pill--manual {
+  background: color-mix(in srgb, var(--color-surface-tint) 42%, var(--color-surface) 58%);
+  color: var(--color-vein);
+}
+
+.daily-page .agenda-source-text {
+  line-height: 1.35;
+}
+
+.daily-page .agenda-source-link {
+  min-height: 30px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+.daily-page .agenda-actions,
+.daily-page .hourly-schedule-wrap {
+  margin-top: var(--space-2);
+}
+
+.daily-page .hourly-schedule-hidden {
+  margin-top: var(--space-1);
+}
 
 .daily-page .today-notes-panel {
   display: grid;
@@ -710,6 +919,11 @@
     grid-template-columns: 1fr;
   }
 
+  .daily-page .daily-attention__lead,
+  .daily-page .daily-attention__grid {
+    grid-template-columns: 1fr;
+  }
+
   .daily-page .entries-header,
   .daily-page .other-suggestions__header,
   .daily-page .side-header {
@@ -782,5 +996,620 @@
   .panel .task .task-actions {
     margin-left: 0;
     width: 100%;
+  }
+}
+
+/* Daily-loop visual hierarchy --------------------------------------- */
+.daily-page {
+  width: min(1380px, 100%);
+  margin: 0 auto;
+  padding: var(--space-5);
+}
+
+.daily-page .daily-header {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.daily-page .centered-header {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-panel);
+  background: linear-gradient(110deg, color-mix(in srgb, var(--color-surface-tint) 58%, var(--color-surface) 42%), var(--color-surface));
+  box-shadow: var(--shadow-card);
+}
+
+.daily-page .daily-actions {
+  justify-content: flex-start;
+  margin-top: 0;
+}
+
+.daily-page .daily-actions .button {
+  min-height: 40px;
+}
+
+.daily-page .daily-attention {
+  position: relative;
+  overflow: hidden;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding: var(--space-5);
+  border-color: color-mix(in srgb, var(--color-ripple) 34%, var(--color-border) 66%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-surface-accent) 64%, var(--color-surface) 36%), var(--color-surface));
+  box-shadow: var(--shadow-float);
+}
+
+.daily-page .daily-attention::after {
+  position: absolute;
+  inset: -8rem -5rem auto auto;
+  width: 17rem;
+  height: 17rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-lantern) 13%, transparent);
+  content: '';
+  pointer-events: none;
+}
+
+.daily-page .daily-attention__lead,
+.daily-page .daily-attention__grid {
+  position: relative;
+  z-index: 1;
+}
+
+.daily-page .daily-attention__eyebrow {
+  color: var(--color-ripple);
+  font-family: var(--font-sans);
+  font-weight: 800;
+  letter-spacing: 0.11em;
+}
+
+.daily-page .daily-attention h3 {
+  font-size: clamp(1.45rem, 2vw, 1.9rem);
+  line-height: 1.1;
+}
+
+.daily-page .daily-attention__recommendation {
+  display: flex;
+  align-items: center;
+  padding: var(--space-4);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--color-surface) 74%, white 26%);
+  box-shadow: var(--shadow-border);
+  font-size: 1rem;
+}
+
+.daily-page .daily-attention__tile {
+  min-height: 128px;
+  padding: var(--space-4);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--color-surface) 88%, white 12%);
+  box-shadow: var(--shadow-border);
+}
+
+.daily-page .daily-attention__tile--needs-action {
+  border-color: color-mix(in srgb, var(--color-lantern) 56%, var(--color-border) 44%);
+  background: color-mix(in srgb, var(--color-lantern) 12%, var(--color-surface) 88%);
+}
+
+.daily-page .daily-attention__tile strong {
+  font-size: 1.85rem;
+}
+
+.daily-page .daily-layout {
+  gap: var(--space-5);
+}
+
+.daily-page .panel {
+  padding: var(--space-4);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-card);
+}
+
+.daily-page .daily-section-heading,
+.daily-page .side-header h3 {
+  color: var(--color-text-strong);
+  font-size: 1.08rem;
+}
+
+.daily-page .daily-section-heading {
+  padding-inline-start: var(--space-2);
+  border-left: 3px solid color-mix(in srgb, var(--color-ripple) 70%, var(--color-spool) 30%);
+}
+
+.daily-page .daily-suggestions,
+.daily-page .ripple-box {
+  padding-top: var(--space-3);
+}
+
+.daily-page .agenda-item {
+  padding: var(--space-3);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--color-surface-tint) 34%, var(--color-surface) 66%);
+}
+
+.daily-page .agenda-origin-pill {
+  min-height: 26px;
+  background: color-mix(in srgb, var(--color-ripple) 13%, var(--color-surface) 87%);
+  color: var(--color-ripple);
+  letter-spacing: 0.03em;
+}
+
+.daily-page .agenda-source-link {
+  color: var(--color-plum);
+  font-weight: 750;
+}
+
+.daily-page .entry-card {
+  padding: var(--space-3);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--color-surface) 94%, white 6%);
+}
+
+@media (max-width: 720px) {
+  .daily-page {
+    padding: var(--space-3);
+  }
+
+  .daily-page .daily-attention {
+    padding: var(--space-4);
+  }
+
+  .daily-page .daily-attention h3 {
+    font-size: 1.45rem;
+  }
+}
+
+/* Compact Today focus ------------------------------------------------ */
+.daily-page {
+  padding-top: var(--space-3);
+}
+
+.daily-page .daily-header {
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
+.daily-page .centered-header {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.daily-page .daily-actions {
+  position: relative;
+  align-items: center;
+}
+
+.daily-page .daily-options-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.daily-page .daily-options-menu > summary {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
+  box-shadow: var(--shadow-border);
+  color: var(--color-vein);
+  cursor: pointer;
+  font-size: 1rem;
+  list-style: none;
+}
+
+.daily-page .daily-options-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.daily-page .daily-options-menu > summary:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.daily-page .daily-options-menu__panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  width: min(19rem, calc(100vw - 2 * var(--space-3)));
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-float);
+}
+
+.daily-page .daily-options-menu__panel strong {
+  color: var(--color-text-strong);
+  font-family: var(--font-thread);
+}
+
+.daily-page .daily-options-menu__panel .button {
+  min-height: 44px;
+  text-align: left;
+}
+
+.daily-page .daily-attention.compact-action-summary {
+  position: relative;
+  overflow: visible;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border-color: color-mix(in srgb, var(--color-ripple) 28%, var(--color-border) 72%);
+  border-radius: var(--radius-card);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-surface-accent) 44%, var(--color-surface) 56%),
+    var(--color-surface)
+  );
+  box-shadow: var(--shadow-card);
+}
+
+.daily-page .daily-attention.compact-action-summary::after {
+  display: none;
+}
+
+.daily-page .daily-attention .compact-action-summary__header h2 {
+  font-size: clamp(1.15rem, 2vw, 1.4rem);
+}
+
+.daily-page .daily-attention__note {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  padding-inline: var(--space-1);
+}
+
+.daily-page .daily-section-heading {
+  padding: 0 0 var(--space-1);
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 65%, transparent);
+  border-radius: 0;
+  background: transparent;
+}
+
+.daily-page .daily-schedule-disclosure {
+  margin-top: var(--space-2);
+}
+
+@media (max-width: 720px) {
+  .daily-page {
+    padding-top: var(--space-2);
+  }
+
+  .daily-page .centered-header {
+    padding: 0;
+  }
+
+  .daily-page .daily-actions {
+    flex-wrap: nowrap;
+  }
+
+  .daily-page .daily-actions > .button {
+    min-width: 0;
+    padding-inline: var(--space-2);
+    white-space: nowrap;
+  }
+
+  .daily-page .daily-options-menu__panel {
+    right: 0;
+    left: auto;
+  }
+
+  .daily-page .daily-attention.compact-action-summary {
+    padding: var(--space-3);
+  }
+
+  .daily-page .daily-attention .compact-action-summary__header h2 {
+    font-size: 1.2rem;
+  }
+
+  .daily-page .daily-attention .compact-action-summary__body {
+    gap: var(--space-2);
+  }
+
+  .daily-page .daily-attention .compact-action-summary__secondary {
+    gap: var(--space-2);
+  }
+
+  .daily-page .panel {
+    padding: var(--space-3);
+  }
+}
+
+/* Intentional mobile Today composition -------------------------------- */
+.daily-page .mobile-date-navigator {
+  grid-template-columns: 44px minmax(0, 1fr) 44px auto;
+  align-items: center;
+}
+
+.daily-page .mobile-date-navigator__label {
+  font-family: var(--font-echo);
+  font-size: clamp(1.25rem, 3vw, 1.7rem);
+  color: var(--color-plum);
+}
+
+.daily-page .mobile-date-navigator__arrow,
+.daily-page .mobile-date-navigator__today {
+  background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
+}
+
+.daily-page .daily-actions__desktop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.daily-page .daily-add-menu {
+  display: none;
+  position: relative;
+}
+
+.daily-page .daily-add-menu > summary {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--color-spool) 46%, var(--color-border) 54%);
+  border-radius: var(--radius-button);
+  background: color-mix(in srgb, var(--color-spool) 17%, var(--color-surface) 83%);
+  color: var(--color-plum);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 750;
+  list-style: none;
+}
+
+.daily-page .daily-add-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.daily-page .daily-add-menu__panel {
+  position: absolute;
+  z-index: 25;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  width: min(14rem, calc(100vw - 2 * var(--space-3)));
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-elevated);
+  box-shadow: var(--shadow-float);
+}
+
+.daily-page .daily-add-menu__panel button {
+  min-height: 44px;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-input);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+.daily-page .daily-add-menu__panel button:hover,
+.daily-page .daily-add-menu__panel button:focus-visible {
+  background: color-mix(in srgb, var(--color-surface) 72%, var(--color-spool) 28%);
+}
+
+@media (max-width: 720px) {
+  .daily-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .daily-page .daily-header {
+    display: contents;
+  }
+
+  .daily-page .mobile-date-navigator {
+    order: 1;
+    position: static;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px auto;
+    gap: 0.35rem;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .daily-page .mobile-date-navigator__label {
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .daily-page .mobile-date-navigator__arrow,
+  .daily-page .mobile-date-navigator__today {
+    min-height: 44px;
+  }
+
+  .daily-page .mobile-date-navigator__today {
+    padding-inline: 0.55rem;
+  }
+
+  .daily-page .daily-attention {
+    order: 2;
+    margin: 0;
+  }
+
+  .daily-page .daily-attention.compact-action-summary {
+    padding: var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .daily-page .daily-attention .compact-action-summary__header h2 {
+    font-family: var(--font-thread);
+    font-size: 1.13rem;
+  }
+
+  .daily-page .daily-attention .compact-action-summary__body {
+    align-items: center;
+  }
+
+  .daily-page .daily-attention .compact-action-summary__copy strong {
+    font-family: var(--font-sans);
+    font-size: 0.98rem;
+  }
+
+  .daily-page .daily-attention .compact-action-summary__copy p {
+    font-size: 0.8rem;
+  }
+
+  .daily-page .daily-attention__note {
+    order: 3;
+    margin: 0;
+  }
+
+  .daily-page .daily-layout {
+    order: 4;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .daily-page .daily-side {
+    order: 1;
+  }
+
+  .daily-page .daily-main {
+    order: 2;
+  }
+
+  .daily-page .daily-layout .panel {
+    padding: var(--space-3);
+    border-radius: var(--radius-card);
+  }
+
+  .daily-page .daily-actions {
+    order: 5;
+    justify-content: flex-end;
+    width: 100%;
+    margin: 0;
+    padding-top: var(--space-1);
+  }
+
+  .daily-page .daily-actions__desktop {
+    display: none;
+  }
+
+  .daily-page .daily-add-menu {
+    display: block;
+  }
+
+  .daily-page .daily-options-menu {
+    margin-left: 0;
+  }
+
+  .daily-page .daily-options-menu > summary {
+    min-height: 44px;
+  }
+
+  .daily-page .daily-options-menu__panel {
+    right: 0;
+    left: auto;
+    width: min(19rem, calc(100vw - 2 * var(--space-3)));
+  }
+
+  .daily-page > .secondary-section {
+    order: 6;
+  }
+
+  .daily-page > .secondary-section > summary {
+    min-height: 44px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--font-sans);
+    font-size: 0.86rem;
+  }
+
+  .daily-page .today-notes-panel {
+    padding: var(--space-3);
+    border-radius: var(--radius-card);
+  }
+
+  .daily-page .today-notes-header {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .daily-page .today-notes-header h3 {
+    font-family: var(--font-thread);
+    font-size: 1.02rem;
+  }
+
+  .daily-page .today-notes-header p {
+    margin: 0.15rem 0 0;
+    font-size: 0.75rem;
+  }
+
+  .daily-page .today-notes-actions {
+    flex: 0 0 auto;
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .daily-page .today-notes-actions .pill {
+    min-height: 28px;
+    padding: 0.2rem 0.45rem;
+    font-size: 0.7rem;
+  }
+
+  .daily-page .today-notes-actions .button {
+    min-height: 40px;
+    padding-inline: 0.65rem;
+    font-size: 0.76rem;
+  }
+
+  .daily-page .today-notes-textarea {
+    min-height: 7rem;
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+  }
+
+  .daily-page .today-notes-preview {
+    display: none;
+  }
+
+  .daily-page .agenda-item {
+    padding: var(--space-2);
+  }
+
+  .daily-page .agenda-title,
+  .daily-page .agenda-meta,
+  .daily-page .agenda-source {
+    font-family: var(--font-sans);
+  }
+
+  .daily-page .agenda-source,
+  .daily-page .agenda-actions {
+    gap: 0.35rem;
+  }
+
+  .daily-page .agenda-actions .button,
+  .daily-page .agenda-source-link {
+    min-height: 40px;
   }
 }

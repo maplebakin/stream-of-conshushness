@@ -21,17 +21,28 @@ function importReferences(modelName) {
 }
 
 describe('backend legacy model import contracts', () => {
+  it('keeps raw section-page validation bypass behind an explicit development opt-in', () => {
+    const route = read('routes/sectionPages.js');
+    expect(route).toContain("const DEV_FALLBACKS = !IS_PROD && process.env.ALLOW_DEV_FALLBACKS === '1'");
+    expect(route).toContain('if (!DEV_FALLBACKS)');
+  });
+
   it('uses SectionPage as the current custom section page model, not legacy Page', () => {
     expect(importReferences('SectionPage')).toEqual([
       'routes/export.js',
       'routes/search.js',
       'routes/sectionPages.js',
+      'routes/sections.js',
     ]);
     expect(importReferences('Page')).toEqual([]);
   });
 
   it('uses ScheduleItem as the current daily schedule model, not legacy DailySchedule', () => {
-    expect(importReferences('ScheduleItem')).toEqual(['routes/schedule.js']);
+    expect(importReferences('ScheduleItem')).toEqual([
+      'routes/export.js',
+      'routes/schedule.js',
+      'routes/search.js',
+    ]);
     expect(importReferences('DailySchedule')).toEqual([]);
   });
 

@@ -19,6 +19,14 @@ export default function RegisterPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    if (!username.trim()) {
+      setError('Username is required.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -26,20 +34,26 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       const { data } = await axios.post('/api/register', {
-        username,
+        username: username.trim(),
         password,
         email: email.trim() || undefined,
       });
-      login(data.token);
+      login(data);
       navigate('/');
     } catch (err) {
-      setError(err.message || 'Registration failed');
+      setError(err?.response?.data?.error || err.message || 'Registration failed');
     } finally {
       setLoading(false);
     }
   }
 
   const pwdMismatch = confirmPassword && password !== confirmPassword;
+  const canSubmit = Boolean(
+    username.trim() &&
+    password.length >= 6 &&
+    confirmPassword &&
+    password === confirmPassword
+  );
 
   return (
     <main className="auth-page">
@@ -122,7 +136,7 @@ export default function RegisterPage() {
               <Link to="/login">Back to login</Link>
             </div>
             <div className="right">
-              <button type="submit" className="button" disabled={loading}>
+              <button type="submit" className="button" disabled={loading || !canSubmit}>
                 {loading ? 'Creating…' : 'Create account'}
               </button>
             </div>

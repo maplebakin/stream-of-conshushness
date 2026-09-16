@@ -49,12 +49,12 @@ export default function RepeatFields({
 
           <label>
             <div style={{ fontSize: 12, opacity: 0.8 }}>Start Date</div>
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ width: '100%' }} />
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} required style={{ width: '100%' }} />
           </label>
 
           <label>
             <div style={{ fontSize: 12, opacity: 0.8 }}>Until (optional)</div>
-            <input type="date" value={until} onChange={e => setUntil(e.target.value)} style={{ width: '100%' }} />
+            <input type="date" value={until} min={startDate || undefined} onChange={e => setUntil(e.target.value)} style={{ width: '100%' }} />
           </label>
 
           {freq === 'WEEKLY' && (
@@ -66,8 +66,12 @@ export default function RepeatFields({
                     key={d.key}
                     type="button"
                     onClick={() => toggleDay(d.key)}
+                    aria-pressed={byday.includes(d.key)}
+                    aria-label={`${d.label} ${byday.includes(d.key) ? 'selected' : 'not selected'}`}
                     style={{
-                      padding: '4px 8px',
+                      padding: '8px 10px',
+                      minWidth: 44,
+                      minHeight: 44,
                       borderRadius: 8,
                       border: '1px solid var(--color-border,#e4e4e7)',
                       background: byday.includes(d.key) ? 'var(--color-accent,#e9d5ff)' : 'transparent',

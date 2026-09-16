@@ -1,4 +1,4 @@
-# Stream of Conshushness Manual Smoke Test
+# StreamofConshushness Manual Smoke Test
 
 This checklist covers the current functional MVP path after the Phase 2 backend stabilization and early Phase 3 Daily Page UI work.
 
@@ -18,7 +18,8 @@ This checklist covers the current functional MVP path after the Phase 2 backend 
 | Appointment/event creation from automation | Usable now | Entry automation can create source-marked appointments/events linked to the entry. Update behavior is covered by backend tests. |
 | Manual appointment/event creation | Usable now | Daily Page has `+ Add appointment`; Calendar has appointment and important-event modals. |
 | Notes/schedule on Daily Page | Partially usable | `NotesSection` and `HourlySchedule` are mounted on Daily Page; this pass did not deeply test their workflows. |
-| Search/export/settings/admin | Broken/unknown | Routes are wired, but they were not audited in this smoke pass. Admin likely requires appropriate privileges. |
+| Search/export | Usable under automated contract tests | Search is owner-scoped, race-guarded, and links to exact destinations where the current UI supports them; export remains authenticated. Manual browser recovery checks are still recommended. |
+| Settings/admin | Needs manual smoke | Routes are wired; admin requires appropriate privileges. |
 
 ## Local Smoke Setup
 
@@ -95,6 +96,26 @@ Only run destructive cleanup commands against a dedicated disposable smoke datab
 ## Smoke Test Setup
 
 After local setup is complete, use a fresh test account or a disposable local database when possible.
+
+## Automated Browser Smoke
+
+The repo includes a minimal Playwright smoke test for the core daily loop:
+
+```bash
+npx playwright install chromium
+RUN_BROWSER_SMOKE=1 BROWSER_SMOKE_START_SERVER=1 npm run test:browser-smoke
+```
+
+This starts isolated smoke servers, registers disposable users, creates the Stream entry `I need to call the dentist tomorrow.`, verifies the pending Review Inbox task suggestion, accepts it, and confirms `Call the dentist` appears on tomorrow's `/day/:date` page. It also creates `I'm going to visit my mom on the 13th.` and verifies the extracted `Visit my mom` event appears on the expected day agenda.
+
+Requirements:
+
+- A working `.env` with `MONGODB_URI` pointing at a disposable test database.
+- `JWT_SECRET` set to a valid value.
+- Chromium installed through `npx playwright install chromium`.
+- Ports `3100` and `5174` available when `BROWSER_SMOKE_START_SERVER=1`, unless you set `E2E_API_BASE` and `E2E_BASE_URL`.
+
+Without `RUN_BROWSER_SMOKE=1`, `npm run test:browser-smoke` intentionally skips so normal unit/build validation does not depend on a live database or browser binary.
 
 ## Manual Smoke Checklist
 

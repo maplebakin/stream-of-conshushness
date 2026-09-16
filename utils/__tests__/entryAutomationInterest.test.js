@@ -130,7 +130,10 @@ describe('entry automation interest suggestions', () => {
     mocks.rippleFind.mockReturnValue({
       select: () => Promise.resolve([]),
     });
-    mocks.rippleInsertMany.mockResolvedValue([]);
+    mocks.rippleInsertMany.mockImplementation(async (docs) => docs.map((doc, index) => ({
+      _id: `ripple-${index + 1}`,
+      ...doc,
+    })));
     mocks.suggestedTaskInsertMany.mockResolvedValue([]);
     mocks.suggestedGatherItemFind.mockReturnValue({
       select: () => ({
@@ -148,8 +151,9 @@ describe('entry automation interest suggestions', () => {
         lean: () => Promise.resolve(
           mocks.existingSuggestedInterests.filter((item) => (
             item.userId === query.userId &&
-            item.category === query.category &&
-            item.status === query.status
+            (!query.category || item.category === query.category) &&
+            (!query.sourceEntryId || item.sourceEntryId === query.sourceEntryId) &&
+            (query.status?.$in ? query.status.$in.includes(item.status) : item.status === query.status)
           ))
         ),
       }),
@@ -222,6 +226,19 @@ describe('entry automation interest suggestions', () => {
     expect(mocks.importantEventCreate).not.toHaveBeenCalled();
   });
 
+  it('keeps task review active when an entry mixes an interest with a scheduled action', async () => {
+    const entry = await createInterestEntry(
+      "I'd like to learn about tap dance. I need to call the dentist tomorrow."
+    );
+
+    expect(entry.suggestedTasks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: expect.stringMatching(/call the dentist/i) }),
+    ]));
+    expect(mocks.rippleInsertMany).toHaveBeenCalled();
+    expect(mocks.suggestedTaskInsertMany).toHaveBeenCalled();
+    expect(mocks.suggestedInterestInsertMany).toHaveBeenCalled();
+  });
+
   it('does not create duplicate suggestions when an active Interest already exists', async () => {
     mocks.existingInterests = [{
       userId: 'user-1',
@@ -250,7 +267,7 @@ describe('entry automation interest suggestions', () => {
     expect(mocks.suggestedInterestInsertMany).not.toHaveBeenCalled();
   });
 
-  it('allows a new suggestion when existing Interest is archived or previous suggestion was rejected', async () => {
+  it('remembers a rejected suggestion from the same source even when an active Interest is archived', async () => {
     mocks.existingInterests = [{
       userId: 'user-1',
       title: 'Tap dance',
@@ -264,15 +281,12 @@ describe('entry automation interest suggestions', () => {
       normalizedTitle: 'tap dance',
       category: 'Learning Curiosities',
       status: 'rejected',
+      sourceEntryId: 'entry-1',
     }];
 
     await createInterestEntry("I'd like to learn about tap dance.");
 
-    expect(insertedInterestDocs()[0]).toMatchObject({
-      title: 'Tap dance',
-      category: 'Learning Curiosities',
-      status: 'pending',
-    });
+    expect(mocks.suggestedInterestInsertMany).not.toHaveBeenCalled();
   });
 
   it.each([

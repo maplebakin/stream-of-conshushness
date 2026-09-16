@@ -120,7 +120,7 @@ export default function SectionSidebar() {
               <Link
                 key={p._id}
                 to={url}
-                className="rounded-button text-ink hover:bg-thread hover:text-mist px-3 py-2"
+                className="hover:bg-thread rounded-button px-3 py-2 text-ink hover:text-mist"
                 title={p.title}
               >
                 {p.emoji ? `${p.emoji} ` : ''}{p.title}

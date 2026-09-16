@@ -3,6 +3,7 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import ResearchSubject from '../models/ResearchSubject.js';
 import Section from '../models/Section.js';
+import { logSafeError } from '../utils/errorHandler.js';
 
 const { ObjectId } = mongoose.Types;
 const r = Router();
@@ -34,6 +35,20 @@ async function resolveSection(userId, key) {
   return Section.findOne({ ownerId: userId, slug: key }).lean();
 }
 
+async function resolveOwnedRelationshipIds(userId, sectionId, values) {
+  const raw = [...new Set((Array.isArray(values) ? values : []).filter(Boolean).map(String))];
+  const requested = raw.filter((id) => ObjectId.isValid(id));
+  if (!requested.length) return { ids: [], allOwned: raw.length === 0 };
+
+  const rows = await ResearchSubject.find({
+    _id: { $in: requested },
+    userId,
+    sectionId,
+  }).select('_id').lean();
+  const ids = (rows || []).map((row) => row._id);
+  return { ids, allOwned: requested.length === raw.length && ids.length === requested.length };
+}
+
 // ─── List subjects in a research section ──────────────────────────────────────
 // GET /api/research/:sectionKey/subjects[?q=]
 r.get('/:sectionKey/subjects', async (req, res) => {
@@ -54,7 +69,7 @@ r.get('/:sectionKey/subjects', async (req, res) => {
 
     return res.json({ subjects, sectionId: section._id });
   } catch (e) {
-    console.error('[research] list failed:', e);
+    logSafeError('research list failed', e);
     return res.status(500).json({ error: 'Failed to list subjects' });
   }
 });
@@ -86,6 +101,13 @@ r.post('/:sectionKey/subjects', async (req, res) => {
 
     const base = slugify(name);
     const slug = await uniqueSlug(userId, section._id, base);
+    const [ownedParents, ownedSpouses] = await Promise.all([
+      resolveOwnedRelationshipIds(userId, section._id, parentIds),
+      resolveOwnedRelationshipIds(userId, section._id, spouseIds),
+    ]);
+    if (!ownedParents.allOwned || !ownedSpouses.allOwned) {
+      return res.status(400).json({ error: 'Relationships must reference subjects in this research section' });
+    }
 
     const subject = await ResearchSubject.create({
       userId,
@@ -100,8 +122,8 @@ r.post('/:sectionKey/subjects', async (req, res) => {
       deathPlace: String(deathPlace).trim(),
       burialPlace: String(burialPlace).trim(),
       occupation: String(occupation).trim(),
-      parentIds: (Array.isArray(parentIds) ? parentIds : []).filter(id => ObjectId.isValid(id)),
-      spouseIds: (Array.isArray(spouseIds) ? spouseIds : []).filter(id => ObjectId.isValid(id)),
+      parentIds: ownedParents.ids,
+      spouseIds: ownedSpouses.ids,
       notes: String(notes).slice(0, 50000),
       sources: (Array.isArray(sources) ? sources : []).slice(0, 50).map(s => ({
         citation: String(s.citation || '').trim(),
@@ -114,7 +136,7 @@ r.post('/:sectionKey/subjects', async (req, res) => {
 
     return res.status(201).json({ subject });
   } catch (e) {
-    console.error('[research] create failed:', e);
+    logSafeError('research create failed', e);
     return res.status(500).json({ error: 'Failed to create subject' });
   }
 });
@@ -134,8 +156,16 @@ r.get('/:sectionKey/subjects/:id', async (req, res) => {
       userId,
       sectionId: section._id,
     })
-      .populate('parentIds', 'name slug birthDate deathDate gender')
-      .populate('spouseIds', 'name slug birthDate deathDate gender')
+      .populate({
+        path: 'parentIds',
+        select: 'name slug birthDate deathDate gender',
+        match: { userId, sectionId: section._id },
+      })
+      .populate({
+        path: 'spouseIds',
+        select: 'name slug birthDate deathDate gender',
+        match: { userId, sectionId: section._id },
+      })
       .lean();
 
     if (!subject) return res.status(404).json({ error: 'Subject not found' });
@@ -149,7 +179,7 @@ r.get('/:sectionKey/subjects/:id', async (req, res) => {
 
     return res.json({ subject: { ...subject, children } });
   } catch (e) {
-    console.error('[research] get failed:', e);
+    logSafeError('research get failed', e);
     return res.status(500).json({ error: 'Failed to get subject' });
   }
 });
@@ -175,16 +205,23 @@ r.patch('/:sectionKey/subjects/:id', async (req, res) => {
     for (const key of allowed) {
       if (key in req.body) updates[key] = req.body[key];
     }
-    if (updates.name) {
-      updates.name = String(updates.name).trim().slice(0, 300);
+    if (Object.prototype.hasOwnProperty.call(updates, 'name')) {
+      updates.name = String(updates.name || '').trim().slice(0, 300);
+      if (!updates.name) return res.status(400).json({ error: 'name required' });
     }
     if (updates.parentIds) {
-      updates.parentIds = (Array.isArray(updates.parentIds) ? updates.parentIds : [])
-        .filter(id => ObjectId.isValid(id));
+      const owned = await resolveOwnedRelationshipIds(userId, section._id, updates.parentIds);
+      if (!owned.allOwned) {
+        return res.status(400).json({ error: 'Parents must belong to this research section' });
+      }
+      updates.parentIds = owned.ids;
     }
     if (updates.spouseIds) {
-      updates.spouseIds = (Array.isArray(updates.spouseIds) ? updates.spouseIds : [])
-        .filter(id => ObjectId.isValid(id));
+      const owned = await resolveOwnedRelationshipIds(userId, section._id, updates.spouseIds);
+      if (!owned.allOwned) {
+        return res.status(400).json({ error: 'Spouses must belong to this research section' });
+      }
+      updates.spouseIds = owned.ids;
     }
     if (updates.sources) {
       updates.sources = (Array.isArray(updates.sources) ? updates.sources : []).slice(0, 50).map(s => ({
@@ -201,17 +238,20 @@ r.patch('/:sectionKey/subjects/:id', async (req, res) => {
       updates.alternateNames = (Array.isArray(updates.alternateNames) ? updates.alternateNames : [])
         .map(n => String(n).trim()).filter(Boolean);
     }
+    if (!Object.keys(updates).length) {
+      return res.status(400).json({ error: 'No valid updates provided' });
+    }
 
     const subject = await ResearchSubject.findOneAndUpdate(
       { _id: req.params.id, userId, sectionId: section._id },
       { $set: updates },
-      { new: true }
+      { new: true, runValidators: true }
     ).lean();
 
     if (!subject) return res.status(404).json({ error: 'Subject not found' });
     return res.json({ subject });
   } catch (e) {
-    console.error('[research] update failed:', e);
+    logSafeError('research update failed', e);
     return res.status(500).json({ error: 'Failed to update subject' });
   }
 });
@@ -226,7 +266,7 @@ r.delete('/:sectionKey/subjects/:id', async (req, res) => {
 
     if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
 
-    const subject = await ResearchSubject.findOneAndDelete({
+    const subject = await ResearchSubject.findOne({
       _id: req.params.id,
       userId,
       sectionId: section._id,
@@ -234,15 +274,23 @@ r.delete('/:sectionKey/subjects/:id', async (req, res) => {
 
     if (!subject) return res.status(404).json({ error: 'Subject not found' });
 
-    // Remove this subject from other subjects' parentIds and spouseIds
+    // Clean relationships while the owned subject still exists. If cleanup
+    // fails, deletion does not leave every related record dangling.
     await ResearchSubject.updateMany(
-      { userId, sectionId: section._id },
+      { userId, sectionId: section._id, _id: { $ne: subject._id } },
       { $pull: { parentIds: subject._id, spouseIds: subject._id } }
     );
 
+    const deleted = await ResearchSubject.findOneAndDelete({
+      _id: subject._id,
+      userId,
+      sectionId: section._id,
+    }).lean();
+    if (!deleted) return res.status(409).json({ error: 'Subject changed while it was being deleted' });
+
     return res.json({ ok: true });
   } catch (e) {
-    console.error('[research] delete failed:', e);
+    logSafeError('research delete failed', e);
     return res.status(500).json({ error: 'Failed to delete subject' });
   }
 });

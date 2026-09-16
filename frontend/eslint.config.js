@@ -18,7 +18,7 @@ export default defineConfig([
       reactHooks.configs['recommended-latest'],
       reactRefresh.configs.vite,
       // Tailwind’s recommended rules
-      tailwind.configs['flat/recommended'],
+      tailwind.configs.recommended,
     ],
     languageOptions: {
       ecmaVersion: 'latest',
@@ -29,9 +29,9 @@ export default defineConfig([
       },
     },
     settings: {
-      // Point it at your Tailwind config so it knows your custom tokens
+      // Point it at the Tailwind CSS entry so it knows your custom tokens
       tailwindcss: {
-        config: 'frontend/tailwind.config.js',
+        cssConfigPath: 'src/index.css',
       },
     },
     rules: {

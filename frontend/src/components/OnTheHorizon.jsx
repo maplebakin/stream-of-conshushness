@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import axios from '../api/axiosInstance.js';
-import { getAppointmentDetailParts } from '../utils/appointmentIds.js';
+import { getAppointmentDetailParts, getStoredAppointmentId } from '../utils/appointmentIds.js';
+import { sourceEntryPath, sourceStateLabel } from '../utils/sourceEntryState.js';
 
 function itemIcon(type) {
   return type === 'appointment' ? '🗓️' : '⭐';
@@ -8,6 +10,25 @@ function itemIcon(type) {
 
 function itemTypeLabel(type) {
   return type === 'appointment' ? 'Appointment' : 'Important event';
+}
+
+function formatHorizonDate(item) {
+  if (!item?.date) return '';
+  const date = new Date(`${item.date}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return item.date;
+  const dateLabel = date.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+  const time = item.time || item.timeStart;
+  if (!time) return dateLabel;
+  const [hour, minute = '00'] = String(time).split(':');
+  const hourNumber = Number(hour);
+  if (!Number.isFinite(hourNumber)) return `${dateLabel} · ${time}`;
+  const suffix = hourNumber >= 12 ? 'PM' : 'AM';
+  const displayHour = hourNumber % 12 || 12;
+  return `${dateLabel} · ${displayHour}:${minute} ${suffix}`;
 }
 
 export default function OnTheHorizon({
@@ -18,10 +39,15 @@ export default function OnTheHorizon({
   onAddEvent,
   onEditAppointment,
   onDeleteAppointment,
+  confirmingAppointmentDeleteId = '',
+  confirmingAppointmentDeleteMessage = '',
+  deletingAppointmentId = '',
+  onCancelAppointmentDelete,
 }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,7 +60,10 @@ export default function OnTheHorizon({
         if (days) params.set('days', String(days));
         if (limit) params.set('limit', String(limit));
         const { data } = await axios.get(`/api/horizon?${params.toString()}`);
-        if (!cancelled) setItems(Array.isArray(data?.items) ? data.items : []);
+        if (!cancelled) {
+          setItems(Array.isArray(data?.items) ? data.items : []);
+          setExpanded(false);
+        }
       } catch (err) {
         if (!cancelled) {
           setItems([]);
@@ -52,10 +81,10 @@ export default function OnTheHorizon({
   }, [days, limit, refreshKey]);
 
   return (
-    <section className="on-the-horizon" style={{ display: 'grid', gap: 12 }}>
-      <header style={{ display: 'grid', gap: 8 }}>
-        <h3 className="font-thread text-vein" style={{ margin: 0 }}>On the Horizon</h3>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+    <section className={`on-the-horizon${expanded ? ' is-expanded' : ''}`}>
+      <header className="on-the-horizon__header">
+        <h3 className="font-thread text-vein">On the Horizon</h3>
+        <div className="on-the-horizon__add-actions">
           {onAddAppointment && (
             <button className="button chip" type="button" onClick={onAddAppointment} title="Add appointment">
               + Appointment
@@ -80,42 +109,75 @@ export default function OnTheHorizon({
           {items.map((item) => {
             const isAppointment = item.type === 'appointment';
             const detailParts = isAppointment ? getAppointmentDetailParts(item) : [];
+            const appointmentDeleteId = isAppointment ? getStoredAppointmentId(item) : '';
+            const confirmingDelete = appointmentDeleteId && confirmingAppointmentDeleteId === appointmentDeleteId;
+            const deleting = appointmentDeleteId && deletingAppointmentId === appointmentDeleteId;
+            const sourceState = sourceStateLabel(item);
+            const sourcePath = sourceEntryPath(item);
+            const sourceLabel = sourceState || (item.sourceEntryId ? 'From Stream' : 'Manual');
+            const hasDetails = Boolean(item.sourceText || item.details || detailParts.length);
             return (
               <li
                 key={`${item.type}-${item.id}`}
-                className="task"
-                style={{ background: 'var(--card,#fff)', borderRadius: 12, padding: '8px 10px', display: 'grid', gap: 4 }}
+                className="task horizon-item"
               >
-                <div style={{ display: 'grid', gap: 2 }}>
-                  <span className="muted" title={item.date}>
-                    {item.displayLabel || `${item.countdownLabel || ''} ${item.title || ''}`.trim()}
-                  </span>
-                  <strong>{itemIcon(item.type)} {item.title}</strong>
-                </div>
-
-                <div className="muted" style={{ fontSize: 13 }}>
-                  {[item.date, item.time, itemTypeLabel(item.type), ...detailParts.filter((part) => part !== item.time)].filter(Boolean).join(' · ')}
-                </div>
-
-                {item.sourceText && (
-                  <div className="muted" style={{ fontSize: 13 }}>
-                    Source: "{item.sourceText}"
+                <div className="horizon-item__main">
+                  <span className="horizon-item__relative">{item.countdownLabel || 'Upcoming'}</span>
+                  <strong className="horizon-item__title">{itemIcon(item.type)} {item.title}</strong>
+                  <div className="horizon-item__meta">
+                    {formatHorizonDate(item)} · {itemTypeLabel(item.type)}
                   </div>
-                )}
-                {isAppointment && item.details && (
-                  <div className="muted" style={{ fontSize: 13 }}>{item.details}</div>
-                )}
+                  <span className="horizon-item__provenance">{sourceLabel}</span>
+                </div>
+
+                <div className="horizon-item__links">
+                  {sourcePath && (
+                    <Link to={sourcePath} className="button chip horizon-item__source-link">
+                      View source
+                    </Link>
+                  )}
+                  {hasDetails && (
+                    <details className="horizon-item__details">
+                      <summary>View details</summary>
+                      <div>
+                        {detailParts.length > 0 && <p>{detailParts.filter((part) => part !== item.time).join(' · ')}</p>}
+                        {item.sourceText && <p>Source: “{item.sourceText}”</p>}
+                        {isAppointment && item.details && <p>{item.details}</p>}
+                      </div>
+                    </details>
+                  )}
+                </div>
+
+                <div className="horizon-item__desktop-details">
+                  <div className="muted">
+                    {[item.date, item.time, itemTypeLabel(item.type), ...detailParts.filter((part) => part !== item.time)].filter(Boolean).join(' · ')}
+                  </div>
+                  {item.sourceText && <div className="muted">Source: “{item.sourceText}”</div>}
+                  {sourceState && <div className="muted">{sourceState}</div>}
+                  {isAppointment && item.details && <div className="muted">{item.details}</div>}
+                </div>
 
                 {isAppointment && (onEditAppointment || onDeleteAppointment) && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span className="horizon-item__actions">
                     {onEditAppointment && (
-                      <button type="button" className="button chip" onClick={() => onEditAppointment(item)} title="Edit appointment">
+                      <button type="button" className="button chip" onClick={() => onEditAppointment(item)} title="Edit appointment" disabled={Boolean(deletingAppointmentId)}>
                         Edit
                       </button>
                     )}
                     {onDeleteAppointment && (
-                      <button type="button" className="button chip" onClick={() => onDeleteAppointment(item)} title="Delete appointment">
-                        Delete
+                      <button
+                        type="button"
+                        className="button chip"
+                        onClick={() => onDeleteAppointment(item)}
+                        title={confirmingDelete ? confirmingAppointmentDeleteMessage || 'Confirm delete appointment' : 'Delete appointment'}
+                        disabled={Boolean(deletingAppointmentId)}
+                      >
+                        {deleting ? 'Deleting…' : confirmingDelete ? 'Confirm Delete' : 'Delete'}
+                      </button>
+                    )}
+                    {confirmingDelete && onCancelAppointmentDelete && (
+                      <button type="button" className="button chip" onClick={onCancelAppointmentDelete} disabled={Boolean(deletingAppointmentId)}>
+                        Cancel
                       </button>
                     )}
                   </span>
@@ -124,6 +186,12 @@ export default function OnTheHorizon({
             );
           })}
         </ul>
+      )}
+
+      {!loading && !error && items.length > 4 && (
+        <button type="button" className="button chip horizon-show-more" onClick={() => setExpanded(true)}>
+          Show more ({items.length - 4})
+        </button>
       )}
     </section>
   );

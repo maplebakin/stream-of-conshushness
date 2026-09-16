@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState, useContext, useMemo } from 're
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
 import { todayISOInToronto } from './utils/date.js';
+import { useToast } from './hooks/useToast.js';
 
 /**
  * SuggestedTasksInbox
@@ -11,6 +12,7 @@ import { todayISOInToronto } from './utils/date.js';
  */
 export default function SuggestedTasksInbox({ dateISO, onAccepted, onRejected }) {
   const { token } = useContext(AuthContext);
+  const { showToast } = useToast();
   const auth = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
   const dayISO = useMemo(() => dateISO || todayISOInToronto(), [dateISO]);
 
@@ -65,7 +67,7 @@ export default function SuggestedTasksInbox({ dateISO, onAccepted, onRejected })
       if (action === 'reject' && typeof onRejected === 'function') onRejected({ _id: id });
     } catch (e) {
       console.error(`Error ${action}ing suggested task:`, e);
-      alert(`Could not ${action} this item. Check console for details.`);
+      showToast(`Could not ${action} this item.`, { type: 'error' });
     } finally {
       setBusy(prev => ({ ...prev, [id]: false }));
     }
@@ -86,7 +88,7 @@ export default function SuggestedTasksInbox({ dateISO, onAccepted, onRejected })
               <div className="mt-1 text-xs text-gray-500">Due {dueDateLabel(t.dueDate)}</div>
             )}
             {t.originalContext && (
-              <div className="mt-1 text-xs italic text-gray-500">from: {t.originalContext}</div>
+              <div className="mt-1 text-xs text-gray-500 italic">from: {t.originalContext}</div>
             )}
           </div>
           <div className="space-x-2">

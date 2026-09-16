@@ -1,8 +1,10 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import Interest from '../models/Interest.js';
-import { normalizeClusterIds, resolveClusterIdForOwner } from '../utils/clusterIds.js';
+import { resolveClusterIdForOwner, resolveClusterIdsForOwner } from '../utils/clusterIds.js';
 import { normalizeInterestTitleKey } from '../utils/interestExtractor.js';
+import { logSafeError } from '../utils/errorHandler.js';
+import { resolveOwnedEntryId } from '../utils/ownedReferences.js';
 
 const router = express.Router();
 const { ObjectId } = mongoose.Types;
@@ -23,7 +25,7 @@ function normalizeStatus(value, fallback = 'curious') {
 }
 
 async function resolveClusters(userId, body = {}) {
-  let clusters = normalizeClusterIds(body.clusters);
+  let clusters = await resolveClusterIdsForOwner(userId, body.clusters);
   if (!clusters.length && body.clusterId) {
     const resolved = await resolveClusterIdForOwner(userId, body.clusterId);
     if (resolved) clusters = [resolved];
@@ -57,11 +59,11 @@ router.get('/', async (req, res) => {
 
     const items = await Interest.find(q)
       .sort({ status: 1, category: 1, updatedAt: -1, createdAt: -1 })
-      .populate('clusters', 'name slug icon color')
+      .populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } })
       .lean();
     res.json(items);
   } catch (err) {
-    console.error('[interests] list failed:', err);
+    logSafeError('interests list failed', err);
     res.status(500).json({ error: 'Failed to load interests' });
   }
 });
@@ -75,7 +77,12 @@ router.post('/', async (req, res) => {
     if (!title) return res.status(400).json({ error: 'title is required' });
 
     const clusters = await resolveClusters(userId, req.body || {});
-    const sourceEntryId = ObjectId.isValid(req.body?.sourceEntryId) ? new ObjectId(req.body.sourceEntryId) : null;
+    const sourceEntryId = req.body?.sourceEntryId
+      ? await resolveOwnedEntryId(userId, req.body.sourceEntryId)
+      : null;
+    if (req.body?.sourceEntryId && !sourceEntryId) {
+      return res.status(400).json({ error: 'sourceEntryId must reference one of your entries' });
+    }
     const item = await Interest.create({
       userId,
       title,
@@ -92,10 +99,10 @@ router.post('/', async (req, res) => {
       reason: cleanString(req.body?.reason, 'manual') || 'manual',
     });
 
-    await item.populate('clusters', 'name slug icon color');
+    await item.populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } });
     res.status(201).json(item);
   } catch (err) {
-    console.error('[interests] create failed:', err);
+    logSafeError('interests create failed', err);
     res.status(500).json({ error: 'Failed to create interest' });
   }
 });
@@ -126,10 +133,10 @@ router.patch('/:id', async (req, res) => {
     }
 
     const saved = await item.save();
-    await saved.populate('clusters', 'name slug icon color');
+    await saved.populate({ path: 'clusters', select: 'name slug icon color', match: { ownerId: userId } });
     res.json(saved);
   } catch (err) {
-    console.error('[interests] update failed:', err);
+    logSafeError('interests update failed', err);
     res.status(500).json({ error: 'Failed to update interest' });
   }
 });
@@ -144,7 +151,7 @@ router.delete('/:id', async (req, res) => {
     if (!result.deletedCount) return res.status(404).json({ error: 'Interest not found' });
     res.json({ ok: true });
   } catch (err) {
-    console.error('[interests] delete failed:', err);
+    logSafeError('interests delete failed', err);
     res.status(500).json({ error: 'Failed to delete interest' });
   }
 });

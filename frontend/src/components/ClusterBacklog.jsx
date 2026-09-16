@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import axios from '@/api/axiosInstance';
-import { AuthContext } from '@/AuthContext.jsx';
+import axios from '../api/axiosInstance';
+import { AuthContext } from '../AuthContext.jsx';
 
 export default function ClusterBacklog({ clusterName, dateISO, onScheduled }) {
   const { token } = useContext(AuthContext);

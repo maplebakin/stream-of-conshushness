@@ -1,15 +1,29 @@
-name: Deploy
+name: Release Artifact
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
-    name: Build and Deploy
+    name: Build release artifact
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Checkout code
@@ -20,31 +34,36 @@ jobs:
         with:
           node-version: '20.x'
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Install frontend dependencies
-        run: npm --prefix frontend ci
-
-      - name: Run tests
-        run: npm test
-        env:
-          NODE_ENV: test
-
-      - name: Build application
-        run: npm --prefix frontend  run build
-        env:
-          NODE_ENV: production
+      - name: Verify and build application
+        run: npm run verify
 
       - name: Create deployment artifact
+        run: npm run build:artifact
+
+      - name: Verify standalone production dependencies and startup
         run: |
-          mkdir -p deploy
-          cp -r frontend/dist deploy/
-          cp package.json package-lock.json deploy/
-          cp -r models routes middleware utils deploy/
-          cp server.js deploy/
-          echo "Deployment artifact created"
+          verification_dir="$(mktemp -d)"
+          cp -r deploy/. "$verification_dir/"
+          npm ci --omit=dev --ignore-scripts --prefix "$verification_dir"
+          cd "$verification_dir"
+          node scripts/verifyDeploymentServer.mjs
+          node --input-type=module -e "await import('./scripts/migrations/backfillClusterLinks.mjs')"
+          node scripts/migrations/replaceAppointmentOneOffIndex.mjs --dry-run
+          node scripts/migrations/auditIntegrityConstraints.mjs --dry-run
+        env:
+          NODE_ENV: production
+          MONGODB_URI: mongodb://127.0.0.1:27017/streamofconshushness_deploy_verify
+          JWT_SECRET: artifact-verification-secret-with-more-than-32-characters
+          CLIENT_ORIGIN: https://stream.invalid
+          PRIVATE_UPLOAD_DIR: /tmp/streamofconshushness-deploy-uploads
+          TRUST_PROXY_HOPS: '0'
 
       # Uncomment and configure when you have a deployment target
       # - name: Deploy to production
@@ -65,12 +84,12 @@ jobs:
           path: deploy/
           retention-days: 30
 
-      - name: Deployment summary
+      - name: Release artifact summary
         run: |
-          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Release Artifact Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Build completed successfully" >> $GITHUB_STEP_SUMMARY
-          echo "📦 Artifacts uploaded" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Build and verification completed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "📦 Artifact uploaded; no production deployment was performed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Build Information" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY

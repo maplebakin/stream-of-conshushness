@@ -5,6 +5,7 @@ import { AuthContext } from './AuthContext.jsx';
 import TaskModal from './TaskModal.jsx';
 import { normalizeClusterList } from './utils/clusterHelpers.js';
 import { todayISOInToronto } from './utils/date.js';
+import { useToast } from './hooks/useToast.js';
 import './DailyRipples.css';
 function pickDateProp(props) {
   return props?.date || props?.dateISO || props?.day || todayISOInToronto();
@@ -86,6 +87,7 @@ async function dismissRipple(id, headers) {
 /* ───────────────── component ───────────────── */
 export default function DailyRipples(props) {
   const { token } = useContext(AuthContext);
+  const { showToast } = useToast();
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : {}),
     [token]
@@ -129,7 +131,7 @@ export default function DailyRipples(props) {
         // Support both /api/ripples?date= and /api/ripples/:date
         let res = await axios.get('/api/ripples', {
           headers: authHeaders,
-          params: { date: day, status: 'pending' },
+          params: { date: day, status: 'pending', standalone: 1 },
         }).catch(() => axios.get(`/api/ripples/${day}`, {
           headers: authHeaders,
           params: { status: 'pending' },
@@ -191,7 +193,7 @@ export default function DailyRipples(props) {
       setRipples(prev => prev.filter(r => (r._id || r.id) !== id));
     } catch (e) {
       console.error('dismiss ripple error', e);
-      alert('Could not dismiss ripple.');
+      showToast('Could not dismiss ripple.', { type: 'error' });
     }
   }
 

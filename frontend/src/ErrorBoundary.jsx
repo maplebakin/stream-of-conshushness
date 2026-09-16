@@ -9,17 +9,18 @@ export default class ErrorBoundary extends React.Component {
     return { error };
   }
   componentDidCatch(error, info) {
-     
-    console.error('Adapter crash:', error, info);
+    console.error('Application render failed:', error, info);
   }
   render() {
     const { error } = this.state;
     if (error) {
       return (
-        <div style={{ padding: 16, border: '1px solid #f00', background: '#fff5f5' }}>
-          <strong>Adapter exploded:</strong>
-          <pre style={{ whiteSpace: 'pre-wrap' }}>{String(error?.stack || error)}</pre>
-          <button onClick={() => this.setState({ error: null })}>Reset</button>
+        <div className="page" role="alert" style={{ padding: 24 }}>
+          <div className="card">
+            <h2>Something went wrong</h2>
+            <p>This view could not be displayed. Your saved data has not been changed.</p>
+            <button className="button" onClick={() => window.location.reload()}>Reload the app</button>
+          </div>
         </div>
       );
     }

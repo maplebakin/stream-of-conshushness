@@ -6,14 +6,17 @@ on:
   pull_request:
     branches: [main, develop]
 
+permissions:
+  contents: read
+
 jobs:
-  test:
-    name: Test & Lint
+  verify:
+    name: Verify (${{ matrix.node-version }})
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        node-version: [18.x, 20.x]
+        node-version: [20.x, 22.x]
 
     steps:
       - name: Checkout code
@@ -23,29 +26,31 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
 
       - name: Install root dependencies
         run: npm ci
 
-      - name: Install frontend dependencies
-        run: cd frontend && npm ci
+      - name: Run project verification
+        run: npm run verify
 
-      - name: Run backend tests
-        run: npm test
-        env:
-          NODE_ENV: test
-
-      - name: Run frontend linting
-        run: cd frontend && npm run lint
-
-      - name: Build frontend
-        run: cd frontend && npm run build
-
-  build:
-    name: Build Check
+  deployment-artifact:
+    name: Production artifact and startup
     runs-on: ubuntu-latest
-    needs: test
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Checkout code
@@ -54,29 +59,53 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '20.x'
-          cache: 'npm'
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
 
-      - name: Install dependencies
+      - name: Install root dependencies
         run: npm ci
 
-      - name: Run full build
+      - name: Build application
         run: npm run build
+
+      - name: Assemble deployment artifact
+        run: npm run build:artifact
+
+      - name: Verify production-only install and startup
+        run: |
+          verification_dir="$(mktemp -d)"
+          cp -r deploy/. "$verification_dir/"
+          npm ci --omit=dev --ignore-scripts --prefix "$verification_dir"
+          cd "$verification_dir"
+          node scripts/verifyDeploymentServer.mjs
+          node --input-type=module -e "await import('./scripts/migrations/backfillClusterLinks.mjs')"
+          node scripts/migrations/replaceAppointmentOneOffIndex.mjs --dry-run
+          node scripts/migrations/auditIntegrityConstraints.mjs --dry-run
         env:
           NODE_ENV: production
+          MONGODB_URI: mongodb://127.0.0.1:27017/streamofconshushness_artifact_verify
+          JWT_SECRET: artifact-verification-secret-with-more-than-32-characters
+          CLIENT_ORIGIN: https://stream.invalid
+          PRIVATE_UPLOAD_DIR: /tmp/streamofconshushness-artifact-uploads
+          TRUST_PROXY_HOPS: '0'
 
-      - name: Check build artifacts
-        run: |
-          if [ ! -d "frontend/dist" ]; then
-            echo "Build failed: frontend/dist directory not found"
-            exit 1
-          fi
-          echo "Build successful: frontend/dist directory exists"
-          ls -la frontend/dist
-
-  security:
-    name: Security Audit
+  browser-smoke:
+    name: Mongo-backed browser smoke
     runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Checkout code
@@ -85,13 +114,37 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '20.x'
-          cache: 'npm'
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
 
-      - name: Run npm audit (root)
-        run: npm audit --audit-level=moderate
-        continue-on-error: true
+      - name: Install application dependencies
+        run: |
+          npm ci
+          npm --prefix frontend ci
 
-      - name: Run npm audit (frontend)
-        run: cd frontend && npm audit --audit-level=moderate
-        continue-on-error: true
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run disposable database-backed journey
+        run: npm run test:browser-smoke
+        env:
+          RUN_BROWSER_SMOKE: '1'
+          BROWSER_SMOKE_START_SERVER: '1'
+          MONGODB_URI: mongodb://127.0.0.1:27017/streamofconshushness_browser_smoke
+          JWT_SECRET: browser-smoke-only-secret-with-more-than-32-characters
+          NODE_ENV: development
+          PRIVATE_UPLOAD_DIR: /tmp/streamofconshushness-browser-uploads
+
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: browser-smoke-failure
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7

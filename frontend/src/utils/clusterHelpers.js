@@ -46,3 +46,32 @@ export function normalizeClusterList(payload) {
   }
   return list;
 }
+
+export function clusterIdOf(raw) {
+  if (!raw) return '';
+  if (typeof raw === 'string') return raw.trim();
+  return String(raw._id || raw.id || '').trim();
+}
+
+export function primaryClusterReference(entity) {
+  const linked = Array.isArray(entity?.clusters) ? entity.clusters : [];
+  for (const cluster of linked) {
+    const id = clusterIdOf(cluster);
+    if (id) return id;
+  }
+  return typeof entity?.cluster === 'string' ? entity.cluster.trim() : '';
+}
+
+export function resolveClusterId(reference, clusters = []) {
+  const value = clusterIdOf(reference);
+  if (!value) return '';
+
+  const match = (Array.isArray(clusters) ? clusters : []).find((cluster) => {
+    const id = clusterIdOf(cluster);
+    const slug = String(cluster?.slug || '').trim();
+    const name = String(cluster?.name || '').trim();
+    return id === value || slug === value || name === value;
+  });
+
+  return clusterIdOf(match);
+}

@@ -1,4 +1,5 @@
 export function getStoredAppointmentId(appointment = {}) {
+  if (!appointment || typeof appointment !== 'object') return '';
   if (appointment.seriesId) return String(appointment.seriesId);
 
   const rawId = appointment._id || appointment.id || '';
@@ -13,11 +14,13 @@ export function getStoredAppointmentId(appointment = {}) {
 }
 
 export function isVirtualRecurringAppointment(appointment = {}) {
+  if (!appointment || typeof appointment !== 'object') return false;
   const rawId = appointment._id || appointment.id || '';
   return String(rawId).startsWith('virtual:');
 }
 
 export function isRecurringAppointment(appointment = {}) {
+  if (!appointment || typeof appointment !== 'object') return false;
   return Boolean(
     appointment.isRecurring ||
     appointment.seriesId ||
@@ -39,6 +42,7 @@ export function getAppointmentDeleteConfirmation(appointment = {}) {
 }
 
 export function getAppointmentTimeLabel(appointment = {}, formatTime = (value) => value) {
+  if (!appointment || typeof appointment !== 'object') return 'All day';
   const start = appointment.timeStart || appointment.time || '';
   const end = appointment.timeEnd || '';
 
@@ -48,6 +52,7 @@ export function getAppointmentTimeLabel(appointment = {}, formatTime = (value) =
 }
 
 export function getAppointmentDetailParts(appointment = {}, formatTime) {
+  if (!appointment || typeof appointment !== 'object') return ['All day'];
   const parts = [getAppointmentTimeLabel(appointment, formatTime)];
 
   if (appointment.location) parts.push(appointment.location);

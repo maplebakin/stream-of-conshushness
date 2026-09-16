@@ -3,20 +3,15 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import SectionPage from '../models/SectionPage.js';
+import { logSafeError } from '../utils/errorHandler.js';
+import { canonicalOrLegacyOwnerQuery } from '../utils/ownedReferences.js';
 
 const router = express.Router();
 const IS_PROD = process.env.NODE_ENV === 'production';
 const DEV_FALLBACKS = !IS_PROD && process.env.ALLOW_DEV_FALLBACKS === '1';
 
 function own(userId) {
-  return {
-    $or: [
-      { owner: userId },
-      { userId },
-      { user: userId },
-      { createdBy: userId },
-    ],
-  };
+  return canonicalOrLegacyOwnerQuery(userId);
 }
 
 const slugify = (s = '') =>
@@ -52,15 +47,13 @@ function normalizePageInput(body = {}, userId, slugMaybe) {
     sectionKey,
     title,
     body: pickBody(body),
-    ...body, // keep extras
-    owner: body.owner || userId,
-    userId: body.userId || userId,
-    user: body.user || userId,
-    createdBy: body.createdBy || userId,
+    userId,
   };
+  if (typeof body.icon === 'string') out.icon = body.icon;
+  if (Number.isFinite(Number(body.order))) out.order = Number(body.order);
+  if (['public', 'private'].includes(body.visibility)) out.visibility = body.visibility;
   if (slugMaybe) {
     out.slug = slugMaybe;
-    out.pageKey = body.pageKey || slugMaybe;
   }
   return out;
 }
@@ -75,8 +68,8 @@ router.get('/', async (req, res) => {
       .lean();
     res.json({ ok: true, count: items.length, items });
   } catch (e) {
-    console.error('[section-pages] list failed:', e);
-    res.status(500).json({ error: 'section-pages list failed', detail: e.message });
+    logSafeError('section pages list failed', e);
+    res.status(500).json({ error: 'section-pages list failed' });
   }
 });
 
@@ -90,8 +83,8 @@ router.get('/by-section/:sectionKey', async (req, res) => {
       .lean();
     res.json({ ok: true, count: items.length, items });
   } catch (e) {
-    console.error('[section-pages] by-section failed:', e);
-    res.status(500).json({ error: 'section-pages by-section failed', detail: e.message });
+    logSafeError('section pages by section failed', e);
+    res.status(500).json({ error: 'section-pages by-section failed' });
   }
 });
 
@@ -106,8 +99,8 @@ router.post('/', async (req, res) => {
     return res.status(201).json({ ok: true, item: created });
   } catch (e) {
     // In production: do NOT bypass validators.
-    if (IS_PROD) {
-      return res.status(400).json({ error: 'section-page create failed', detail: e.message });
+    if (!DEV_FALLBACKS) {
+      return res.status(400).json({ error: 'section-page create failed' });
     }
     // Dev-only raw insert fallback.
     try {
@@ -123,8 +116,8 @@ router.post('/', async (req, res) => {
       const inserted = await coll.findOne({ _id: r.insertedId });
       return res.status(201).json({ ok: true, item: inserted, bypassedValidation: true });
     } catch (rawErr) {
-      console.error('[section-pages] create failed:', e, '→ raw insert failed:', rawErr);
-      return res.status(400).json({ error: 'section-page create failed', detail: e.message });
+      logSafeError('section pages create fallback failed', rawErr);
+      return res.status(400).json({ error: 'section-page create failed' });
     }
   }
 });
@@ -140,8 +133,8 @@ router.get('/:id', async (req, res) => {
     if (!item) return res.status(404).json({ error: 'not found' });
     res.json({ ok: true, item });
   } catch (e) {
-    console.error('[section-pages] get failed:', e);
-    res.status(500).json({ error: 'section-page get failed', detail: e.message });
+    logSafeError('section pages get failed', e);
+    res.status(500).json({ error: 'section-page get failed' });
   }
 });
 
@@ -152,19 +145,49 @@ router.patch('/:id', async (req, res) => {
     if (!mongoose.isValidObjectId(id)) return res.status(400).json({ error: 'invalid id' });
     const userId = req.user?.userId;
 
-    const updates = { ...(req.body || {}) };
-    delete updates.owner; delete updates.user; delete updates.userId; delete updates.createdBy;
+    const body = req.body || {};
+    const updates = {};
+    if (Object.prototype.hasOwnProperty.call(body, 'title')) {
+      const title = String(body.title || '').trim();
+      if (!title) return res.status(400).json({ error: 'title is required' });
+      updates.title = title;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'body') || Object.prototype.hasOwnProperty.call(body, 'content')) {
+      updates.body = String(body.body ?? body.content ?? '');
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'sectionKey')) {
+      const sectionKey = String(body.sectionKey || '').trim();
+      if (!sectionKey) return res.status(400).json({ error: 'sectionKey is required' });
+      updates.sectionKey = sectionKey;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'slug')) {
+      updates.slug = slugify(body.slug);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'icon')) updates.icon = String(body.icon || '');
+    if (Object.prototype.hasOwnProperty.call(body, 'order')) {
+      const order = Number(body.order);
+      if (!Number.isFinite(order)) return res.status(400).json({ error: 'order must be a number' });
+      updates.order = order;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'visibility')) {
+      if (!['public', 'private'].includes(body.visibility)) {
+        return res.status(400).json({ error: 'visibility must be public or private' });
+      }
+      updates.visibility = body.visibility;
+    }
+    if (!Object.keys(updates).length) return res.status(400).json({ error: 'no valid updates' });
 
     const item = await SectionPage.findOneAndUpdate(
       { _id: id, ...own(userId) },
       { $set: updates, $currentDate: { updatedAt: true } },
-      { new: true, runValidators: false }
+      { new: true, runValidators: true }
     );
     if (!item) return res.status(404).json({ error: 'not found' });
     res.json({ ok: true, item });
   } catch (e) {
-    console.error('[section-pages] patch failed:', e);
-    res.status(400).json({ error: 'section-page update failed', detail: e.message });
+    if (e?.code === 11000) return res.status(409).json({ error: 'page slug already exists in this section' });
+    logSafeError('section pages patch failed', e);
+    res.status(400).json({ error: 'section-page update failed' });
   }
 });
 
@@ -179,8 +202,8 @@ router.delete('/:id', async (req, res) => {
     if (!r.deletedCount) return res.status(404).json({ error: 'not found' });
     res.json({ ok: true });
   } catch (e) {
-    console.error('[section-pages] delete failed:', e);
-    res.status(500).json({ error: 'section-page delete failed', detail: e.message });
+    logSafeError('section pages delete failed', e);
+    res.status(500).json({ error: 'section-page delete failed' });
   }
 });
 

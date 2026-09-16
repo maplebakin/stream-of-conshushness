@@ -1,0 +1,95 @@
+.review-inbox-summary {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-ripple) 34%, var(--color-border) 66%);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-surface-accent) 52%, var(--color-surface) 48%);
+}
+
+.review-inbox-summary__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.review-inbox-summary h2,
+.review-inbox-summary p {
+  margin: 0;
+}
+
+.review-inbox-summary h2 {
+  color: var(--color-text-strong);
+  font-family: var(--font-thread);
+  font-size: 1.08rem;
+}
+
+.review-inbox-summary p {
+  color: var(--color-muted);
+  font-size: 0.78rem;
+}
+
+.review-inbox-summary__all {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-plum);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.review-inbox-summary__links {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.review-inbox-summary__link {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+  padding: 0.45rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.review-inbox-summary__link:hover,
+.review-inbox-summary__link:focus-visible {
+  border-color: color-mix(in srgb, var(--color-spool) 52%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 72%, var(--color-spool) 28%);
+  color: var(--color-ink-strong);
+  text-decoration: none;
+}
+
+.review-inbox-summary__link strong {
+  min-width: 1.45rem;
+  color: var(--color-plum);
+  font-size: 0.9rem;
+  text-align: right;
+}
+
+@media (max-width: 420px) {
+  .review-inbox-summary {
+    padding: var(--space-2);
+  }
+
+  .review-inbox-summary__links {
+    gap: 0.35rem;
+  }
+
+  .review-inbox-summary__link {
+    padding-inline: 0.45rem;
+    font-size: 0.72rem;
+  }
+}

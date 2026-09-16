@@ -16,6 +16,10 @@ vi.mock('../../models/ImportantEvent.js', () => ({
   },
 }));
 
+vi.mock('../../utils/ownedReferences.js', () => ({
+  resolveOwnedEntryId: async (_userId, value) => value || null,
+}));
+
 const router = (await import('../events.js')).default;
 
 describe('important event routes', () => {
@@ -66,10 +70,36 @@ describe('important event routes', () => {
     expect(findOneAndUpdateMock).toHaveBeenCalledWith(
       { _id: 'event-created', userId: 'user123' },
       {
-        $set: { entryId: '507f1f77bcf86cd799439011', source: 'user-edited' },
+        $set: {
+          entryId: '507f1f77bcf86cd799439011',
+          source: 'user-edited',
+          automationReviewStatus: 'kept',
+        },
         $currentDate: { updatedAt: true },
       },
       { new: true }
     );
+  });
+
+  it('stores a review decision without changing automation provenance', async () => {
+    findOneAndUpdateMock.mockReturnValue({
+      lean: vi.fn(async () => ({
+        _id: 'event-created',
+        source: 'entry-automation',
+        automationReviewStatus: 'dismissed',
+      })),
+    });
+
+    const res = await request(app)
+      .patch('/api/important-events/event-created/review')
+      .send({ action: 'dismiss' });
+
+    expect(res.status).toBe(200);
+    expect(findOneAndUpdateMock).toHaveBeenCalledWith(
+      { _id: 'event-created', userId: 'user123', source: 'entry-automation' },
+      { $set: { automationReviewStatus: 'dismissed' } },
+      { new: true, runValidators: true }
+    );
+    expect(res.body.source).toBe('entry-automation');
   });
 });

@@ -1,8 +1,9 @@
 // frontend/src/pages/SectionsIndex.jsx
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from '../api/axiosInstance.js';
 import { AuthContext } from '../AuthContext.jsx';
+import { useToast } from '../hooks/useToast.js';
 import '../Main.css';
 import './SectionsIndex.css';
 
@@ -33,6 +34,7 @@ function normalizeSection(raw) {
     icon,
     description: raw.description || raw.summary || '',
     public: Boolean(raw.public),
+    type: raw.type || 'journal',
     updatedAt,
   };
 }
@@ -93,11 +95,18 @@ function formatUpdatedAt(value) {
 export default function SectionsIndex() {
   const navigate = useNavigate();
   const { token, isAuthenticated } = useContext(AuthContext);
+  const { showToast } = useToast();
+  const createInputRef = useRef(null);
 
   const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyIds, setBusyIds] = useState(() => new Set());
+  const [newSectionTitle, setNewSectionTitle] = useState('');
+  const [creatingSection, setCreatingSection] = useState(false);
+  const [renamingSectionId, setRenamingSectionId] = useState('');
+  const [renameTitle, setRenameTitle] = useState('');
+  const [confirmingDeleteSectionId, setConfirmingDeleteSectionId] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [quickFilter, setQuickFilter] = useState('all');
   const [activity, setActivity] = useState({});
@@ -257,23 +266,30 @@ export default function SectionsIndex() {
     });
   }
 
-  async function handleCreate() {
-    const title = window.prompt('Section title');
-    if (!title) return;
-
-    const trimmed = title.trim();
+  async function handleCreate(event) {
+    event?.preventDefault?.();
+    const trimmed = newSectionTitle.trim();
     if (!trimmed) return;
 
     const tempId = `temp-${Date.now()}`;
     const slug = slugify(trimmed);
+    if (!slug) {
+      setError('Section title must contain letters or numbers.');
+      return;
+    }
     const optimistic = {
       id: tempId,
       title: trimmed,
       slug,
       icon: '📚',
+      type: 'journal',
       updatedAt: new Date().toISOString(),
     };
 
+    setCreatingSection(true);
+    setError('');
+    setConfirmingDeleteSectionId('');
+    setRenamingSectionId('');
     setSections((prev) => [optimistic, ...prev]);
     try {
       const res = await axios.post('/api/sections', { title: trimmed, slug });
@@ -281,27 +297,53 @@ export default function SectionsIndex() {
       setSections((prev) =>
         prev.map((section) => (section.id === tempId ? created || section : section)),
       );
+      setNewSectionTitle('');
+      showToast('Section created.', { type: 'success' });
     } catch (err) {
       console.warn('Create section failed:', err?.response?.data || err.message);
       setSections((prev) => prev.filter((section) => section.id !== tempId));
-      alert(err?.response?.data?.error || 'Could not create the section.');
+      setError(err?.response?.data?.error || 'Could not create the section.');
+      showToast(err?.response?.data?.error || 'Could not create the section.', { type: 'error' });
+    } finally {
+      setCreatingSection(false);
     }
   }
 
   function handleOpen(section) {
     if (!section?.slug) return;
-    navigate(`/sections/${encodeURIComponent(section.slug)}`);
+    const path = section.type === 'research'
+      ? `/research/${encodeURIComponent(section.slug)}`
+      : `/sections/${encodeURIComponent(section.slug)}`;
+    navigate(path);
+  }
+
+  function startRename(section) {
+    if (!section?.id) return;
+    setRenamingSectionId(section.id);
+    setRenameTitle(section.title || '');
+    setConfirmingDeleteSectionId('');
+    setError('');
+  }
+
+  function cancelRename() {
+    setRenamingSectionId('');
+    setRenameTitle('');
   }
 
   async function handleRename(section) {
     if (!section?.id) return;
-    const nextTitle = window.prompt('Rename section', section.title);
-    if (!nextTitle) return;
-
-    const trimmed = nextTitle.trim();
-    if (!trimmed || trimmed === section.title) return;
+    const trimmed = renameTitle.trim();
+    if (!trimmed) return;
+    if (trimmed === section.title) {
+      cancelRename();
+      return;
+    }
 
     const nextSlug = slugify(trimmed);
+    if (!nextSlug) {
+      setError('Section title must contain letters or numbers.');
+      return;
+    }
     const previous = { ...section };
 
     setBusy(section.id, true);
@@ -322,9 +364,12 @@ export default function SectionsIndex() {
       setSections((prev) =>
         prev.map((item) => (item.id === section.id ? updated || item : item)),
       );
+      cancelRename();
+      showToast('Section renamed.', { type: 'success' });
     } catch (err) {
       console.warn('Rename section failed:', err?.response?.data || err.message);
-      alert(err?.response?.data?.error || 'Could not rename the section.');
+      setError(err?.response?.data?.error || 'Could not rename the section.');
+      showToast(err?.response?.data?.error || 'Could not rename the section.', { type: 'error' });
       setSections((prev) =>
         prev.map((item) => (item.id === section.id ? previous : item)),
       );
@@ -335,19 +380,23 @@ export default function SectionsIndex() {
 
   async function handleDelete(section) {
     if (!section?.id) return;
-    const confirmed = window.confirm(
-      `Delete “${section.title}”? This will remove it for everyone in your account.`,
-    );
-    if (!confirmed) return;
+    if (confirmingDeleteSectionId !== section.id) {
+      setConfirmingDeleteSectionId(section.id);
+      setRenamingSectionId('');
+      return;
+    }
 
     const before = sections;
     setSections((prev) => prev.filter((item) => item.id !== section.id));
 
     try {
       await axios.delete(`/api/sections/${encodeURIComponent(section.id)}`);
+      setConfirmingDeleteSectionId('');
+      showToast('Section deleted.', { type: 'success' });
     } catch (err) {
       console.warn('Delete section failed:', err?.response?.data || err.message);
-      alert(err?.response?.data?.error || 'Could not delete the section.');
+      setError(err?.response?.data?.error || 'Could not delete the section.');
+      showToast(err?.response?.data?.error || 'Could not delete the section.', { type: 'error' });
       setSections(before);
     }
   }
@@ -363,9 +412,18 @@ export default function SectionsIndex() {
           <h1>Sections</h1>
           <p className="muted">Organise your worlds, hobbies, and quests.</p>
         </div>
-        <button type="button" className="button" onClick={handleCreate} disabled={loading}>
-          + New Section
-        </button>
+        <form className="sections-index__create-form" onSubmit={handleCreate}>
+          <input
+            ref={createInputRef}
+            value={newSectionTitle}
+            onChange={(event) => setNewSectionTitle(event.target.value)}
+            placeholder="New section title"
+            disabled={loading || creatingSection}
+          />
+          <button type="submit" className="button" disabled={loading || creatingSection || !newSectionTitle.trim()}>
+            {creatingSection ? 'Creating...' : '+ New Section'}
+          </button>
+        </form>
       </header>
 
       <div className="sections-index__filters">
@@ -414,7 +472,7 @@ export default function SectionsIndex() {
         <div className="empty-state">
           <p>{hasActiveFilters ? 'No sections match your filters yet.' : 'No sections yet.'}</p>
           {!hasActiveFilters && (
-            <button type="button" className="button button-secondary" onClick={handleCreate}>
+            <button type="button" className="button button-secondary" onClick={() => createInputRef.current?.focus()}>
               Create your first section
             </button>
           )}
@@ -446,32 +504,65 @@ export default function SectionsIndex() {
                     )}
                   </div>
                 </button>
-                <div className="sections-index__actions">
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() => handleOpen(section)}
-                    disabled={busy}
+                {renamingSectionId === section.id ? (
+                  <form
+                    className="sections-index__rename-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      handleRename(section);
+                    }}
                   >
-                    Open
-                  </button>
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() => handleRename(section)}
-                    disabled={busy}
-                  >
-                    Rename
-                  </button>
-                  <button
-                    type="button"
-                    className="link-button danger"
-                    onClick={() => handleDelete(section)}
-                    disabled={busy}
-                  >
-                    Delete
-                  </button>
-                </div>
+                    <input
+                      value={renameTitle}
+                      onChange={(event) => setRenameTitle(event.target.value)}
+                      disabled={busy}
+                    />
+                    <button type="submit" className="link-button" disabled={busy || !renameTitle.trim()}>
+                      Save
+                    </button>
+                    <button type="button" className="link-button" onClick={cancelRename} disabled={busy}>
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <div className="sections-index__actions">
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => handleOpen(section)}
+                      disabled={busy}
+                    >
+                      Open
+                    </button>
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => startRename(section)}
+                      disabled={busy}
+                    >
+                      Rename
+                    </button>
+                    <button
+                      type="button"
+                      className="link-button danger"
+                      onClick={() => handleDelete(section)}
+                      disabled={busy}
+                      title={confirmingDeleteSectionId === section.id ? `Delete "${section.title}" for everyone in your account` : 'Delete section'}
+                    >
+                      {confirmingDeleteSectionId === section.id ? 'Confirm Delete' : 'Delete'}
+                    </button>
+                    {confirmingDeleteSectionId === section.id && (
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => setConfirmingDeleteSectionId('')}
+                        disabled={busy}
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                )}
               </article>
             );
           })}

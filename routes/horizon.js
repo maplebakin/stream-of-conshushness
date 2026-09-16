@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import auth from '../middleware/auth.js';
-import Entry from '../models/Entry.js';
 import ImportantEvent from '../models/ImportantEvent.js';
 import {
   addDays,
@@ -11,6 +10,8 @@ import {
   isISODateString,
 } from '../utils/calendarInstances.js';
 import { todayISOInTZ } from '../utils/date.js';
+import { logSafeError } from '../utils/errorHandler.js';
+import { resolveSourceEntries, sourceEntryMeta, sourceIdsFrom } from '../utils/sourceEntryState.js';
 
 const router = Router();
 router.use(auth);
@@ -31,22 +32,7 @@ async function resolveQuery(query) {
   return query;
 }
 
-async function loadSourceEntries({ userId, items }) {
-  const ids = [...new Set(
-    items
-      .map((item) => item.entryId || item.sourceEntryId)
-      .filter(Boolean)
-      .map((id) => String(id))
-  )];
-  if (!ids.length) return new Map();
-
-  const query = Entry.find({ userId, _id: { $in: ids } });
-  const selected = query?.select ? query.select('_id text date') : query;
-  const entries = await resolveQuery(selected);
-  return new Map((entries || []).map((entry) => [String(entry._id), entry]));
-}
-
-function baseItemFields({ item, type, from, sourceEntry }) {
+function baseItemFields({ item, type, from, source }) {
   const daysUntil = daysBetween(from, item.date);
   const label = countdownLabel(daysUntil);
   const entryId = item.entryId ? String(item.entryId) : null;
@@ -63,8 +49,8 @@ function baseItemFields({ item, type, from, sourceEntry }) {
     displayLabel: displayLabelFor(item.title || '', daysUntil),
     entryId,
     sourceEntryId: entryId,
-    sourceText: sourceEntry?.text || '',
-    sourceDate: sourceEntry?.date || null,
+    ...source,
+    sourceText: source?.sourceAvailable ? source.sourceEntryExcerpt || '' : '',
     cluster: item.cluster || '',
     clusters: Array.isArray(item.clusters) ? item.clusters : [],
   };
@@ -88,19 +74,23 @@ router.get('/', async (req, res) => {
   try {
     const [appointments, eventQuery] = await Promise.all([
       appointmentInstancesInRange(userId, from, to),
-      ImportantEvent.find({ userId, date: { $gte: from, $lte: to } }).sort({ date: 1, createdAt: 1 }),
+      ImportantEvent.find({
+        userId,
+        date: { $gte: from, $lte: to },
+        automationReviewStatus: { $nin: ['pending', 'dismissed'] },
+      }).sort({ date: 1, createdAt: 1 }),
     ]);
     const events = await resolveQuery(eventQuery);
 
-    const sourceEntries = await loadSourceEntries({
+    const sourceEntries = await resolveSourceEntries({
       userId,
-      items: [...appointments, ...(events || [])],
+      sourceIds: sourceIdsFrom([...appointments, ...(events || [])], (item) => item.entryId || item.sourceEntryId),
     });
 
     const appointmentItems = (appointments || []).map((appointment) => {
-      const sourceEntry = appointment.entryId ? sourceEntries.get(String(appointment.entryId)) : null;
+      const source = sourceEntryMeta(sourceEntries, appointment.entryId, { includeExcerpt: true });
       return {
-        ...baseItemFields({ item: appointment, type: 'appointment', from, sourceEntry }),
+        ...baseItemFields({ item: appointment, type: 'appointment', from, source }),
         location: appointment.location || '',
         details: appointment.details || '',
         rrule: appointment.rrule || '',
@@ -114,9 +104,9 @@ router.get('/', async (req, res) => {
     });
 
     const eventItems = (events || []).map((event) => {
-      const sourceEntry = event.entryId ? sourceEntries.get(String(event.entryId)) : null;
+      const source = sourceEntryMeta(sourceEntries, event.entryId, { includeExcerpt: true });
       return {
-        ...baseItemFields({ item: event, type: 'importantEvent', from, sourceEntry }),
+        ...baseItemFields({ item: event, type: 'importantEvent', from, source }),
         description: event.description || '',
         pinned: !!event.pinned,
       };
@@ -130,8 +120,8 @@ router.get('/', async (req, res) => {
 
     res.json({ today: from, from, to, days, items });
   } catch (err) {
-    console.error('[horizon] load failed:', err);
-    res.status(500).json({ error: err?.message || 'Failed to load horizon items' });
+    logSafeError('horizon load failed', err);
+    res.status(500).json({ error: 'Failed to load horizon items' });
   }
 });
 

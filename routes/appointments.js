@@ -3,8 +3,10 @@ import express from 'express';
 import mongoose from 'mongoose';
 import Appointment from '../models/Appointment.js';
 import auth from '../middleware/auth.js';
-import { expandDatesInRange } from '../utils/recurrence.js';
-import { normalizeClusterIds, resolveClusterIdForOwner } from '../utils/clusterIds.js';
+import { expandDatesInRange, isValidISODate, parseRRule } from '../utils/recurrence.js';
+import { resolveClusterIdForOwner, resolveClusterIdsForOwner } from '../utils/clusterIds.js';
+import { logSafeError } from '../utils/errorHandler.js';
+import { resolveOwnedEntryId } from '../utils/ownedReferences.js';
 
 const router = express.Router();
 router.use(auth);
@@ -16,7 +18,7 @@ function clamp(n, lo, hi) {
   if (Number.isNaN(x)) return lo;
   return Math.max(lo, Math.min(hi, x));
 }
-function isISO(s) { return /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')); }
+function isISO(s) { return isValidISODate(s); }
 function getUserId(req) {
   return req.user?.id || req.user?._id || req.user?.userId;
 }
@@ -26,11 +28,59 @@ function isValidId(id) {
 function normalizeNullableString(value) {
   return value === '' || value === undefined ? null : value;
 }
-function normalizeEntryId(value) {
-  if (!value) return null;
-  return ObjectId.isValid(value) ? value : null;
+
+function normalizeTime(value) {
+  if (value == null || value === '') return null;
+  const match = String(value).trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
+function isSupportedRRule(value) {
+  if (!value) return true;
+  const rule = parseRRule(value);
+  if (!['DAILY', 'WEEKLY', 'MONTHLY'].includes(rule.FREQ)) return false;
+  if (rule.INTERVAL && (!/^\d+$/.test(rule.INTERVAL) || Number(rule.INTERVAL) < 1)) return false;
+  if (rule.COUNT && (!/^\d+$/.test(rule.COUNT) || Number(rule.COUNT) < 1)) return false;
+  if (rule.UNTIL && !isISO(rule.UNTIL)) return false;
+  if (rule.BYDAY) {
+    const days = rule.BYDAY.split(',');
+    if (rule.FREQ !== 'WEEKLY' || days.some((day) => !/^(SU|MO|TU|WE|TH|FR|SA)$/.test(day))) return false;
+  }
+  return true;
+}
+
+function isValidTimeZone(value) {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function validateAppointmentShape(value) {
+  if (value.rrule) {
+    if (!isISO(value.startDate)) return 'startDate (YYYY-MM-DD) is required with rrule';
+    if (!isSupportedRRule(value.rrule)) return 'rrule is invalid or unsupported';
+    if (value.until && (!isISO(value.until) || value.until < value.startDate)) {
+      return 'until must be a valid date on or after startDate';
+    }
+  } else if (!isISO(value.date)) {
+    return 'date (YYYY-MM-DD) is required';
+  }
+  if (value.timeStart && !normalizeTime(value.timeStart)) return 'timeStart must be a valid HH:MM time';
+  if (value.timeEnd && !normalizeTime(value.timeEnd)) return 'timeEnd must be a valid HH:MM time';
+  if (value.time && !normalizeTime(value.time)) return 'time must be a valid HH:MM time';
+  const start = normalizeTime(value.timeStart || value.time);
+  const end = normalizeTime(value.timeEnd);
+  if (start && end && end < start) return 'timeEnd must not be earlier than timeStart';
+  if (!isValidTimeZone(value.tz || 'America/Toronto')) return 'tz must be a valid IANA time zone';
+  return '';
+}
 // ---------- CREATE (one-off or series) ----------
 /**
  * POST /api/appointments
@@ -45,7 +95,7 @@ router.post('/', async (req, res) => {
     if (!userId) return res.status(401).json({ error: 'Access denied' });
 
     const b = req.body || {};
-    let clusterIds = normalizeClusterIds(b.clusters);
+    let clusterIds = await resolveClusterIdsForOwner(userId, b.clusters);
     if (!clusterIds.length && b.clusterId) {
       const resolved = await resolveClusterIdForOwner(userId, b.clusterId);
       if (resolved) clusterIds = [resolved];
@@ -53,6 +103,8 @@ router.post('/', async (req, res) => {
       const resolved = await resolveClusterIdForOwner(userId, b.cluster);
       if (resolved) clusterIds = [resolved];
     }
+    const entryId = b.entryId ? await resolveOwnedEntryId(userId, b.entryId) : null;
+    if (b.entryId && !entryId) return res.status(400).json({ error: 'entryId must reference one of your entries' });
 
     const base = {
       userId,
@@ -61,29 +113,35 @@ router.post('/', async (req, res) => {
       startDate: b.startDate || null,
       rrule   : b.rrule || '',
       until   : b.until || null,
-      time    : b.time || null,
-      timeStart: b.timeStart || b.time || null,
-      timeEnd : b.timeEnd || null,
+      time    : normalizeTime(b.time),
+      timeStart: normalizeTime(b.timeStart || b.time),
+      timeEnd : normalizeTime(b.timeEnd),
       location: b.location || '',
       details : b.details || '',
       cluster : b.cluster || '',
       clusters: clusterIds,
       tz      : b.tz || 'America/Toronto',
-      entryId : normalizeEntryId(b.entryId),
+      entryId,
     };
 
     if (!base.title) return res.status(400).json({ error: 'title is required' });
-    if (base.rrule) {
-      if (!isISO(base.startDate)) return res.status(400).json({ error: 'startDate (YYYY-MM-DD) is required with rrule' });
-    } else {
-      if (!isISO(base.date)) return res.status(400).json({ error: 'date (YYYY-MM-DD) is required' });
-    }
+    const validationError = validateAppointmentShape({
+      ...base,
+      // Preserve raw values so malformed times cannot silently become null.
+      time: b.time || null,
+      timeStart: b.timeStart || b.time || null,
+      timeEnd: b.timeEnd || null,
+    });
+    if (validationError) return res.status(400).json({ error: validationError });
 
     const doc = await Appointment.create(base);
     res.status(201).json(doc);
   } catch (err) {
-    console.error('[appointments] create failed:', err);
-    res.status(500).json({ error: err?.message || 'Failed to create appointment' });
+    if (err?.code === 11000) {
+      return res.status(409).json({ error: 'An appointment with this title, date, and time already exists' });
+    }
+    logSafeError('appointments create failed', err);
+    res.status(500).json({ error: 'Failed to create appointment' });
   }
 });
 
@@ -101,29 +159,27 @@ router.get('/', async (req, res) => {
     if (!userId) return res.status(401).json({ error: 'Access denied' });
 
     const clusterFilters = [];
-    if (req.query.cluster) {
-      clusterFilters.push({ cluster: String(req.query.cluster) });
-    }
-
-    let resolvedClusterId = null;
-    if (req.query.clusterId) {
-      resolvedClusterId = await resolveClusterIdForOwner(userId, req.query.clusterId);
-      if (!resolvedClusterId) return res.json([]);
-      clusterFilters.push({ clusters: resolvedClusterId });
+    const requestedCluster = req.query.clusterId || req.query.cluster;
+    if (requestedCluster) {
+      const resolvedClusterId = await resolveClusterIdForOwner(userId, requestedCluster);
+      if (resolvedClusterId) clusterFilters.push({ clusters: resolvedClusterId });
+      // Preserve reads for legacy records that only stored the slug.
+      if (req.query.cluster) clusterFilters.push({ cluster: String(req.query.cluster) });
+      if (!clusterFilters.length) return res.json([]);
     }
 
     const applyClusterFilters = (base = {}) => {
       if (!clusterFilters.length) return base;
       if (clusterFilters.length === 1) return { ...base, ...clusterFilters[0] };
-      return { ...base, $or: clusterFilters };
+      return { ...base, $and: [...(base.$and || []), { $or: clusterFilters }] };
     };
 
     const rawFrom = req.query.from;
     const rawTo   = req.query.to;
-    const from = isISO(rawFrom) ? rawFrom : null;
-    const to   = isISO(rawTo) ? rawTo : null;
+    const from = rawFrom === undefined ? null : (isISO(rawFrom) ? rawFrom : null);
+    const to   = rawTo === undefined ? null : (isISO(rawTo) ? rawTo : null);
 
-    if ((rawFrom !== undefined || rawTo !== undefined) && !from && !to) {
+    if ((rawFrom !== undefined && !from) || (rawTo !== undefined && !to) || (from && to && from > to)) {
       return res.status(400).json({ error: 'Invalid date range' });
     }
 
@@ -148,7 +204,11 @@ router.get('/', async (req, res) => {
     const expandTo   = toISO || fromISO;
 
     // 1) load one-offs in range
-    const rangeQ = applyClusterFilters({ userId });
+    const rangeQ = applyClusterFilters({
+      userId,
+      automationReviewStatus: { $nin: ['pending', 'dismissed'] },
+      scheduleStatus: { $ne: 'cancelled' },
+    });
     if (rangeFrom && rangeTo) rangeQ.date = { $gte: rangeFrom, $lte: rangeTo };
     else if (rangeFrom) rangeQ.date = { $gte: rangeFrom };
     else if (rangeTo) rangeQ.date = { $lte: rangeTo };
@@ -161,10 +221,19 @@ router.get('/', async (req, res) => {
     // 2) expand series if requested
     let virtuals = [];
     if (String(req.query.includeSeries || '1') !== '0') {
-      const seriesQ = applyClusterFilters({ userId, rrule: { $ne: '' } });
+      const seriesQ = applyClusterFilters({
+        userId,
+        rrule: { $ne: '' },
+        automationReviewStatus: { $nin: ['pending', 'dismissed'] },
+        scheduleStatus: { $ne: 'cancelled' },
+      });
       // Narrow by series bounds: startDate ≤ expandTo and (until null or until ≥ expandFrom)
       if (expandTo) seriesQ.startDate = { $lte: expandTo };
-      if (expandFrom) seriesQ.$or = [{ until: null }, { until: { $gte: expandFrom } }, { until: '' }];
+      if (expandFrom) {
+        const untilBounds = [{ until: null }, { until: { $gte: expandFrom } }, { until: '' }];
+        if (seriesQ.$and) seriesQ.$and.push({ $or: untilBounds });
+        else seriesQ.$or = untilBounds;
+      }
 
       const series = await Appointment.find(seriesQ).lean();
 
@@ -210,8 +279,34 @@ router.get('/', async (req, res) => {
     const limit = clamp(req.query.limit ?? 1000, 1, 5000);
     res.json(combined.slice(0, limit));
   } catch (err) {
-    console.error('[appointments] list failed:', err);
-    res.status(500).json({ error: err?.message || 'Failed to load appointments' });
+    logSafeError('appointments list failed', err);
+    res.status(500).json({ error: 'Failed to load appointments' });
+  }
+});
+
+// ---------- AUTOMATION REVIEW DECISION ----------
+router.patch('/:id/review', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Access denied' });
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid appointment id' });
+    const action = String(req.body?.action || '').trim();
+    if (!['keep', 'dismiss'].includes(action)) {
+      return res.status(400).json({ error: 'action must be keep or dismiss' });
+    }
+
+    const doc = await Appointment.findOne({
+      _id: req.params.id,
+      userId,
+      source: 'entry-automation',
+    });
+    if (!doc) return res.status(404).json({ error: 'Appointment not found' });
+    doc.automationReviewStatus = action === 'keep' ? 'kept' : 'dismissed';
+    await doc.save();
+    return res.json(doc);
+  } catch (err) {
+    logSafeError('appointment review decision failed', err);
+    return res.status(500).json({ error: 'Failed to save appointment review decision' });
   }
 });
 
@@ -226,27 +321,33 @@ router.patch('/:id', async (req, res) => {
     if (!doc) return res.status(404).json({ error: 'Appointment not found' });
 
     const b = req.body || {};
+    let hasUserEdit = false;
     if ('title' in b) {
+      hasUserEdit = true;
       const title = String(b.title || '').trim();
       if (!title) return res.status(400).json({ error: 'title is required' });
       doc.title = title;
     }
-    if ('date' in b) doc.date = normalizeNullableString(b.date);
-    if ('startDate' in b) doc.startDate = normalizeNullableString(b.startDate);
-    if ('rrule' in b) doc.rrule = b.rrule || '';
-    if ('until' in b) doc.until = normalizeNullableString(b.until);
-    if ('time' in b) doc.time = normalizeNullableString(b.time);
-    if ('timeStart' in b) doc.timeStart = normalizeNullableString(b.timeStart);
-    if ('timeEnd' in b) doc.timeEnd = normalizeNullableString(b.timeEnd);
-    if ('location' in b) doc.location = b.location || '';
-    if ('details' in b) doc.details = b.details || '';
-    if ('cluster' in b) doc.cluster = b.cluster || '';
-    if ('tz' in b) doc.tz = b.tz || 'America/Toronto';
-    if ('entryId' in b) doc.entryId = b.entryId || null;
-    if (doc.source === 'entry-automation') doc.source = 'user-edited';
+    if ('date' in b) { hasUserEdit = true; doc.date = normalizeNullableString(b.date); }
+    if ('startDate' in b) { hasUserEdit = true; doc.startDate = normalizeNullableString(b.startDate); }
+    if ('rrule' in b) { hasUserEdit = true; doc.rrule = b.rrule || ''; }
+    if ('until' in b) { hasUserEdit = true; doc.until = normalizeNullableString(b.until); }
+    if ('time' in b) { hasUserEdit = true; doc.time = normalizeTime(b.time); }
+    if ('timeStart' in b) { hasUserEdit = true; doc.timeStart = normalizeTime(b.timeStart); }
+    if ('timeEnd' in b) { hasUserEdit = true; doc.timeEnd = normalizeTime(b.timeEnd); }
+    if ('location' in b) { hasUserEdit = true; doc.location = b.location || ''; }
+    if ('details' in b) { hasUserEdit = true; doc.details = b.details || ''; }
+    if ('cluster' in b) { hasUserEdit = true; doc.cluster = b.cluster || ''; }
+    if ('tz' in b) { hasUserEdit = true; doc.tz = b.tz || 'America/Toronto'; }
+    if ('entryId' in b) {
+      const entryId = b.entryId ? await resolveOwnedEntryId(userId, b.entryId) : null;
+      if (b.entryId && !entryId) return res.status(400).json({ error: 'entryId must reference one of your entries' });
+      doc.entryId = entryId;
+      hasUserEdit = true;
+    }
 
     if ('clusters' in b || 'clusterId' in b || 'cluster' in b) {
-      let clusterIds = normalizeClusterIds(b.clusters);
+      let clusterIds = await resolveClusterIdsForOwner(userId, b.clusters);
       if (!clusterIds.length && b.clusterId) {
         const resolved = await resolveClusterIdForOwner(userId, b.clusterId);
         if (resolved) clusterIds = [resolved];
@@ -255,21 +356,32 @@ router.patch('/:id', async (req, res) => {
         if (resolved) clusterIds = [resolved];
       }
       doc.clusters = clusterIds;
+      hasUserEdit = true;
     }
 
-    if (doc.rrule) {
-      if (!isISO(doc.startDate)) return res.status(400).json({ error: 'startDate (YYYY-MM-DD) is required with rrule' });
-      doc.date = doc.date || null;
-    } else if (!isISO(doc.date)) {
-      return res.status(400).json({ error: 'date (YYYY-MM-DD) is required' });
+    if (hasUserEdit && doc.source === 'entry-automation') {
+      doc.source = 'user-edited';
+      doc.automationReviewStatus = 'kept';
     }
+
+    const validationError = validateAppointmentShape({
+      ...doc.toObject?.() || doc,
+      ...(Object.prototype.hasOwnProperty.call(b, 'time') ? { time: b.time } : {}),
+      ...(Object.prototype.hasOwnProperty.call(b, 'timeStart') ? { timeStart: b.timeStart } : {}),
+      ...(Object.prototype.hasOwnProperty.call(b, 'timeEnd') ? { timeEnd: b.timeEnd } : {}),
+    });
+    if (validationError) return res.status(400).json({ error: validationError });
+    if (doc.rrule) doc.date = doc.date || null;
 
     await doc.save();
     res.json(doc);
   } catch (err) {
-    console.error('[appointments] update failed:', err);
+    if (err?.code === 11000) {
+      return res.status(409).json({ error: 'An appointment with this title, date, and time already exists' });
+    }
+    logSafeError('appointments update failed', err);
     const code = err?.name === 'ValidationError' ? 400 : 500;
-    res.status(code).json({ error: err?.message || 'Failed to update appointment' });
+    res.status(code).json({ error: code === 400 ? 'Invalid appointment' : 'Failed to update appointment' });
   }
 });
 
@@ -280,12 +392,19 @@ router.delete('/:id', async (req, res) => {
     if (!userId) return res.status(401).json({ error: 'Access denied' });
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid appointment id' });
 
-    const deleted = await Appointment.findOneAndDelete({ _id: req.params.id, userId });
-    if (!deleted) return res.status(404).json({ error: 'Appointment not found' });
-    res.json({ ok: true, deleted: deleted._id });
+    const appointment = await Appointment.findOne({ _id: req.params.id, userId });
+    if (!appointment) return res.status(404).json({ error: 'Appointment not found' });
+    if (appointment.entryId && ['entry-automation', 'user-edited'].includes(appointment.source)) {
+      appointment.source = 'entry-automation';
+      appointment.automationReviewStatus = 'dismissed';
+      await appointment.save();
+      return res.json({ ok: true, dismissed: appointment._id });
+    }
+    await Appointment.deleteOne({ _id: appointment._id, userId });
+    res.json({ ok: true, deleted: appointment._id });
   } catch (err) {
-    console.error('[appointments] delete failed:', err);
-    res.status(500).json({ error: err?.message || 'Failed to delete appointment' });
+    logSafeError('appointments delete failed', err);
+    res.status(500).json({ error: 'Failed to delete appointment' });
   }
 });
 

@@ -54,6 +54,11 @@ describe('interestExtractor', () => {
     expect(extractInterests('I want to order yarn.')).toEqual([]);
   });
 
+  it('keeps an interest when a separate sentence contains a dated task', () => {
+    expect(extractInterests("I'd like to learn about tap dance. I need to call the dentist tomorrow."))
+      .toEqual([expect.objectContaining({ title: 'Tap dance' })]);
+  });
+
   it('normalizes interest titles for duplicate checks', () => {
     const cases = ['Tap dance', 'learn about tap dance', 'learn tap dance', 'try tap dance', 'get into tap dance', 'research tap dance'];
     expect(cases.map((value) => normalizeInterestTitleKey(value))).toEqual([

@@ -203,7 +203,7 @@ describe('entry automation task extraction', () => {
 
     expect(insertedSuggestedTasks()[0]).toMatchObject({
       title: 'Clean the fish tank',
-      repeat: 'every other day',
+      repeat: 'FREQ=DAILY;INTERVAL=2',
     });
     expect(mocks.taskInsertMany).not.toHaveBeenCalled();
   });
@@ -237,5 +237,16 @@ describe('entry automation task extraction', () => {
     });
     expect(mocks.taskInsertMany).not.toHaveBeenCalled();
     expect(mocks.importantEventCreate).not.toHaveBeenCalled();
+  });
+
+  it('keeps automation pending when a secondary suggestion batch fails', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.rippleInsertMany.mockRejectedValueOnce(new Error('temporary database write failure'));
+
+    const entry = await createEntry('I need to submit the application tomorrow');
+
+    expect(entry.automationPending).toBe(true);
+    expect(mocks.suggestedTaskInsertMany).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 });

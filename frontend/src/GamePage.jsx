@@ -2,7 +2,6 @@ import { useParams } from 'react-router-dom';
 import { useEffect, useState, useContext } from 'react';
 import axios from './api/axiosInstance';
 import { AuthContext } from './AuthContext.jsx';
-import Header from './Header.jsx';
 import SafeHTML from './components/SafeHTML.jsx'; // (top of file)
 
 export default function GamePage() {
@@ -53,10 +52,8 @@ export default function GamePage() {
   );
 
   return (
-    <>
-      <Header />
-      <div className="main-container">
-        <div className="main-feed">
+    <div className="main-container">
+      <div className="main-feed">
           <h2>🎮 {game.title || slug.replace(/-/g, ' ')}</h2>
           {game.coverImage && (
             <img src={game.coverImage} alt={game.title} className="game-cover" />
@@ -101,8 +98,7 @@ export default function GamePage() {
               </div>
             ))
           )}
-        </div>
       </div>
-    </>
+    </div>
   );
 }

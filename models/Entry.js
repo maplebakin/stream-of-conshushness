@@ -36,15 +36,26 @@ const EntrySchema = new Schema({
 
   // Soft delete support
   deletedAt: { type: Date, default: null, index: true },
+  automationPending: { type: Boolean, default: false, index: true },
+  // Monotonic source revision for automation writes. It lets a newer entry
+  // edit supersede an in-flight older automation run without stale artifacts
+  // winning the race.
+  automationRevision: { type: Number, default: 0, min: 0 },
+  // Stable client receipt for retry-safe capture. Legacy entries omit it.
+  clientRequestId: { type: String, trim: true, maxlength: 128, default: undefined },
 
   // Ripple/task suggestions extracted from content
   suggestedTasks: { type: [SuggestedTaskSchema], default: [] },
-}, { timestamps: true });
+}, { timestamps: true, optimisticConcurrency: true });
 
 // Helpful compound indexes
 EntrySchema.index({ userId: 1, cluster: 1, date: -1 });
 EntrySchema.index({ userId: 1, clusters: 1, date: -1 });
 EntrySchema.index({ userId: 1, sectionPageId: 1, date: -1 });
 EntrySchema.index({ userId: 1, sectionId: 1, pinned: -1, date: -1 });
+EntrySchema.index(
+  { userId: 1, clientRequestId: 1 },
+  { unique: true, partialFilterExpression: { clientRequestId: { $type: "string" } } }
+);
 
 export default mongoose.model("Entry", EntrySchema);

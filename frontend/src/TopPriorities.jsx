@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ConfirmButton from './components/ConfirmButton.jsx';
 
 function TopPriorities({ date, importantEvents = [] }) {
   const [priorities, setPriorities] = useState([]);
@@ -59,7 +60,6 @@ function TopPriorities({ date, importantEvents = [] }) {
   };
 
   const handleDelete = (index) => {
-    if (!window.confirm('Delete this priority?')) return; // optional confirm
     const updated = priorities.filter((_, i) => i !== index);
     setPriorities(updated);
   };
@@ -94,7 +94,9 @@ function TopPriorities({ date, importantEvents = [] }) {
                 {item}
               </span>
             )}
-            <button onClick={() => handleDelete(index)} aria-label="Delete priority">🗑️</button>
+            <ConfirmButton onConfirm={() => handleDelete(index)} confirmLabel="Confirm" aria-label="Delete priority">
+              Delete
+            </ConfirmButton>
           </li>
         ))}
       </ul>

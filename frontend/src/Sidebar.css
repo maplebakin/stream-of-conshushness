@@ -1,15 +1,13 @@
 @import "./variables.css";
 
-:root { --header-height: 64px; }
-
 .section-sidebar {
   inline-size: 260px;
   min-inline-size: 220px;
   padding: var(--space-4);
-  border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--color-surface) 78%, var(--color-surface-soft) 22%);
+  border-radius: var(--radius-panel);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 91%, white 9%), var(--color-surface-tint));
   border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
-  box-shadow: var(--shadow-border);
+  box-shadow: var(--shadow-card);
   color: var(--color-text);
 }
 
@@ -49,10 +47,11 @@
 
 .sidebar-nav .nav-link,
 .sidebar-nav a {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 0.42rem 0.7rem;
+  min-height: 44px;
+  padding: 0.45rem 0.7rem;
   border-radius: var(--radius-button);
   font-family: var(--font-sans);
   font-size: 0.92rem;
@@ -61,6 +60,25 @@
   color: color-mix(in srgb, var(--color-vein) 85%, white 15%);
   background: transparent;
   transition: background-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.sidebar-nav--primary .nav-link,
+.sidebar-nav--primary a {
+  min-height: 44px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 86%, white 14%);
+}
+
+.sidebar-badge {
+  margin-inline-start: auto;
+  min-width: 1.45rem;
+  padding: 0.08rem 0.42rem;
+  border-radius: var(--radius-button);
+  background: var(--color-plum);
+  color: var(--color-mist);
+  font-size: 0.74rem;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .sidebar-nav .nav-link:hover,
@@ -77,15 +95,24 @@
 
 .sidebar-nav .nav-link.active,
 .sidebar-nav a.active {
-  background: color-mix(in srgb, var(--color-surface) 65%, var(--color-spool) 35%);
+  background: color-mix(in srgb, var(--color-surface) 76%, var(--color-spool) 24%);
   color: var(--color-ink);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-spool) 60%, transparent);
+}
+
+.sidebar-nav--primary .nav-link.active,
+.sidebar-nav--primary a.active {
+  background: color-mix(in srgb, var(--color-surface) 58%, var(--color-spool) 42%);
 }
 
 .sidebar-sep {
   height: 1px;
   background: linear-gradient(to right, transparent, color-mix(in srgb, var(--color-border) 70%, transparent), transparent);
   margin: var(--space-2) 0;
+}
+
+.sidebar-theme {
+  padding: var(--space-2);
 }
 
 @media (max-width: 1024px) {

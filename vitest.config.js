@@ -10,6 +10,7 @@ export default defineConfig({
       'routes/__tests__/**/*.test.js',
       'middleware/__tests__/**/*.test.js',
       'services/__tests__/**/*.test.js',
+      'frontend/src/**/__tests__/**/*.test.js',
     ],
     coverage: {
       provider: 'v8',

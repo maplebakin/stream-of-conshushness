@@ -1,29 +1,30 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { describe, expect, it } from 'vitest';
 
 import { isClustered } from '../isClustered.js';
 
-test('isClustered returns false when entry has no cluster data', () => {
-  assert.equal(isClustered({}), false);
-  assert.equal(isClustered(null), false);
-});
+describe('isClustered', () => {
+  it('returns false when entry has no cluster data', () => {
+    expect(isClustered({})).toBe(false);
+    expect(isClustered(null)).toBe(false);
+  });
 
-test('isClustered returns true when legacy cluster string is present', () => {
-  assert.equal(isClustered({ cluster: 'focus' }), true);
-  assert.equal(isClustered({ cluster: '   focus   ' }), true);
-});
+  it('returns true when a legacy cluster string is present', () => {
+    expect(isClustered({ cluster: 'focus' })).toBe(true);
+    expect(isClustered({ cluster: '   focus   ' })).toBe(true);
+  });
 
-test('isClustered returns false for empty or whitespace cluster strings', () => {
-  assert.equal(isClustered({ cluster: '' }), false);
-  assert.equal(isClustered({ cluster: '   ' }), false);
-});
+  it('returns false for empty or whitespace cluster strings', () => {
+    expect(isClustered({ cluster: '' })).toBe(false);
+    expect(isClustered({ cluster: '   ' })).toBe(false);
+  });
 
-test('isClustered returns true when clusters array has entries', () => {
-  assert.equal(isClustered({ clusters: ['abc123'] }), true);
-  assert.equal(isClustered({ clusters: [null, 'abc123'] }), true);
-});
+  it('returns true when the clusters array has entries', () => {
+    expect(isClustered({ clusters: ['abc123'] })).toBe(true);
+    expect(isClustered({ clusters: [null, 'abc123'] })).toBe(true);
+  });
 
-test('isClustered returns false when clusters array lacks usable values', () => {
-  assert.equal(isClustered({ clusters: [] }), false);
-  assert.equal(isClustered({ clusters: ['   ', null] }), false);
+  it('returns false when the clusters array lacks usable values', () => {
+    expect(isClustered({ clusters: [] })).toBe(false);
+    expect(isClustered({ clusters: ['   ', null] })).toBe(false);
+  });
 });

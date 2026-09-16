@@ -59,6 +59,15 @@ const fixtures = vi.hoisted(() => ({
   appointments: [{ _id: 'appt-1' }],
   importantEvents: [{ _id: 'event-1' }],
   ripples: [{ _id: 'ripple-1' }],
+  suggestedTasks: [{ _id: 'suggested-task-1' }],
+  gatherItems: [{ _id: 'gather-item-1' }],
+  suggestedGatherItems: [{ _id: 'suggested-gather-1' }],
+  interests: [{ _id: 'interest-1' }],
+  suggestedInterests: [{ _id: 'suggested-interest-1' }],
+  researchSubjects: [{ _id: 'research-1' }],
+  games: [{ _id: 'game-1' }],
+  gameNotes: [{ _id: 'game-note-1' }],
+  scheduleItems: [{ _id: 'schedule-item-1' }],
 }));
 
 const entryFindMock = vi.fn((query = {}) => makeQuery(query?.deletedAt === null ? activeEntries() : fixtures.entries));
@@ -84,6 +93,24 @@ const importantEventFindMock = vi.fn(() => makeQuery(fixtures.importantEvents));
 const importantEventCountMock = vi.fn(() => Promise.resolve(fixtures.importantEvents.length));
 const rippleFindMock = vi.fn(() => makeQuery(fixtures.ripples));
 const rippleCountMock = vi.fn(() => Promise.resolve(fixtures.ripples.length));
+const suggestedTaskFindMock = vi.fn(() => makeQuery(fixtures.suggestedTasks));
+const suggestedTaskCountMock = vi.fn(() => Promise.resolve(fixtures.suggestedTasks.length));
+const gatherItemFindMock = vi.fn(() => makeQuery(fixtures.gatherItems));
+const gatherItemCountMock = vi.fn(() => Promise.resolve(fixtures.gatherItems.length));
+const suggestedGatherItemFindMock = vi.fn(() => makeQuery(fixtures.suggestedGatherItems));
+const suggestedGatherItemCountMock = vi.fn(() => Promise.resolve(fixtures.suggestedGatherItems.length));
+const interestFindMock = vi.fn(() => makeQuery(fixtures.interests));
+const interestCountMock = vi.fn(() => Promise.resolve(fixtures.interests.length));
+const suggestedInterestFindMock = vi.fn(() => makeQuery(fixtures.suggestedInterests));
+const suggestedInterestCountMock = vi.fn(() => Promise.resolve(fixtures.suggestedInterests.length));
+const researchSubjectFindMock = vi.fn(() => makeQuery(fixtures.researchSubjects));
+const researchSubjectCountMock = vi.fn(() => Promise.resolve(fixtures.researchSubjects.length));
+const gameFindMock = vi.fn(() => makeQuery(fixtures.games));
+const gameCountMock = vi.fn(() => Promise.resolve(fixtures.games.length));
+const gameNoteFindMock = vi.fn(() => makeQuery(fixtures.gameNotes));
+const gameNoteCountMock = vi.fn(() => Promise.resolve(fixtures.gameNotes.length));
+const scheduleItemFindMock = vi.fn(() => makeQuery(fixtures.scheduleItems));
+const scheduleItemCountMock = vi.fn(() => Promise.resolve(fixtures.scheduleItems.length));
 
 vi.mock('../../middleware/auth.js', () => ({
   default: (req, _res, next) => {
@@ -112,6 +139,15 @@ vi.mock('../../models/SectionPage.js', () => ({ default: { find: (...args) => se
 vi.mock('../../models/Appointment.js', () => ({ default: { find: (...args) => appointmentFindMock(...args), countDocuments: (...args) => appointmentCountMock(...args) } }));
 vi.mock('../../models/ImportantEvent.js', () => ({ default: { find: (...args) => importantEventFindMock(...args), countDocuments: (...args) => importantEventCountMock(...args) } }));
 vi.mock('../../models/Ripple.js', () => ({ default: { find: (...args) => rippleFindMock(...args), countDocuments: (...args) => rippleCountMock(...args) } }));
+vi.mock('../../models/SuggestedTask.js', () => ({ default: { find: (...args) => suggestedTaskFindMock(...args), countDocuments: (...args) => suggestedTaskCountMock(...args) } }));
+vi.mock('../../models/GatherItem.js', () => ({ default: { find: (...args) => gatherItemFindMock(...args), countDocuments: (...args) => gatherItemCountMock(...args) } }));
+vi.mock('../../models/SuggestedGatherItem.js', () => ({ default: { find: (...args) => suggestedGatherItemFindMock(...args), countDocuments: (...args) => suggestedGatherItemCountMock(...args) } }));
+vi.mock('../../models/Interest.js', () => ({ default: { find: (...args) => interestFindMock(...args), countDocuments: (...args) => interestCountMock(...args) } }));
+vi.mock('../../models/SuggestedInterest.js', () => ({ default: { find: (...args) => suggestedInterestFindMock(...args), countDocuments: (...args) => suggestedInterestCountMock(...args) } }));
+vi.mock('../../models/ResearchSubject.js', () => ({ default: { find: (...args) => researchSubjectFindMock(...args), countDocuments: (...args) => researchSubjectCountMock(...args) } }));
+vi.mock('../../models/Game.js', () => ({ default: { find: (...args) => gameFindMock(...args), countDocuments: (...args) => gameCountMock(...args) } }));
+vi.mock('../../models/GameNote.js', () => ({ default: { find: (...args) => gameNoteFindMock(...args), countDocuments: (...args) => gameNoteCountMock(...args) } }));
+vi.mock('../../models/ScheduleItem.js', () => ({ default: { find: (...args) => scheduleItemFindMock(...args), countDocuments: (...args) => scheduleItemCountMock(...args) } }));
 
 const router = (await import('../export.js')).default;
 

@@ -24,6 +24,7 @@ function PasswordInput({ value, onChange, disabled }) {
         type="button"
         className="small"
         onClick={() => setShow((s) => !s)}
+        disabled={disabled}
         aria-label={show ? 'Hide password' : 'Show password'}
       >
         {show ? 'Hide' : 'Show'}

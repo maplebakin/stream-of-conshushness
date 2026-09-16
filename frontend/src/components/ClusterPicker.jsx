@@ -18,7 +18,7 @@ export default function ClusterPicker({ value = '', onChange, disabled = false, 
         const res = await api.get('/api/clusters');
         if (ignore) return;
         const list = normalizeClusterList(res)
-          .map((c) => ({ key: c.slug, label: c.name }))
+          .map((c) => ({ key: c.id || c.slug, slug: c.slug, label: c.name }))
           .filter((c) => c.key && c.label);
         list.sort((a, b) => a.label.localeCompare(b.label));
         setClusters(list);
@@ -33,7 +33,14 @@ export default function ClusterPicker({ value = '', onChange, disabled = false, 
   }, [api]);
 
   const v = value || '';
-  const activeLabel = clusters.find(c => c.key === v)?.label;
+  const activeCluster = clusters.find(c => String(c.key) === String(v) || c.slug === v);
+  const activeLabel = activeCluster?.label;
+
+  useEffect(() => {
+    if (activeCluster?.key && String(activeCluster.key) !== String(v)) {
+      onChange?.(activeCluster.key);
+    }
+  }, [activeCluster, onChange, v]);
 
   return (
     <div className="qa-row">

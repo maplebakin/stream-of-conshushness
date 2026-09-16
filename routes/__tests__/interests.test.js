@@ -19,6 +19,11 @@ vi.mock('../../models/Interest.js', () => ({
 vi.mock('../../utils/clusterIds.js', () => ({
   normalizeClusterIds: (ids = []) => (Array.isArray(ids) ? ids : [ids]).filter(Boolean),
   resolveClusterIdForOwner: async (_userId, value) => (value === 'missing' ? null : value),
+  resolveClusterIdsForOwner: async (_userId, ids = []) => (Array.isArray(ids) ? ids : [ids]).filter(Boolean),
+}));
+
+vi.mock('../../utils/ownedReferences.js', () => ({
+  resolveOwnedEntryId: async (_userId, value) => value ? { toString: () => value } : null,
 }));
 
 const router = (await import('../interests.js')).default;
